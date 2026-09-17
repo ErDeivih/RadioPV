@@ -184,6 +184,13 @@
     background-color: #696969;
     transition: width 0.1s;
     border-radius: 4px;
+    // Necesario para que la parte rellena y el tirador (posicionados en absoluto) se
+    // coloquen DENTRO de la barra y no respecto a un antepasado cualquiera.
+    position: relative;
+    // El navegador no debe interpretar el arrastre como scroll (móvil) ni como selección.
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
 
     .position-sider {
       background-color: white;
@@ -208,6 +215,48 @@
       }
     }
   }
+}
+
+/* Pantallas táctiles: aquí no existe `:hover`, así que todo lo que sólo aparecía al pasar el
+ * ratón (el tirador y el color de la parte rellena) no se veía nunca, y la barra de 4 px era
+ * imposible de acertar con el dedo. */
+@media (hover: none) {
+  .volume-sider {
+    // Zona táctil mucho más alta que la barra, sin cambiar el aspecto: el pseudo-elemento
+    // forma parte de la caja del elemento a efectos de pulsación.
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: -14px;
+      bottom: -14px;
+    }
+
+    .position-sider {
+      background-color: #1ed760;
+    }
+
+    .handler-sider {
+      display: block;
+      background: white;
+      height: 12px;
+      width: 12px;
+      border-radius: 6px;
+      margin-top: -4px;
+      margin-left: -6px;
+    }
+  }
+}
+
+/* Con el ratón, mientras se arrastra el tirador también debe verse aunque no haya `:hover`. */
+.volume-sider .handler-sider.arrastrando {
+  display: block;
+  background: white;
+  height: 10px;
+  width: 10px;
+  border-radius: 5px;
+  margin-top: -7px;
 }
 
 .queue-song-image-container,
@@ -309,14 +358,45 @@
     .time-line {
       height: 3px;
       width: 100%;
-      overflow: hidden;
+      // Sin `overflow: hidden`: recortaba la zona táctil ampliada de abajo y dejaba sólo los
+      // 3 px de la línea como superficie pulsable.
       margin-top: 10px;
       margin-bottom: -10px;
       background: rgb(0 0 0 / 24%);
 
-      .current-time {
+      // La barra del reproductor móvil reutiliza el componente `Slider` (táctil), pero con
+      // el aspecto de una línea fina: sin tirador y con el mismo gris que antes.
+      .volume-sider-container {
+        width: 100%;
+      }
+
+      .volume-sider {
         height: 3px;
-        background: white;
+        margin-bottom: 0;
+        padding-left: 0;
+        border-radius: 0;
+        background: transparent;
+
+        .position-sider {
+          background: white;
+          border-radius: 0;
+        }
+
+        .handler-sider {
+          display: none;
+        }
+
+        // Zona táctil generosa: la línea mide 3 px, imposible de acertar con el dedo.
+        // Se amplía hacia ARRIBA (hacia abajo se saldría del reproductor y robaría pulsaciones
+        // al resto de la interfaz).
+        &::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: -16px;
+          bottom: 0;
+        }
       }
     }
   }

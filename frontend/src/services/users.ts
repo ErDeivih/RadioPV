@@ -8,6 +8,7 @@ import { User } from '../interfaces/user';
 import { PlaylistItem } from '../interfaces/playlists';
 import { toPage, toPlaylistItem, toArtist, toTrack } from '../api/adapt';
 import type { TrackOut, ArtistOut } from '../api/types';
+import { colaController } from '../player/queueController';
 
 interface FetchTopItemsParams extends PaginationQueryParams {
   /** @description Over what time frame the affinities are computed. Valid values: long_term (calculated from ~1 year of data and including all new data as it becomes available), medium_term (approximately last 6 months), short_term (approximately last 4 weeks). Default: medium_term */
@@ -76,11 +77,20 @@ const fetchFollowedArtists = async (_params: PaginationQueryParams = {}) => {
 
 /**
  * @description Get the list of objects that make up the user's queue.
+ *
+ * En RadioPV la cola vive en el cliente (`queueController`), no en el servidor: la pedíamos a
+ * `GET /me/player/queue`, un endpoint que aquí no existe, así que cada llamada (al abrir el
+ * panel de reproducción, en las acciones de álbum/playlist/canción) devolvía un 404 silencioso.
+ * Ahora se lee del propio reproductor y no se hace ninguna petición.
  */
 const fetchQueue = async () => {
-  return await axios.get<{ currently_playing: Track | Episode; queue: (Track | Episode)[] }>(
-    `/me/player/queue`
-  );
+  const actual = colaController.actual as unknown as Track | null;
+  return {
+    data: {
+      currently_playing: (actual ?? null) as Track | Episode,
+      queue: [...colaController.cola] as unknown as (Track | Episode)[],
+    },
+  };
 };
 
 /**

@@ -67,6 +67,7 @@ export const VolumeControls = () => {
           <Slider
             isEnabled
             value={volume}
+            ariaLabel='Volumen'
             onChange={(value) => {
               setVolume(value);
             }}

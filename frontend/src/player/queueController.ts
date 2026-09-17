@@ -29,13 +29,22 @@ let contexto = 'player';                         // contexto para las señales d
 let repetir: 0 | 1 | 2 = 0;                      // 0 off · 1 context · 2 track
 let barajando = false;
 let ultimoId: string | null = null;              // id de la última canción (semilla del Flow)
+/** URI del contexto que está sonando (`radiopv:playlist:12`, `radiopv:album:x::y`…).
+ *  Sin esto la UI no puede saber si la playlist que estás viendo es la que suena, así que el
+ *  botón grande nunca se ponía en "pausa" ni marcaba el contexto activo. */
+let uriContexto: string | null = null;
 let pidiendoRadio = false;                       // evita dos GET /recommend/radio simultáneos
 let onChange: (() => void) | null = null;        // avisa a la UI (Redux) para volcar la cola (B1)
 
 const REPEAT_KEY = 'radiopv_repeat';
 try { repetir = (Number(localStorage.getItem(REPEAT_KEY)) as 0 | 1 | 2) || 0; } catch { /* ignore */ }
 
-const cambios = () => onChange?.();
+const cambios = () => {
+  onChange?.();
+  // Al cambiar aleatorio/repetir/cola hay que republicar el estado: si la música está en pausa
+  // no llegan `timeupdate`s y los iconos de la barra se quedarían sin actualizar.
+  playerController.refrescar();
+};
 
 const artistOf = (t: ColaItem) => t.artists?.[0]?.name;
 
@@ -57,7 +66,10 @@ const barajar = (xs: ColaItem[]): ColaItem[] => {
 const reproducir = (item: ColaItem) => {
   void playerController.play(item, contexto);
   // B5: pre-buffear la siguiente (cola[0]) para que el salto no tenga silencio.
-  void playerController.precacheNext(cola[0]?.id);
+  // Con guarda: `precacheNext(undefined)` acababa pidiendo `/stream/undefined` y el error se
+  // tragaba en silencio (una petición perdida por cada canción al final de la cola).
+  const siguiente = cola[0]?.id;
+  if (siguiente !== undefined && siguiente !== null) void playerController.precacheNext(siguiente);
 };
 
 // Al sonar una canción (da igual si viene de startPlayback o de la cola) registramos cuál es
@@ -119,10 +131,12 @@ const avanzar = (auto: boolean) => {
 export const colaController = {
   setContexto(c: string) { contexto = c; },
   /** Rellena la cola al arrancar un contexto. `lista` es el orden completo (fuente), `offset` es
-   *  el índice de la canción que ya estamos reproduciendo (se excluye de la cola). */
-  cargar(lista: ColaItem[], ctx?: string, offset = 0) {
+   *  el índice de la canción que ya estamos reproduciendo (se excluye de la cola).
+   *  `uri` es la URI del contexto que suena (playlist/álbum/…), para que la UI sepa cuál es. */
+  cargar(lista: ColaItem[], ctx?: string, offset = 0, uri?: string | null) {
     fuente = lista;
     contexto = ctx ?? contexto;
+    uriContexto = uri ?? null;
     actual = null;                  // nuevo contexto → historial y "anterior" empiezan de cero
     historial = [];
     const resto = lista.slice(offset + 1);
@@ -166,6 +180,7 @@ export const colaController = {
     fuente = [];
     historial = [];
     actual = null;
+    uriContexto = null;
     cambios();
   },
   bindChange(fn: (() => void) | null) { onChange = fn; },
@@ -173,6 +188,7 @@ export const colaController = {
   get actual() { return actual; },
   get shuffle() { return barajando; },
   get repeat() { return repetir; },
+  get uriContexto() { return uriContexto; },
 };
 
 export type { ColaItem };

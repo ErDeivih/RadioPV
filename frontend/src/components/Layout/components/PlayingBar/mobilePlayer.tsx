@@ -1,7 +1,8 @@
 import SongDetails from './SongDetails';
 import { useAppDispatch, useAppSelector } from '../../../../store/store';
 import { Col, Row } from 'antd';
-import { ListIcon, Pause, Play } from '../../../Icons';
+import { ListIcon, Pause, Play, SkipBack, SkipNext } from '../../../Icons';
+import { Slider } from '../../../Slider';
 
 // Redux
 import { playerService } from '../../../../services/player';
@@ -13,15 +14,33 @@ import { AddSongToLibraryButton } from '../../../Actions/AddSongToLibrary';
 import { spotifyActions } from '../../../../store/slices/spotify';
 
 const PlayButton = () => {
-  const paused = useAppSelector((state) => state.spotify.state?.paused);
+  // `paused` es el campo que publica el reproductor. Antes no lo publicaba, así que
+  // `!undefined` era `true` siempre: el botón del móvil mostraba "Pausar" y al pulsarlo
+  // pausaba, pero ya no había forma de volver a darle al play desde ahí.
+  const paused = useAppSelector((state) => state.spotify.state?.paused ?? true);
   return (
     <button
+      aria-label={paused ? 'Reproducir' : 'Pausar'}
       onClick={() => (!paused ? playerService.pausePlayback() : playerService.startPlayback())}
     >
       {paused ? <Play /> : <Pause />}
     </button>
   );
 };
+
+/** Anterior / siguiente también en la barra del móvil: antes sólo existían en la barra de
+ *  escritorio, así que desde el teléfono no se podía cambiar de canción. */
+const PrevButton = () => (
+  <button aria-label='Anterior' onClick={() => playerService.previousTrack()}>
+    <SkipBack />
+  </button>
+);
+
+const NextButton = () => (
+  <button aria-label='Siguiente' onClick={() => playerService.nextTrack()}>
+    <SkipNext />
+  </button>
+);
 
 const QueueButton = () => {
   const dispatch = useAppDispatch();
@@ -87,17 +106,25 @@ const NowPlayingBarMobile = () => {
                   dispatch(spotifyActions.setLiked({ liked: !liked }));
                 }}
               />
+              <PrevButton />
               <PlayButton />
+              <NextButton />
             </div>
           </Col>
         </Row>
+        {/* Antes era una simple línea decorativa que además nunca avanzaba: leía
+            `position`/`duration`, campos que el reproductor no publicaba, así que el ancho
+            salía `NaN%`. Ahora es una barra de verdad: se ve avanzar y se puede tocar o
+            arrastrar con el dedo para buscar dentro de la canción. */}
         <div className='time-line'>
-          <div
-            className='current-time'
-            style={{
-              width: `${(position / duration) * 100}%`,
+          <Slider
+            isEnabled
+            value={duration > 0 ? position / duration : 0}
+            ariaLabel='Barra de progreso'
+            onChangeEnd={(v) => {
+              if (duration > 0) playerService.seekToPosition(Math.round(duration * v)).then();
             }}
-          ></div>
+          />
         </div>
       </div>
     </div>

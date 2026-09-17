@@ -33,23 +33,24 @@ const SkipBackButton = memo(() => {
 });
 
 const PlayButton = memo(() => {
-  const isPlaying = useAppSelector((state) => !state.spotify.state?.paused);
-  const disabled = useAppSelector(
-    (state) =>
-      !state.spotify.state ||
-      (state.spotify.state?.disallows.pausing && state.spotify.state?.disallows.resuming)
+  // `paused` es el campo que publica el reproductor (forma del SDK). Antes no se publicaba, así
+  // que `!undefined` daba `true` siempre: el botón mostraba "Pausar" y sólo sabía pausar,
+  // nunca reanudar. También hay que exigir que exista estado: sin canción no se está sonando.
+  const isPlaying = useAppSelector(
+    (state) => !!state.spotify.state && !state.spotify.state.paused
   );
+  const hasTrack = useAppSelector((state) => !!state.spotify.state?.track_window?.current_track);
+  const disabled = !hasTrack;
 
   return (
     <button
       aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
       className={`player-pause-button ${disabled ? 'disabled' : ''}`}
       onClick={() => {
-        if (!disabled) {
-          return isPlaying
-            ? playerService.pausePlayback().then()
-            : playerService.startPlayback().then();
-        }
+        if (disabled) return;
+        return isPlaying
+          ? playerService.pausePlayback().then()
+          : playerService.startPlayback().then();
       }}
     >
       {!isPlaying ? <Play /> : <Pause />}

@@ -31,13 +31,12 @@ export const setState = createAsyncThunk<
 >('spotify/setState', async ({ state: spotifyState }, { getState, dispatch }) => {
   if (!spotifyState) return null;
   const state = getState() as RootState;
-  const currentSong = spotifyState?.track_window.current_track;
+  const currentSong = spotifyState?.track_window?.current_track;
 
-  if (currentSong?.id !== state.spotify.state?.track_window.current_track.id) {
-    const playing = !spotifyState.paused;
-    const song = spotifyState.track_window.current_track;
-    document.title =
-      song && playing ? `${song.name} • ${song.artists[0].name}` : 'RadioNano';
+  // Sólo el cambio de canción: pedir el "me gusta" de la que empieza.
+  // (El título de la pestaña se actualiza en `webPlayback`, que sí reacciona también a la
+  //  pausa; aquí sólo se hacía al cambiar de canción, así que al pausar seguía el título.)
+  if (currentSong?.id !== state.spotify.state?.track_window?.current_track?.id) {
     if (currentSong) dispatch(fetchLikedSong(currentSong.id!));
   }
   return spotifyState;

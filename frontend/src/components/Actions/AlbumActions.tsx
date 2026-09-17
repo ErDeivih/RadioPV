@@ -140,15 +140,16 @@ export const AlbumActionsWrapper: FC<AlbumActionsWrapperProps> = memo((props) =>
       {
         label: t('Add to queue'),
         key: '3',
-        disabled: true,
+        // Igual que en el menú de playlist: estaba deshabilitado porque `addToQueue` recibía
+        // la URI del álbum (clave `artista::álbum`) y pedía `/tracks/{clave}` → 404.
         icon: <AddToQueueIcon />,
         onClick: () => {
           if (!handleUserValidation()) return;
-          playerService.addToQueue(album.uri).then(() => {
+          playerService.addContextToQueue(album.uri).then((n) => {
             dispatch(fetchQueue());
             message.open({
-              type: 'success',
-              content: t('Added to queue'),
+              type: n ? 'success' : 'warning',
+              content: n ? t('Added to queue') : t('No songs to add'),
             });
           });
         },

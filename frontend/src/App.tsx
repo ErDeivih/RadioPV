@@ -4,7 +4,7 @@ import './styles/App.scss';
 
 // Utils
 import i18next from 'i18next';
-import { FC, Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { FC, Suspense, lazy, memo, useEffect, useMemo, useRef } from 'react';
 import { getFromLocalStorageWithExpiry } from './utils/localstorage';
 import { getRefreshToken } from './utils/spotify/login';
 
@@ -25,8 +25,8 @@ import WebPlayback, { WebPlaybackProps } from './utils/spotify/webPlayback';
 
 // Pages
 import SearchContainer from './pages/Search/Container';
-import { playerService } from './services/player';
 import { Spinner } from './components/spinner/spinner';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const Home = lazy(() => import('./pages/Home'));
 const Page404 = lazy(() => import('./pages/404'));
@@ -204,14 +204,14 @@ const RoutesComponent = memo(() => {
             <Route
               key={route.path}
               path={route.path}
-              element={<Suspense>{route.element}</Suspense>}
+              element={<Suspense>{<ErrorBoundary zona={route.path || 'inicio'}>{route.element}</ErrorBoundary>}</Suspense>}
             >
               {route?.children
                 ? route.children.map((child) => (
                     <Route
                       key={child.path}
                       path={child.path}
-                      element={<Suspense>{child.element}</Suspense>}
+                      element={<Suspense>{<ErrorBoundary zona={child.path || route.path}>{child.element}</ErrorBoundary>}</Suspense>}
                     />
                   ))
                 : undefined}
@@ -226,35 +226,17 @@ const RoutesComponent = memo(() => {
 const RootComponent = () => {
   const user = useAppSelector((state) => !!state.auth.user);
   const language = useAppSelector((state) => state.language.language);
-  const playing = useAppSelector((state) => !state.spotify.state?.paused);
 
   useEffect(() => {
     document.documentElement.setAttribute('lang', language);
     i18next.changeLanguage(language);
   }, [language]);
 
-  const handleSpaceBar = useCallback(
-    (e: KeyboardEvent) => {
-      // @ts-ignore
-      if (e.target?.tagName?.toUpperCase() === 'INPUT') return;
-      if (playing === undefined) return;
-      e.stopPropagation();
-      if (e.key === ' ' || e.code === 'Space' || e.keyCode === 32) {
-        e.preventDefault();
-        const request = !playing ? playerService.startPlayback() : playerService.pausePlayback();
-        request.then().catch(() => {});
-      }
-    },
-    [playing]
-  );
-
-  useEffect(() => {
-    if (!user) return;
-    document.addEventListener('keydown', handleSpaceBar);
-    return () => {
-      document.removeEventListener('keydown', handleSpaceBar);
-    };
-  }, [user, handleSpaceBar]);
+  // NOTA: aquí vivía un segundo manejador de la barra espaciadora que duplicaba el de
+  // `utils/spotify/webPlayback.tsx`. Llamaba a `e.stopPropagation()` para CUALQUIER tecla, así
+  // que en la práctica anulaba los atajos de flechas (±10 s), M (silencio) y L (me gusta) del
+  // otro manejador, y al pulsar espacio los dos competían por alternar la reproducción.
+  // Los atajos tienen un único dueño: webPlayback.
 
   useEffect(() => {
     if (!user) return;

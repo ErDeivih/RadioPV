@@ -142,18 +142,43 @@ const startPlayback = async (
   }
   const parts = String(trackUri).split(':');
   const kind = parts[1];  // 'track' | 'album' | 'playlist' | ...
-  const id = parts[parts.length - 1];   // para track: el id; para album/playlist: clave
+  // Para `track` es el id; para playlist, el id; para álbum, la clave `artista::álbum`.
+  // Se usa todo lo que va DESPUÉS del tipo (y no el último trozo): la clave de un álbum lleva
+  // `::` dentro, así que `parts[parts.length - 1]` se quedaba sólo con el nombre del álbum y la
+  // URI reconstruida no coincidía con la de la página (el botón nunca marcaba "sonando").
+  const id = parts.slice(2).join(':');
+  // Posición de arranque dentro de la lista. Las tablas de canciones ya la mandaban
+  // (`offset: { position: index }`), pero aquí se ignoraba y siempre sonaba la primera:
+  // pulsar la quinta canción de una playlist reproducía la primera.
+  // OJO: no se puede acotar aquí con `uris.length`, porque al abrir una playlist o un álbum la
+  // llamada trae sólo `context_uri` y `uris` viene vacío (acotar contra 0 dejaba el offset en 0
+  // y volvía a sonar siempre la primera). Se acota en cada rama, cuando ya se conoce la lista.
+  const offset = Math.max(0, body.offset?.position ?? 0);
+
+  if (kind === 'user' && parts[parts.length - 1] === 'collection') {
+    // "Me gusta". Antes esta URI caía en la rama genérica y acababa pidiendo
+    // `GET /tracks/collection`, que devuelve 404: la lista de favoritos no sonaba nunca y
+    // no había ningún error visible, simplemente silencio.
+    const { data } = await axios.get<TrackOut[]>('/library/liked');
+    const lista = data.map(toTrack);
+    if (!lista.length) return;
+    const pos = Math.min(offset, lista.length - 1);
+    colaController.cargar(lista, 'liked', pos, trackUri);
+    await playerController.play(lista[pos]);
+    return;
+  }
 
   if (kind === 'track') {
     if (uris.length > 1) {
       // Lista entera (una tabla de canciones): la cola queda rellena con el resto.
       const lista = await resolvLista(uris);
-      const primero = lista[0];
+      const primero = lista[Math.min(offset, Math.max(0, lista.length - 1))];
       if (!primero) {
         playerController.resume();
         return;
       }
-      colaController.cargar(lista, 'player', 0);
+      const pos = lista.indexOf(primero);
+      colaController.cargar(lista, 'player', pos, body.context_uri ?? null);
       await playerController.play(primero);
       return;
     }
@@ -166,22 +191,32 @@ const startPlayback = async (
     const [artist, album] = id.split('::');
     const { data } = await axios.get<TrackOut[]>('/tracks', { params: { artist, album } });
     const lista = data.map(toTrack);
-    const primero = lista[0];
-    if (primero) {
-      colaController.cargar(lista, 'album', 0);
-      await playerController.play(primero);
-    }
+    if (!lista.length) return;
+    const pos = Math.min(offset, lista.length - 1);
+    // La URI del contexto se guarda para que la página del álbum sepa que es la que suena.
+    colaController.cargar(lista, 'album', pos, `radiopv:album:${id}`);
+    await playerController.play(lista[pos]);
     return;
   }
 
   if (kind === 'playlist') {
     const { data } = await axios.get<TrackOut[]>(`/playlists/${id}/tracks`);
     const lista = data.map(toTrack);
-    const primero = lista[0];
-    if (primero) {
-      colaController.cargar(lista, `playlist:${id}`, 0);
-      await playerController.play(primero);
-    }
+    if (!lista.length) return;
+    const pos = Math.min(offset, lista.length - 1);
+    colaController.cargar(lista, `playlist:${id}`, pos, `radiopv:playlist:${id}`);
+    await playerController.play(lista[pos]);
+    return;
+  }
+
+  // Artista: sus canciones más escuchadas, para que el botón grande del artista suene.
+  if (kind === 'artist') {
+    const { data } = await axios.get<TrackOut[]>(`/artists/${encodeURIComponent(id)}/top`);
+    const lista = data.map(toTrack);
+    if (!lista.length) return;
+    const pos = Math.min(offset, lista.length - 1);
+    colaController.cargar(lista, 'artist', pos, `radiopv:artist:${id}`);
+    await playerController.play(lista[pos]);
     return;
   }
 
@@ -237,9 +272,61 @@ const getVolume = (): number => playerController.getVolume();
 const toggleShuffle = async (_state: boolean) => { colaController.barajar(_state); };
 
 /**
+ * Resuelve una URI de contexto a su lista de canciones: playlist, álbum, artista o "me gusta".
+ * Devuelve `[]` (y no lanza) si la URI no es un contexto reconocible.
+ */
+const tracksDeContexto = async (uri: string): Promise<Track[]> => {
+  const parts = String(uri).split(':');
+  const kind = parts[1];
+  // Igual que en `startPlayback`: la clave del álbum lleva `::`, así que hay que quedarse con
+  // todo lo que sigue al tipo y no con el último trozo.
+  const id = parts.slice(2).join(':');
+  try {
+    if (kind === 'user' && parts[parts.length - 1] === 'collection') {
+      const { data } = await axios.get<TrackOut[]>('/library/liked');
+      return data.map(toTrack);
+    }
+    if (kind === 'playlist') {
+      const { data } = await axios.get<TrackOut[]>(`/playlists/${id}/tracks`);
+      return data.map(toTrack);
+    }
+    if (kind === 'album') {
+      const [artist, album] = id.split('::');
+      const { data } = await axios.get<TrackOut[]>('/tracks', { params: { artist, album } });
+      return data.map(toTrack);
+    }
+    if (kind === 'artist') {
+      const { data } = await axios.get<TrackOut[]>(`/artists/${encodeURIComponent(id)}/top`);
+      return data.map(toTrack);
+    }
+  } catch {
+    /* contexto no reconocido: se ignora */
+  }
+  return [];
+};
+
+/**
+ * @description Añade una lista entera (playlist, álbum, artista o "me gusta") al final de la cola.
+ *
+ * `addToQueue` sólo entiende canciones sueltas: le pasábamos la URI de la playlist y acababa
+ * pidiendo `GET /tracks/{id-de-playlist}`, que da 404, así que la opción estaba directamente
+ * desactivada en los menús de playlist y de álbum. Aquí se resuelven todas sus canciones.
+ */
+const addContextToQueue = async (uri: string) => {
+  const lista = await tracksDeContexto(uri);
+  if (lista.length) colaController.encolar(lista);
+  return lista.length;
+};
+
+/**
  * @description Add an item to the end of the user's current playback queue. This API only works for users who have Spotify Premium.
  */
 const addToQueue = async (uri: string) => {
+  // Si la URI es de una lista, se encola la lista entera en vez de intentar resolverla como
+  // si fuera una única canción.
+  if (/^radiopv:(playlist|album|artist):/.test(uri) || /^spotify:user:.*:collection$/.test(uri)) {
+    return void addContextToQueue(uri);
+  }
   const track = await getTrackProf(tidDeUri(uri));
   if (track) colaController.encolar([track]);
 };
@@ -269,6 +356,7 @@ const getRecentlyPlayed = async (params: { limit?: number; after?: number; befor
 
 export const playerService = {
   addToQueue,
+  addContextToQueue,
   addToQueueNext,
   setPlaybackDevice,
   setPlaybackDeviceName,

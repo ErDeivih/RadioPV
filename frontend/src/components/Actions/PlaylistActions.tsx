@@ -173,15 +173,17 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
     items.push({
       label: t('Add to queue'),
       key: '3',
-      disabled: true,
+      // Estaba `disabled: true` porque no funcionaba: se pasaba la URI de la playlist a
+      // `addToQueue`, que la trataba como una canción suelta y pedía `/tracks/{id-playlist}`
+      // (404). Ahora `addContextToQueue` resuelve todas las canciones de la lista.
       icon: <AddToQueueIcon />,
       onClick: () => {
         if (!handleUserValidation()) return;
-        return playerService.addToQueue(playlist.uri).then(() => {
+        return playerService.addContextToQueue(playlist.uri).then((n) => {
           dispatch(fetchQueue());
           message.open({
-            type: 'success',
-            content: t('Added to queue'),
+            type: n ? 'success' : 'warning',
+            content: n ? t('Added to queue') : t('No songs to add'),
           });
         });
       },

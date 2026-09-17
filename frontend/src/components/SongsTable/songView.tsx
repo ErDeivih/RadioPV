@@ -306,7 +306,10 @@ export const SongView = (props: SongViewProps) => {
   const isMobile = useIsMobile();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => !!state.auth.user);
-  const isPlaying = useAppSelector((state) => !!state.spotify.state?.paused);
+  // Antes esto era `!!state.spotify.state?.paused`: justo lo contrario de lo que se quiere
+  // (y con el campo ausente daba siempre `false`), así que desde una fila nunca se podía
+  // pausar: al pulsar la canción que estaba sonando, volvía a empezar desde el principio.
+  const isPlaying = useAppSelector((state) => !!state.spotify.state && !state.spotify.state.paused);
   const currentSong = useAppSelector(
     (state) => state.spotify.state?.track_window.current_track,
     (a, b) => a?.id === b?.id

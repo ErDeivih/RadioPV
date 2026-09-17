@@ -23,6 +23,10 @@ let current: Track | null = null;
 let onState: ((state: unknown) => void) | null = null;
 let onEnded: (() => void) | null = null;
 let onPlayed: ((track: Track) => void) | null = null;
+/** Siguiente / anterior desde la pantalla de bloqueo (MediaSession). La cola vive en
+ *  `queueController`, así que el reproductor sólo guarda la función que le pasa el puente. */
+let onNext: (() => void) | null = null;
+let onPrev: (() => void) | null = null;
 let precarga: HTMLAudioElement | null = null;   // audio oculto que pre-buffea la siguiente (B5)
 
 const VOLUME_KEY = 'radiopv_volume';            // volumen persistente entre sesiones (B4)
@@ -125,8 +129,8 @@ const ensure = () => {
     ultimoTick = t;
     emit();
   });
-  audio.addEventListener('play', emit);
-  audio.addEventListener('pause', emit);
+  audio.addEventListener('play', () => { mediaSessionEstado(true); emit(); });
+  audio.addEventListener('pause', () => { mediaSessionEstado(false); emit(); });
   audio.addEventListener('ended', () => {
     cerrar(true);
     emit();
@@ -143,17 +147,49 @@ const ensure = () => {
 
 const emit = () => {
   if (!onState || !audio || !current) return;
+  const duracion = Number.isFinite(audio.duration) ? audio.duration : 0;
+  const posicion = audio.currentTime;
   onState({
     track_window: { current_track: current },
+    // ── CONTRATO DE ESTADO ──────────────────────────────────────────────────────────────
+    // La UI lee la forma del SDK de Spotify (la que está declarada en `Spotify.PlaybackState`),
+    // NO la de la Web API. Antes aquí sólo se publicaban `is_playing`/`position_ms`/`duration_ms`
+    // y faltaban `paused`, `position` y `duration`, que es lo que consultan los componentes.
+    // El resultado eran tres fallos que parecían independientes y eran el mismo:
+    //   · `state.spotify.state?.paused` era `undefined` y `!undefined === true`, así que TODOS
+    //     los botones de play/pausa creían estar sonando: sólo pausaban, nunca reanudaban.
+    //   · la barra de progreso leía `position`/`duration` (inexistentes) → siempre 0:00 y al
+    //     arrastrarla hacía seek a 0.
+    // Se publican las dos formas (la del SDK y la de la API) para no romper a nadie.
+    paused: audio.paused,
     is_playing: !audio.paused && !audio.ended,
-    position_ms: Math.round(audio.currentTime * 1000),
-    duration_ms: Math.round((audio.duration || 0) * 1000),
+    position: Math.round(posicion * 1000),
+    duration: Math.round(duracion * 1000),
+    position_ms: Math.round(posicion * 1000),
+    duration_ms: Math.round(duracion * 1000),
+    progress_ms: Math.round(posicion * 1000),
+    timestamp: Date.now(),
     // La UI lee estos campos para habilitar/reflejar los botones (si faltan, `disallows.x` rompe).
-    disallows: { pausing: false, resuming: false, skipping_next: false, skipping_prev: false },
+    // `seeking` y `loading` no son disallows reales: el elemento ya está cargado.
+    disallows: {
+      pausing: false,
+      resuming: false,
+      skipping_next: false,
+      skipping_prev: false,
+      seeking: false,
+    },
+    // `shuffle`, `repeat_mode` y `context` los añade el puente (`webPlayback`) porque dependen
+    // de la cola, y el reproductor no puede importarla sin crear un ciclo.
     shuffle: false,
     repeat_mode: 0,
+    context: null,
   });
 };
+
+/** Vuelve a publicar el estado sin esperar al siguiente `timeupdate`.
+ *  Hace falta al pulsar aleatorio/repetir con la música en pausa: sin `timeupdate` la UI no se
+ *  enteraría del cambio y el icono se quedaría sin actualizar. */
+const refrescar = () => emit();
 
 const mediaSession = () => {
   if (!current || !('mediaSession' in navigator) || !audio) return;
@@ -168,6 +204,23 @@ const mediaSession = () => {
   navigator.mediaSession.setActionHandler('seekto', (d) => {
     if (audio && d.seekTime != null) audio.currentTime = d.seekTime;
   });
+  // Faltaban estos tres: en el móvil, los botones de la pantalla de bloqueo y de los
+  // auriculares (siguiente / anterior / ±10 s) no hacían absolutamente nada.
+  navigator.mediaSession.setActionHandler('nexttrack', () => onNext?.());
+  navigator.mediaSession.setActionHandler('previoustrack', () => onPrev?.());
+  navigator.mediaSession.setActionHandler('seekbackward', (d) => {
+    if (audio) audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset ?? 10));
+  });
+  navigator.mediaSession.setActionHandler('seekforward', (d) => {
+    if (audio) audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + (d.seekOffset ?? 10));
+  });
+};
+
+/** Refleja en la pantalla de bloqueo si está sonando o en pausa (el icono del sistema). */
+const mediaSessionEstado = (sonando: boolean) => {
+  try {
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = sonando ? 'playing' : 'paused';
+  } catch { /* algunos navegadores no dejan cambiarlo */ }
 };
 
 const signal = (body: Record<string, unknown>) => {
@@ -225,6 +278,11 @@ export const playerController = {
   bind(onStateFn: ((s: unknown) => void) | null) { onState = onStateFn; },
   /** La cola (o el "Flow") se engancha aquí para encadenar la siguiente canción. */
   bindEnded(fn: (() => void) | null) { onEnded = fn; },
+  /** Siguiente / anterior desde la pantalla de bloqueo o los auriculares. */
+  bindNext(fn: (() => void) | null) { onNext = fn; },
+  bindPrev(fn: (() => void) | null) { onPrev = fn; },
+  /** Republica el estado ya mismo (para que la UI reaccione sin esperar al `timeupdate`). */
+  refrescar,
   /** Notifica a la cola qué canción acaba de sonar (mantiene `actual` y la semilla del Flow). */
   bindPlayed(fn: ((t: Track) => void) | null) { onPlayed = fn; },
 

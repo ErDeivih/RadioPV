@@ -34,10 +34,21 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
 
   const handleState = useCallback((state: any | null) => {
     if (state) {
-      // Reflejar shuffle/repeat reales en el estado que consume la UI (los botones).
+      // Añadir aquí lo que depende de la COLA. El reproductor no puede consultarla sin crear un
+      // ciclo de imports (la cola sí importa al reproductor), así que estos tres campos se
+      // completan en el puente, que ve a los dos.
+      //  · `context.uri`: sin él ningún selector podía saber qué playlist/álbum suena.
+      //  · `shuffle` / `repeat_mode`: antes se publicaban fijos a `false`/`0` desde el
+      //    reproductor, de modo que el botón de aleatorio siempre recibía `!false` (nunca se
+      //    podía apagar) y el de repetir siempre mandaba "context" (nunca ciclaba).
       dispatch(
         spotifyActions.setState({
-          state: { ...state, shuffle: colaController.shuffle, repeat_mode: colaController.repeat },
+          state: {
+            ...state,
+            shuffle: colaController.shuffle,
+            repeat_mode: colaController.repeat,
+            context: colaController.uriContexto ? { uri: colaController.uriContexto } : null,
+          },
         })
       );
     }
@@ -80,10 +91,22 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [state, liked]);
 
+  // Título de la pestaña: nombre de la canción mientras suena, "RadioNano" en pausa o parado.
+  // Antes esto se hacía en el reductor de `setState` y sólo al cambiar de canción, de modo que
+  // al pausar la pestaña seguía anunciando la canción como si siguiera sonando.
+  useEffect(() => {
+    const s = state as any;
+    const song = s?.track_window?.current_track;
+    document.title = song && s?.is_playing ? `${song.name} • ${song.artists?.[0]?.name ?? ''}` : 'RadioNano';
+  }, [state]);
+
   useEffect(() => {
     playerController.bind(handleState);
     // Al terminar una canción, la cola avanza; al agotarse, entra el "Flow" (radio encadenada).
     playerController.bindEnded(() => colaController.siguiente(true));
+    // Botones de la pantalla de bloqueo / auriculares del móvil.
+    playerController.bindNext(() => colaController.siguiente(false));
+    playerController.bindPrev(() => colaController.anterior());
     // Volcar la cola del cliente a Redux para que el panel "Next" se pinte (B1).
     colaController.bindChange(() => dispatch(queueActions.setQueue([...colaController.cola])));
     onPlayerLoading();
@@ -93,6 +116,8 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
     return () => {
       playerController.bind(null as any);
       playerController.bindEnded(null);
+      playerController.bindNext(null);
+      playerController.bindPrev(null);
       colaController.bindChange(null);
     };
   }, [handleState, onPlayerLoading, onPlayerWaitingForDevice, onPlayerDeviceSelected]);
