@@ -1,4 +1,4 @@
 export const navigation = {
-  'Go back': 'Volver',
-  'Go forward': 'Avanzar',
+  'Go back': 'Atrás',
+  'Go forward': 'Adelante',
 };

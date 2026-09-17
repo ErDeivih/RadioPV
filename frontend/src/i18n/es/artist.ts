@@ -8,7 +8,7 @@ export const artist = {
   Albums: 'Álbumes',
   Singles: 'Sencillos',
   All: 'Todos',
-  Compilations: 'Compilaciones',
+  Compilations: 'Recopilatorios',
   'Singles and EPs': 'Sencillos y EPs',
   'Appears on': 'Aparece en',
   'Show more': 'Mostrar más',
@@ -16,4 +16,9 @@ export const artist = {
   Follow: 'Seguir',
   Unfollow: 'Dejar de seguir',
   'Fans also like': 'A los fans también les gusta',
+  // El inglés usa estas tres con mayúscula inicial y las de arriba en minúscula.
+  // i18next distingue mayúsculas, así que sin estas entradas se veían en inglés.
+  'Popular Releases': 'Lanzamientos populares',
+  'Popular Albums': 'Álbumes populares',
+  'Show More': 'Mostrar más',
 };

@@ -1,6 +1,7 @@
 import { Modal } from 'antd';
 
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 // Constants
 import { AVAILABLE_LANGUAGES } from '../../constants/languages';
@@ -14,6 +15,7 @@ import type { Languages } from '../../interfaces/languages';
 
 export const LanguageModal = memo(() => {
   const dispatch = useAppDispatch();
+  const [t] = useTranslation(['navbar']);
   const open = useAppSelector((state) => state.language.isModalOpen);
 
   const onClose = (value?: Languages) => {
@@ -40,7 +42,7 @@ export const LanguageModal = memo(() => {
               color: 'white',
             }}
           >
-            Choose a language
+            {t('Choose a language')}
           </h1>
         }
       >

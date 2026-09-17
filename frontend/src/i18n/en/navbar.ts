@@ -6,6 +6,7 @@ export const navbar = {
   'Collapse your library': 'Collapse your library',
   'Expand your library': 'Expand your library',
   Language: 'Language',
+  'Choose a language': 'Choose a language',
   'Contact me': 'Contact me',
   'Create a new Playlist': 'Create a new Playlist',
   Playlist: 'Playlist',
