@@ -28,13 +28,13 @@ WORKDIR /app
 
 COPY requirements-backend.txt .
 RUN pip install --no-cache-dir -r requirements-backend.txt \
- && pip install --no-cache-dir librosa soundfile numpy pandas yt-dlp requests
+ && pip install --no-cache-dir librosa soundfile numpy pandas yt-dlp requests mutagen
 
 # Código
 COPY backend backend
 COPY radiov radiov
 COPY scripts scripts
-COPY run_agent.py ./
+COPY run_agent.py run_collector.py ./
 
 RUN mkdir -p /app/data
 

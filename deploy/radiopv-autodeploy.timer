@@ -1,0 +1,14 @@
+[Unit]
+Description=Comprueba cambios en GitHub para RadioPV cada 5 minutos
+
+[Timer]
+# Primera comprobacion 3 minutos despues de arrancar
+OnBootSec=3min
+# Y luego cada 5 minutos
+OnUnitActiveSec=5min
+Unit=radiopv-autodeploy.service
+# Si el servidor estaba apagado, recupera la pasada perdida
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -299,6 +299,75 @@ sudo sqlite3 /opt/stacks/radiopv/data/backend.db ".backup '/srv/data/backups/bac
 
 ---
 
+## 7. Auto-despliegue desde GitHub
+
+> **Por defecto NO es automático.** Un `git push` desde tu PC **no** cambia nada en el
+> servidor: hay que entrar y hacer `./deploy.sh`. Para automatizarlo se instala un *timer*
+> de systemd que revisa GitHub cada 5 minutos.
+
+### 7.1 Instalación (una sola vez)
+
+```
+cd /opt/stacks/radiopv/deploy
+```
+```
+chmod +x autodeploy.sh
+```
+```
+sudo cp radiopv-autodeploy.service radiopv-autodeploy.timer /etc/systemd/system/
+```
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now radiopv-autodeploy.timer
+```
+
+### 7.2 Comprobar que está activo
+
+```
+systemctl list-timers radiopv-autodeploy.timer
+```
+**✅ Debe mostrar la próxima ejecución.**
+
+**Forzar una pasada ahora y ver el resultado:**
+```
+sudo systemctl start radiopv-autodeploy.service
+journalctl -u radiopv-autodeploy -n 60 --no-pager
+```
+
+### 7.3 Qué hace cada pasada
+
+```
+1. git fetch            → consulta GitHub
+2. ¿commits nuevos?
+   NO  → sale en silencio, sin tocar nada
+   SÍ  → git pull y reconstruye SOLO lo necesario:
+         · backend/, radiov/, Dockerfile, requirements*  → reconstruye la imagen
+         · frontend/                                     → reconstruye el frontend (necesita Node)
+3. docker compose up -d
+```
+
+### 7.4 Tu flujo de trabajo
+
+Desde el PC:
+```
+cd F:\EspacioCodigo\RadioPV
+git add -A
+git commit -m "lo que sea"
+git push
+```
+**Y en 5 minutos el servidor se ha actualizado solo.** Sin entrar por SSH.
+
+> ⚠️ **Si el cambio es solo del frontend y el servidor no tiene Node**, el aviso aparecerá en
+> el log y tendrás que compilarlo en tu PC (paso 1.4) y copiar `frontend/build`.
+
+### 7.5 Desactivarlo
+
+```
+sudo systemctl disable --now radiopv-autodeploy.timer
+```
+
+---
+
 ## 6. Problemas frecuentes
 
 | Síntoma | Causa probable | Solución |

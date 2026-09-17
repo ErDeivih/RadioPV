@@ -1,0 +1,15 @@
+[Unit]
+Description=RadioPV · autodespliegue desde GitHub
+Documentation=file:///opt/stacks/radiopv/docs/DESPLIEGUE_SERVIDOR.md
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=david
+Group=david
+WorkingDirectory=/opt/stacks/radiopv
+ExecStart=/opt/stacks/radiopv/deploy/autodeploy.sh
+# Si tarda mas de 30 min, algo va mal
+TimeoutStartSec=1800
