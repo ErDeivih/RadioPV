@@ -122,14 +122,67 @@
   }
 
   @media (max-width: $desktop-breakpoint) {
+    /* AQUÍ ESTABA EL MOTIVO DE QUE LA MÚSICA NO SONARA EN EL MÓVIL: antes esto ponía
+     * `display: none !important`, o sea que en pantalla pequeña el botón de reproducir
+     * NO EXISTÍA. Y como sólo se revelaba con `:hover`, en una pantalla táctil no había
+     * manera de sacarlo: invisible e inclickeable, así que la música no se podía ni
+     * empezar. No era el audio, era que no había botón. */
+    // El botón mide 40px, pero el contenedor sólo reservaba 36px y la tarjeta lleva
+    // `overflow: hidden`: sin ensanchar el contenedor el botón sale recortado por la derecha.
+    .button-container {
+      flex: 0 0 44px;
+      padding-inline-end: 2px;
+
+      // En táctil el botón de verdad está siempre visible, así que el iconito del
+      // `img` (que sólo servía de pista para el ratón) sobra: se verían los dos.
+      img {
+        display: none;
+      }
+    }
+
     .circle-play {
-      display: none !important;
+      display: flex !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+      inline-size: 40px;
+      block-size: 40px;
+      min-block-size: 40px;
+      margin-right: 0 !important;
     }
 
     &:active {
       transform: scale(0.99);
       transition: transform 0.2s ease-in-out;
     }
+  }
+}
+
+/* Móvil y tablet táctil en general. No basta con mirar el ancho: lo que decide si se
+ * puede usar `:hover` es el tipo de puntero. Un iPad en horizontal pasa de 768px y
+ * seguiría sin poder mostrar los botones que dependen del ratón. */
+@media (hover: none) {
+  .horizontal-playlist {
+    .button-container {
+      flex: 0 0 44px;
+      padding-inline-end: 2px;
+
+      img {
+        display: none;
+      }
+    }
+
+    .circle-play {
+      display: flex !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+    }
+  }
+
+  // Lo mismo para las tarjetas de playlist: el botón de reproducir se revelaba con
+  // `opacity: 0` + `:hover`, y en una pantalla táctil no había forma de sacarlo.
+  .playlist-card .circle-play-div {
+    opacity: 1;
+    transform: none;
   }
 }
 
