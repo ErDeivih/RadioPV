@@ -17,15 +17,15 @@ from pathlib import Path
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from radiov.config import BASE_MUSIC
+from radiov.config import BASE_MUSIC, DATA_DIR, resolve_music
 
-DB = "data/radiov.db"
+DB = DATA_DIR / "radiov.db"
 DEST_ROOT = BASE_MUSIC / "_cuarentena"
 
 
 def main() -> int:
     apply = "--apply" in sys.argv
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(str(DB))
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         "SELECT id, artist, title, file_path FROM tracks WHERE status='cuarentena' AND file_path IS NOT NULL").fetchall()
@@ -36,7 +36,7 @@ def main() -> int:
     moved = 0
     for r in rows:
         fp = r["file_path"]
-        p = Path(fp)
+        p = resolve_music(fp)
         if not p.exists():
             print(f"    [omitir] no existe en disco: {fp}")
             continue

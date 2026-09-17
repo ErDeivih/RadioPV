@@ -13,9 +13,12 @@ from pathlib import Path
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from radiov.config import BASE_MUSIC  # noqa: E402
+# `DATA_DIR` sale de radiov.config: es la ruta ABSOLUTA de los datos. Antes la base se abría como
+# "data/radiov.db" (relativa al directorio desde el que lanzaras el script), así que desde otro
+# sitio SQLite creaba una base VACÍA y el script decía "0 filas" sin avisar de nada.
+from radiov.config import BASE_MUSIC, DATA_DIR  # noqa: E402
 
-DB = "data/radiov.db"
+DB = DATA_DIR / "radiov.db"
 CUARENTENA = Path(BASE_MUSIC) / "_cuarentena"
 
 
@@ -33,7 +36,7 @@ def listar(con) -> None:
 def main() -> None:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     aplicar = "--apply" in sys.argv
-    con = sqlite3.connect(DB)
+    con = sqlite3.connect(str(DB))
 
     if len(args) < 2:
         listar(con)

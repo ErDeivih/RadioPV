@@ -14,13 +14,22 @@ Uso:
 from __future__ import annotations
 
 import sqlite3
+import sys
 from pathlib import Path
 
-DB = "data/radiov.db"
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# `DATA_DIR` es la ruta ABSOLUTA de los datos. Antes la base se abría como "data/radiov.db"
+# (relativa al directorio desde el que lanzaras el script): desde otro sitio SQLite creaba una
+# base VACÍA y el script decía "0 filas" sin avisar de nada.
+from radiov.config import DATA_DIR  # noqa: E402
+
+DB = DATA_DIR / "radiov.db"
 
 
 def main() -> int:
-    conn = sqlite3.connect(DB, timeout=60)
+    conn = sqlite3.connect(str(DB), timeout=60)
     conn.row_factory = sqlite3.Row
     filas = conn.execute(
         "SELECT id, rms FROM tracks WHERE rms IS NOT NULL ORDER BY rms").fetchall()

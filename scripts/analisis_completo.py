@@ -17,11 +17,12 @@ from pathlib import Path
 
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from radiov.config import DATA_DIR, resolve_music
 
 import radiov.catalog as C
 
 TARGET_LUFS = -14.0
-DB = "data/radiov.db"
+DB = DATA_DIR / "radiov.db"
 SAMPLE_SECONDS = 30
 
 
@@ -74,7 +75,7 @@ def main() -> int:
         i = _s.argv.index("--limit")
         if i + 1 < len(_s.argv):
             limit = int(_s.argv[i + 1])
-    conn = sqlite3.connect(DB, timeout=300)
+    conn = sqlite3.connect(str(DB), timeout=300)
     conn.row_factory = sqlite3.Row
     rows = conn.execute("SELECT id, file_path, rms, gain_db FROM tracks "
                         "WHERE status='descargada' AND file_path IS NOT NULL "

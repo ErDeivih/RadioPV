@@ -16,10 +16,11 @@ from pathlib import Path
 
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from radiov.config import DATA_DIR, resolve_music
 
 import radiov.quality as Q
 
-DB = "data/radiov.db"
+DB = DATA_DIR / "radiov.db"
 
 
 def main() -> int:
@@ -28,7 +29,7 @@ def main() -> int:
     if delete and not apply:
         apply = True  # borrar implica aplicar el marcado
 
-    conn = sqlite3.connect(DB, timeout=60)
+    conn = sqlite3.connect(str(DB), timeout=60)
     conn.row_factory = sqlite3.Row
     rows = conn.execute("SELECT * FROM tracks WHERE status != 'cuarentena'").fetchall()
 
@@ -69,7 +70,7 @@ def main() -> int:
 
     # borrar ficheros (solo con --delete-files)
     for fp in files:
-        p = Path(fp)
+        p = resolve_music(fp)
         try:
             p.unlink(missing_ok=True)
         except OSError as e:  # noqa: BLE001

@@ -17,16 +17,17 @@ from pathlib import Path
 
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from radiov.config import DATA_DIR
 
 import radiov.catalog as C
 
 UMBRAL = 0.6
-DB = "data/radiov.db"
+DB = DATA_DIR / "radiov.db"
 
 
 def main() -> int:
     apply = "--apply" in sys.argv
-    conn = sqlite3.connect(DB, timeout=60)
+    conn = sqlite3.connect(str(DB), timeout=60)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         "SELECT id, title, artist, duration, file_path, match_score, status "
