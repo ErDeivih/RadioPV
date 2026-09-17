@@ -21,7 +21,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # ffmpeg: lo usan /stream y el análisis de audio del recolector.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates libsndfile1 libgomp1 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
