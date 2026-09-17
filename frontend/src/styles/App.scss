@@ -548,6 +548,16 @@ h3 {
     pointer-events: auto !important;
   }
 
+  // Búsquedas recientes: el botón de reproducir y el de borrar sólo aparecían al pasar el ratón,
+  // así que en el móvil no había forma de borrar una búsqueda. Ahora se ven siempre.
+  [class*="recent-searches"] {
+    button {
+      opacity: 1 !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
+    }
+  }
+
   // Y los elementos que dependen del hover para verse, siempre visibles.
   .card-actions,
   .play-button,
