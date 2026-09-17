@@ -26,6 +26,35 @@ def _track_exists(db, deezer_id, artist, title):
     return q.first() is not None
 
 
+def _estado_destino(estado_actual, estado_origen, file_path):
+    """Decide el `status` final de una canción al sincronizar el catálogo.
+
+    POR QUÉ NO SE COPIA A CIEGAS
+    ----------------------------
+    `verificar_ficheros` (worker) marca 'perdida' las canciones cuyo fichero ya no está en el
+    servidor, que es lo que las saca de la app y las pone en la cola de re-descarga. Esa
+    comprobación corría los domingos a las 3:00… pero ESTA sincronización va cada 30 minutos y
+    copiaba el `status` de radiov.db, que sigue diciendo 'descargada'. O sea que la revisión
+    semanal perdía siempre y la aplicación seguía ofreciendo canciones que no se pueden
+    reproducir (el reproductor las intentaba y las saltaba).
+
+    Regla: si el fichero sigue sin estar, gana 'perdida'. La marca sólo se levanta cuando el
+    fichero ha vuelto de verdad, que es justo lo que pasa al terminar de copiar la música.
+    """
+    if estado_actual != "perdida" or estado_origen != "descargada":
+        return estado_origen
+    if not file_path:
+        return "perdida"
+    try:
+        from app.paths import resolve_music  # noqa: PLC0415
+
+        return "descargada" if resolve_music(file_path).exists() else "perdida"
+    except Exception:  # noqa: BLE001
+        # Si no se puede comprobar, se mantiene la marca: es más honesto no ofrecer algo que
+        # puede no sonar que ofrecerlo y fallar.
+        return "perdida"
+
+
 def migrate() -> None:
     """Sincroniza el catálogo de radiov.db → BD del backend. NO destructivo, idempotente.
 
@@ -72,12 +101,18 @@ def migrate() -> None:
         else:
             actualizados += 1
 
+        # Hay que leer el estado ANTES del bucle: `status` está en CAMPOS y se sobrescribe.
+        estado_previo = destino.status
+
         for c in CAMPOS:
             if c in d:
                 setattr(destino, c, d[c])
         destino.is_remix = bool(d.get("is_remix"))
         destino.explicit = bool(d.get("explicit"))
-        destino.status = d.get("status") or "descargada"
+        # Ver `_estado_destino`: el estado de radiov.db no puede pisar la marca 'perdida'.
+        destino.status = _estado_destino(
+            estado_previo, d.get("status") or "descargada", d.get("file_path")
+        )
         if did:
             destino.deezer_id = did
 
