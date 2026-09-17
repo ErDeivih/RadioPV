@@ -510,6 +510,47 @@ h3 {
   }
 }
 
+/* ===========================================================================
+   EN PANTALLAS TÁCTILES NO HAY RATÓN
+   ===========================================================================
+   Todo lo que en escritorio aparece "al pasar por encima" (hover) aquí NO EXISTE.
+   El caso más grave era el botón de reproducir de las tarjetas: nace con
+   `opacity: 0` y `visibility: hidden`, y solo se muestra con `:hover`. En un
+   móvil eso significa que el botón de play está siempre oculto e inclickeable,
+   así que **la música no se podía ni empezar**. De ahí el "directamente no se
+   escucha la música": no era el audio, era que no había forma de darle al play.
+
+   `@media (hover: none)` es la forma correcta de detectarlo: se cumple en
+   móviles y tabletas, y no en un PC con ratón, así que cada uno ve lo suyo.
+   =========================================================================== */
+@media (hover: none) {
+  .image-button {
+    opacity: 1 !important;
+    visibility: visible !important;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  // Cualquier acción que se esconda esperando el ratón pasa a estar visible.
+  [class*="Actions"],
+  [class*="actions"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  // Y los elementos que dependen del hover para verse, siempre visibles.
+  .card-actions,
+  .play-button,
+  .play-circle {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  // En táctil, el "hover" se activa al tocar y deja el elemento pegado. Fuera.
+  *:hover {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 .drag-line {
   color: #1db954;
   border: 1px solid #1db954 !important;
