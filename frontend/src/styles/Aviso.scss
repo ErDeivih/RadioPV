@@ -1,0 +1,45 @@
+/* Aviso del reproductor (canción sin archivo, reproducción bloqueada por el navegador…).
+ *
+ * Se dibuja aquí y no con el `message` de antd a propósito: en React 19 las funciones estáticas
+ * de antd v5 no pintan de forma fiable sin su parche oficial, así que el aviso se emitía pero no
+ * se veía. Un elemento propio no depende de eso.
+ *
+ * En el móvil se coloca ARRIBA para que no lo tape el reproductor, que está fijo abajo. */
+.radiopv-aviso {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  max-width: min(92vw, 520px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #2b2b2b;
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 55%);
+  border-left: 4px solid #1ed760;
+  animation: radiopv-aviso-entra 0.25s ease-out;
+  pointer-events: none;
+}
+
+@keyframes radiopv-aviso-entra {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (max-width: 768px) {
+  .radiopv-aviso {
+    // El reproductor móvil ocupa la parte baja: el aviso va arriba, con espacio para el menú.
+    top: 8px;
+    font-size: 0.8rem;
+    padding: 8px 12px;
+  }
+}

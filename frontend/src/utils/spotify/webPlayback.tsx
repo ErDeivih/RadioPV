@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, FC, memo, useCallback, useRef } from 'react';
-import { message } from 'antd';
+import { useEffect, useState, FC, memo, useCallback, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../../store/store';
 import { spotifyActions } from '../../store/slices/spotify';
 import { playerController, AVISO } from '../../player/playerController';
@@ -104,14 +103,27 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
   // Avisos del reproductor: cuando una canción no se puede cargar (falta su archivo en el
   // servidor) se salta a la siguiente. Antes esto no se veía de ninguna manera: la reproducción
   // simplemente no arrancaba y parecía que la aplicación estaba rota.
+  //
+  // Se dibuja un aviso propio y NO se usa el `message` estático de antd: en React 19 esas
+  // funciones estáticas no pintan nada de forma fiable (antd v5 las apoya en una API de React 18
+  // que ya no existe sin su parche), y el aviso se quedaba en el limbo: se emitía el evento y no
+  // aparecía nada en pantalla.
+  const [aviso, setAviso] = useState<string | null>(null);
+
   useEffect(() => {
     const alAvisar = (e: Event) => {
       const mensaje = (e as CustomEvent<{ mensaje?: string }>).detail?.mensaje;
-      if (mensaje) message.warning({ content: mensaje, key: 'radiopv-aviso', duration: 4 });
+      if (mensaje) setAviso(mensaje);
     };
     window.addEventListener(AVISO, alAvisar);
     return () => window.removeEventListener(AVISO, alAvisar);
   }, []);
+
+  useEffect(() => {
+    if (!aviso) return;
+    const t = window.setTimeout(() => setAviso(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [aviso]);
 
   useEffect(() => {
     playerController.bind(handleState);
@@ -138,7 +150,16 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
     };
   }, [handleState, onPlayerLoading, onPlayerWaitingForDevice, onPlayerDeviceSelected]);
 
-  return <>{props.children}</>;
+  return (
+    <>
+      {props.children}
+      {aviso ? (
+        <div className='radiopv-aviso' role='status' aria-live='polite'>
+          {aviso}
+        </div>
+      ) : null}
+    </>
+  );
 });
 
 export default WebPlayback;
