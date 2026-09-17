@@ -9,6 +9,7 @@ export interface UiState {
   libraryCollapsed: boolean;
   loginTooltipOpen: boolean;
   loginButtonOpen: boolean;
+  loginModalOpen: boolean;
   loginModalItem: string | null;
 }
 
@@ -19,6 +20,7 @@ const initialState: UiState = {
   libraryCollapsed: true,
   loginTooltipOpen: false,
   loginButtonOpen: false,
+  loginModalOpen: false,
   loginModalItem: null,
 };
 
@@ -34,12 +36,22 @@ const uiSlice = createSlice({
     closeLoginButton(state) {
       state.loginButtonOpen = false;
     },
-    openLoginModal(state, action: PayloadAction<string>) {
-      state.loginModalItem = action.payload;
+    /**
+     * Abre el modal de acceso.
+     *
+     * La imagen es OPCIONAL y solo decora: antes el modal solo se dibujaba si había imagen
+     * (`if (!imgUrl) return null`), así que los botones de "Iniciar sesión" —que no vienen de
+     * ninguna canción ni álbum— no tenían forma de abrirlo y había que pasarles algo. Ahora
+     * manda `loginModalOpen`, y sin imagen se usa el logo de la app.
+     */
+    openLoginModal(state, action: PayloadAction<string | undefined>) {
+      state.loginModalItem = action.payload || null;
+      state.loginModalOpen = true;
       state.loginButtonOpen = false;
       state.loginTooltipOpen = false;
     },
     closeLoginModal(state) {
+      state.loginModalOpen = false;
       state.loginModalItem = null;
     },
     openLoginTooltip(state) {

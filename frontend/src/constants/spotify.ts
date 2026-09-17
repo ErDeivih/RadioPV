@@ -12,6 +12,10 @@ export const INITIAL_VOLUME = 0.2;
 
 export const PLAYLIST_DEFAULT_IMAGE = `${import.meta.env.BASE_URL}icon-192.png`;
 
+// Imagen que se muestra en el modal de acceso cuando se abre "en general" (al pulsar
+// cualquier botón de Iniciar sesión), sin venir de una canción o un álbum concreto.
+export const LOGIN_DEFAULT_IMAGE = `${import.meta.env.BASE_URL}icon-512.png`;
+
 export const ARTISTS_DEFAULT_IMAGE = `${import.meta.env.BASE_URL}avatar-default.png`;
 
 export const LIKED_SONGS_IMAGE = `${import.meta.env.BASE_URL}images/liked-songs.png`;

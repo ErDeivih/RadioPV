@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 
 // Redux
 import { uiActions } from '../../../../store/slices/ui';
-import { loginToSpotify } from '../../../../store/slices/auth';
 import { useAppDispatch, useAppSelector } from '../../../../store/store';
 
 // Constants
@@ -26,20 +25,29 @@ const LoginButton = () => {
     dispatch(uiActions.closeLoginButton());
   }, [dispatch]);
 
+  // Abre NUESTRO modal de acceso. Antes se despachaba `loginToSpotify()`, que ya no redirige
+  // a Spotify (es un compañero de compatibilidad que solo mira si hay token): sin sesión no
+  // hacía absolutamente nada, y el botón parecía muerto.
+  const onLogin = useCallback(() => {
+    dispatch(uiActions.openLoginModal(ARTISTS_DEFAULT_IMAGE));
+  }, [dispatch]);
+
   return (
     <Popconfirm
       icon={null}
       open={tooltipOpen}
       onCancel={onClose}
+      onConfirm={onLogin}
       placement='bottomLeft'
       rootClassName='login-tooltip'
       cancelText={<CloseIcon />}
       title={t('You’re logged out')}
       cancelButtonProps={{ type: 'text' }}
       okButtonProps={{ className: 'white-button small' }}
+      okText={t('Log In')}
       description={t('Log in to add this to your Liked Songs.')}
     >
-      <WhiteButton title={t('Log In')} onClick={() => dispatch(loginToSpotify())} />
+      <WhiteButton title={t('Log In')} onClick={onLogin} />
     </Popconfirm>
   );
 };

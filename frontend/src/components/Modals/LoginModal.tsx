@@ -12,7 +12,7 @@ import { useAppDispatch, useAppSelector } from '../../store/store';
 import { register as apiRegister } from '../../api/auth';
 
 // Constants
-import { DEFAULT_PAGE_COLOR } from '../../constants/spotify';
+import { DEFAULT_PAGE_COLOR, LOGIN_DEFAULT_IMAGE } from '../../constants/spotify';
 
 // Utils
 import tinycolor from 'tinycolor2';
@@ -25,7 +25,6 @@ export const LoginModal = memo(() => {
   const [t] = useTranslation(['home']);
   const isMobile = useIsMobile();
 
-  const [open, setOpen] = useState<boolean>(false);
   const [color, setColor] = useState<string>(DEFAULT_PAGE_COLOR);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,29 +33,44 @@ export const LoginModal = memo(() => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState<string>('');
 
+  // `loginModalOpen` manda; la imagen solo decora.
+  const abierto = useAppSelector((state) => state.ui.loginModalOpen);
   const imgUrl = useAppSelector((state) => state.ui.loginModalItem);
+  const imagen = imgUrl || LOGIN_DEFAULT_IMAGE;
 
   const onClose = useCallback(() => {
     dispatch(uiActions.closeLoginModal());
   }, [dispatch]);
 
+  /**
+   * El color de fondo se saca de la imagen, pero NO puede bloquear la apertura: antes el
+   * modal solo se dibujaba dentro del `.then()` del análisis, así que si la imagen tardaba
+   * o fallaba (una carátula que no carga, un CORS), el botón de "Iniciar sesión" parecía
+   * muerto. Ahora el modal se abre igual y el color se aplica cuando llega; si falla, se
+   * queda el color por defecto.
+   */
   useEffect(() => {
-    if (imgUrl) {
-      getImageAnalysis2(imgUrl).then((color) => {
-        let colorObj = tinycolor(color);
-        while (colorObj.isLight()) {
-          colorObj = colorObj.darken(10);
-        }
-        setColor(colorObj.toHexString());
-        setOpen(true);
-      });
+    if (!abierto) {
+      setColor(DEFAULT_PAGE_COLOR);
+      return;
     }
+    let vivo = true;
+    getImageAnalysis2(imagen)
+      .then((tono) => {
+        if (!vivo) return;
+        let colorObj = tinycolor(tono);
+        while (colorObj.isLight()) colorObj = colorObj.darken(10);
+        setColor(colorObj.toHexString());
+      })
+      .catch(() => {
+        if (vivo) setColor(DEFAULT_PAGE_COLOR);
+      });
     return () => {
-      setOpen(false);
+      vivo = false;
     };
-  }, [imgUrl]);
+  }, [abierto, imagen]);
 
-  if (!imgUrl) return null;
+  if (!abierto) return null;
 
   const submit = async () => {
     setError('');
@@ -79,7 +93,7 @@ export const LoginModal = memo(() => {
       <Modal
         centered
         width={780}
-        open={open}
+        open={abierto}
         footer={null}
         destroyOnHidden
         onCancel={onClose}
@@ -98,7 +112,7 @@ export const LoginModal = memo(() => {
           }}
         >
           <div className='img-container'>
-            <img alt='RadioNano' loading='lazy' src={imgUrl || '/icon-512.png'} />
+            <img alt='RadioNano' loading='lazy' src={imagen || '/icon-512.png'} />
           </div>
           <div className='content-container'>
             <h2 style={{ lineHeight: 1.4 }}>{t('Inicia sesión en RadioNano')}</h2>

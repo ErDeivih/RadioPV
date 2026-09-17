@@ -7,8 +7,10 @@ import { DetailsCard } from '../../NowPlaying/Details/card';
 
 // Redux
 import { uiActions } from '../../../../../store/slices/ui';
-import { loginToSpotify } from '../../../../../store/slices/auth';
 import { useAppDispatch, useAppSelector } from '../../../../../store/store';
+
+// Constants
+import { LOGIN_DEFAULT_IMAGE } from '../../../../../constants/spotify';
 
 export const LibraryLoginInfo = memo(() => {
   const [t] = useTranslation(['home']);
@@ -19,8 +21,9 @@ export const LibraryLoginInfo = memo(() => {
     dispatch(uiActions.closeLoginTooltip());
   }, [dispatch]);
 
+  // Abre NUESTRO modal de acceso (antes iba a `loginToSpotify()`, que sin sesión no hace nada).
   const onConfirm = useCallback(() => {
-    return dispatch(loginToSpotify());
+    dispatch(uiActions.openLoginModal(LOGIN_DEFAULT_IMAGE));
   }, [dispatch]);
 
   useEffect(() => {
@@ -52,7 +55,7 @@ export const LibraryLoginInfo = memo(() => {
             <WhiteButton
               size='small'
               title={t('Log In')}
-              onClick={() => dispatch(loginToSpotify())}
+              onClick={() => dispatch(uiActions.openLoginModal(LOGIN_DEFAULT_IMAGE))}
             />
           </div>
         </DetailsCard>

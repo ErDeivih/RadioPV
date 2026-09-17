@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { WhiteButton } from '../../../Button';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '../../../../store/store';
-import { loginToSpotify } from '../../../../store/slices/auth';
+import { uiActions } from '../../../../store/slices/ui';
+import { LOGIN_DEFAULT_IMAGE } from '../../../../constants/spotify';
 import useIsMobile from '../../../../utils/isMobile';
 
 export const LoginFooter = memo(() => {
@@ -12,6 +13,10 @@ export const LoginFooter = memo(() => {
 
   if (isMobile) return null;
 
+  // Abre NUESTRO modal de acceso. Antes iba a `loginToSpotify()`, que ya no redirige a
+  // Spotify: sin sesión no hacía nada y el botón parecía roto.
+  const onLogin = () => dispatch(uiActions.openLoginModal(LOGIN_DEFAULT_IMAGE));
+
   return (
     <div className='login-footer' style={{ margin: '0px 10px' }}>
       <div className='login-container'>
@@ -20,7 +25,7 @@ export const LoginFooter = memo(() => {
           <p className='description'>{t('Log In to access all the features of the app')}.</p>
         </div>
 
-        <WhiteButton title={t('Log In')} onClick={() => dispatch(loginToSpotify())} />
+        <WhiteButton title={t('Log In')} onClick={onLogin} />
       </div>
     </div>
   );
