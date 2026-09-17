@@ -22,7 +22,15 @@ pytest-cache-files-*
 .mypy_cache
 
 # --- cachés de gestores de paquetes ---
+# OJO con `.yarn` a secas: en .dockerignore los patrones se anclan a la raíz, así que eso
+# solo excluye el .yarn de arriba y NO frontend/.yarn, que sí se colaba.
+#
+# Y eso rompía el build: frontend/.yarn/install-state.gz es un fichero de estado propio de
+# CADA máquina. Al hacer `COPY frontend/ ./` se copiaba encima del que acababa de generar la
+# instalación dentro del contenedor, y entonces `yarn build` abortaba con
+# «Couldn't find the node_modules state file».
 .yarn
+**/.yarn
 .yarn-global
 .pnpm-store
 **/node_modules
