@@ -70,6 +70,9 @@ def main() -> int:
                     help="escribe las correcciones (por defecto solo revisa y apunta el veredicto)")
     ap.add_argument("--no-recordar", action="store_true",
                     help="no escribe NADA, ni el veredicto (pasada totalmente limpia)")
+    ap.add_argument("--reemplazar", action="store_true",
+                    help="además de corregir datos, vuelve a DESCARGAR las canciones cuyo "
+                         "fichero esté mal (el viejo se aparta en _descartes, no se borra)")
     ap.add_argument("--solo-dudosos", action="store_true",
                     help="solo las ya marcadas como dudosas o nunca revisadas")
     ap.add_argument("--veredicto", default=None, help="revisar solo las de este veredicto")
@@ -149,6 +152,20 @@ def main() -> int:
             # Se apunta el veredicto (sin tocar la ficha) para que la próxima pasada siga
             # por donde iba en vez de volver a empezar por las mismas canciones.
             CO.registrar(a)
+
+        if args.reemplazar and a.veredicto in CO.NECESITAN_DESCARGA:
+            print(f"        reemplazando el fichero (veredicto {a.veredicto})...")
+            try:
+                r = CO.reemplazar_fichero(t, a)
+            except Exception as e:  # noqa: BLE001
+                r = {"error": f"{type(e).__name__}: {e}"}
+            for paso in r.get("pasos", []):
+                print(f"          · {paso}")
+            if r.get("error"):
+                print(f"          [X] {r['error']}")
+            if r.get("reemplazado"):
+                print(f"          -> FICHERO SUSTITUIDO "
+                      f"(el viejo en {r.get('viejo_apartado') or 'no había'})")
 
     total = time.time() - t0
     print("\n" + "=" * 78)

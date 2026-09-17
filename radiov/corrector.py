@@ -62,6 +62,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from . import db
+from . import models as M
 from .config import load_settings, resolve_music
 
 # ---------------------------------------------------------------------------
@@ -834,6 +835,150 @@ def aplicar(a: Analisis, *, mover_fichero: bool = True) -> dict:
 
     registrar(a)
     return hecho
+
+
+def reemplazar_fichero(track: dict, a: Analisis, *, client=None,
+                       carpeta_descartes: Optional[Path] = None,
+                       verificar: bool = True) -> dict:
+    """Vuelve a descargar la canción y sustituye el fichero equivocado.
+
+    Tres reglas que no se saltan:
+
+    1. **Solo se hace si el veredicto lo justifica.** Con `correcta` o `metadatos` este
+       método no toca el fichero: ahí lo que falla son los datos, no la canción.
+
+    2. **El fichero nuevo se verifica antes de aceptarlo.** Se le hace la misma comparación
+       de audio que al viejo, contra el preview de Deezer. Si el nuevo tampoco cuadra, se
+       tira y se deja el original: no tiene sentido cambiar un fichero malo por otro.
+       La excepción es cuando el fichero ni existe ni suena — ahí no hay nada que perder.
+
+    3. **El fichero viejo NO se borra.** Se aparta en `_descartes/` con el motivo en el
+       nombre. Si la detección se equivocó, se recupera moviéndolo de vuelta.
+    """
+    from . import youtube as YT
+    from .catalog import _rel_music, organize_track, real_duration, write_tags
+    from .config import BASE_MUSIC
+
+    salida: dict[str, Any] = {"reemplazado": False, "motivo": a.veredicto, "pasos": []}
+
+    if a.veredicto not in NECESITAN_DESCARGA:
+        salida["pasos"].append(
+            f"no se toca: el veredicto «{a.veredicto}» no implica cambiar el fichero")
+        return salida
+
+    ruta_vieja = resolve_music(track["file_path"]) if track.get("file_path") else None
+    existe_viejo = bool(ruta_vieja and ruta_vieja.exists())
+
+    # --- con qué datos buscar: los verificados, no los que pudieran estar mal ---
+    cand = (a.detalle.get("deezer") or {}).get("candidato") or {}
+    artista = cand.get("artist") or track.get("artist") or ""
+    titulo = cand.get("title") or track.get("title") or ""
+    if cand.get("artist") or cand.get("title"):
+        salida["pasos"].append(f"se busca con los datos verificados: «{artista} - {titulo}»")
+    esperada = cand.get("duration") or track.get("duration") or None
+
+    # --- descarga ---
+    try:
+        nuevo = YT.search_and_download(
+            artista, titulo,
+            expected_duration=float(esperada) if esperada else None,
+            genre=track.get("genre") or "other",
+            language=track.get("language") or "es")
+    except Exception as e:  # noqa: BLE001
+        salida["error"] = f"la descarga falló: {type(e).__name__}: {e}"
+        return salida
+    if not nuevo or not nuevo.get("file_path"):
+        salida["error"] = "no se encontró ninguna descarga válida"
+        return salida
+    ruta_nueva_descargada = Path(nuevo["file_path"])
+    salida["pasos"].append(f"descargado: {ruta_nueva_descargada.name} "
+                           f"({ruta_nueva_descargada.stat().st_size if ruta_nueva_descargada.exists() else 0} bytes)")
+
+    # --- verificación del fichero nuevo ---
+    preview = cand.get("preview") or (a.detalle.get("deezer") or {}).get("guardado", {}).get("preview")
+    if verificar and existe_viejo and preview:
+        prueba = dict(track)
+        prueba["file_path"] = str(ruta_nueva_descargada)
+        comp = comparar_audio(prueba, preview)
+        salida["verificacion_nuevo"] = comp
+        if not comp.get("ok"):
+            salida["error"] = f"no se pudo verificar la descarga: {comp.get('problemas')}"
+            ruta_nueva_descargada.unlink(missing_ok=True)
+            return salida
+        if comp["croma"] < UMBRAL_CROMA_MISMA or comp["mfcc"] < UMBRAL_MFCC_MISMA:
+            salida["error"] = (
+                f"la descarga tampoco cuadra (croma {comp['croma']}, mfcc {comp['mfcc']}); "
+                f"se deja el fichero original")
+            ruta_nueva_descargada.unlink(missing_ok=True)
+            return salida
+        salida["pasos"].append(
+            f"la descarga SÍ cuadra: croma {comp['croma']}, mfcc {comp['mfcc']}")
+    elif not existe_viejo:
+        salida["pasos"].append("no había fichero (o no sonaba): se acepta sin verificar")
+    elif not preview:
+        salida["pasos"].append("sin preview de Deezer: no se puede verificar la descarga")
+
+    # --- apartar el viejo ---
+    if existe_viejo and ruta_vieja:
+        base = carpeta_descartes or (Path(BASE_MUSIC) / "_descartes")
+        destino_dir = base / a.veredicto
+        try:
+            destino_dir.mkdir(parents=True, exist_ok=True)
+            destino = destino_dir / ruta_vieja.name
+            if destino.exists():
+                destino = destino_dir / f"{ruta_vieja.stem}__{track['id']}{ruta_vieja.suffix}"
+            ruta_vieja.replace(destino)
+            salida["viejo_apartado"] = str(destino)
+            salida["pasos"].append(f"el fichero viejo se apartó a {destino}")
+        except Exception as e:  # noqa: BLE001
+            salida["error"] = f"no se pudo apartar el fichero viejo: {type(e).__name__}: {e}"
+            ruta_nueva_descargada.unlink(missing_ok=True)
+            return salida
+
+    # --- colocar el nuevo en su sitio ---
+    campos: dict[str, Any] = {}
+    try:
+        rec = {**track, **{k: v for k, v in (a.correcciones or {}).items()},
+               "file_path": _rel_music(str(ruta_nueva_descargada))}
+        organizado = organize_track(rec)
+        final = Path(organizado) if organizado else ruta_nueva_descargada
+        campos["file_path"] = _rel_music(str(final))
+        campos["file_size"] = final.stat().st_size if final.exists() else 0
+    except Exception as e:  # noqa: BLE001
+        campos["file_path"] = _rel_music(str(ruta_nueva_descargada))
+        campos["file_size"] = (ruta_nueva_descargada.stat().st_size
+                               if ruta_nueva_descargada.exists() else 0)
+        salida["aviso_organizar"] = f"{type(e).__name__}: {e}"
+
+    campos["youtube_id"] = nuevo.get("youtube_id")
+    campos["youtube_url"] = nuevo.get("youtube_url")
+    campos["duration"] = real_duration(campos["file_path"]) or nuevo.get("duration")
+    campos["match_score"] = 1.0 if salida.get("verificacion_nuevo", {}).get("ok") else nuevo.get("match_score")
+    campos["status"] = M.STATUS_DOWNLOADED
+    campos.update({k: v for k, v in (a.correcciones or {}).items()})
+    db.update_track(track["id"], **campos)
+
+    try:
+        write_tags(campos["file_path"], {**track, **campos})
+    except Exception as e:  # noqa: BLE001
+        salida["aviso_tags"] = f"{type(e).__name__}: {e}"
+
+    db.log_event(f"🔁 Reemplazada {artista} - {titulo} (era {a.veredicto})", "info")
+    salida["reemplazado"] = True
+    salida["campos"] = campos
+    salida["pasos"].append(f"colocada en {campos['file_path']}")
+
+    # El fichero ya es otro: se vuelve a analizar para dejar los datos de audio al día.
+    try:
+        from .catalog import analyze_bpm
+        bpm, tempo, energy = analyze_bpm(campos["file_path"])
+        if bpm:
+            db.update_track(track["id"], bpm=bpm, tempo_est=tempo, energy=energy)
+            salida["pasos"].append(f"reanalizado: BPM {bpm}")
+    except Exception as e:  # noqa: BLE001
+        salida["aviso_bpm"] = f"{type(e).__name__}: {e}"
+
+    return salida
 
 
 def _ahora() -> str:
