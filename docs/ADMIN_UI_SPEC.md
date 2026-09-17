@@ -131,7 +131,40 @@ Duración · MB · Estado · Acciones (`🗑️ Borrar` · `🚫 Vetar`)
 | `radiov/ingest_control.py` | ✅ **creado** |
 | `run_collector.py` (obedece al interruptor) | ✅ **creado** |
 | `backend/app/routers/admin.py` (API) | ✅ **creado** |
+| `POST /admin/tracks/bulk` (borrado por filtros, con `dry_run`) | ✅ **creado** |
+| `POST /admin/artists/bulk-veto` | ✅ **creado** |
 | `main.py` registra el router | ✅ **parcheado** |
-| `Library.tsx`, `Blacklist.tsx`, `Ingest.tsx` | ⬜ **pendiente** |
-| Enlace en `App.tsx` y en la barra de navegación | ⬜ pendiente |
-| Marcar tu usuario como `is_admin` | ⬜ pendiente |
+| `frontend/src/pages/Admin/api.ts` | ✅ **creado** |
+| `frontend/src/pages/Admin/Library.tsx` | ✅ **creado** |
+| `frontend/src/pages/Admin/Blacklist.tsx` | ✅ **creado** |
+| `frontend/src/pages/Admin/Ingest.tsx` | ✅ **creado** |
+| `frontend/src/pages/Admin/index.tsx` (pestañas + guarda `is_admin`) | ✅ **creado** |
+| Ruta `/admin` en `App.tsx` | ✅ **añadida** |
+| Botón **Admin** en la barra superior (solo administradores) | ✅ **añadido** en `Navbar/Header.tsx` |
+| `npx tsc --noEmit` | ✅ **sin errores** |
+| Marcar tu usuario como `is_admin` | ⬜ pendiente (se hace en el servidor) |
+
+---
+
+## 7b. Cómo se usa: flujo para limpiar la biblioteca
+
+1. Entra en **Admin** (botón de la barra superior) → pestaña **🎵 Biblioteca**
+2. **Filtra** lo que no quieras: p. ej. *Idioma = Inglés*
+3. Pulsa **"Borrar TODO lo filtrado"**
+4. Aparece un aviso con **cuántas canciones** se van a borrar y **qué filtros** están puestos
+5. Deja activado **"Añadirlas a la lista negra"** → el recolector **no las volverá a bajar**
+6. **Borrar ahora**
+
+**El borrado en masa exige al menos un filtro**, así un clic accidental no puede vaciar la
+biblioteca. La previsualización (`dry_run`) ocurre siempre antes de tocar nada.
+
+### Atajos útiles
+
+| Para… | Cómo |
+|---|---|
+| Quitar todo lo que no sea español | Idioma = *Otro / sin detectar* → Borrar TODO lo filtrado |
+| Quitar un género entero | Género = *Reggaetón* → Borrar TODO lo filtrado |
+| Quitar un artista | Clic en su nombre en la tabla → Borrar TODO lo filtrado |
+| Quitar un rango de años | Año desde / hasta → Borrar TODO lo filtrado |
+| Vetar sin borrar (conservar el fichero) | "Vetar TODO lo filtrado" o la pestaña Lista negra |
+| Parar que siga descargando | Pestaña **🎛️ Ingesta** → interruptor |
