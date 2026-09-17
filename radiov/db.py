@@ -239,7 +239,17 @@ def init_db() -> None:
             conn.execute("ALTER TABLE tracks ADD COLUMN cover_path TEXT")
         if "artist_image_path" not in cols:
             conn.execute("ALTER TABLE tracks ADD COLUMN artist_image_path TEXT")
+        # --- Corrector (verificación contra internet y contra el propio audio) ---
+        if "verificado_at" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN verificado_at TEXT")
+        if "veredicto" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN veredicto TEXT")
+        if "veredicto_detalle" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN veredicto_detalle TEXT")
+        if "audio_huella" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN audio_huella REAL")
         # índices de columnas recién migradas
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_veredicto ON tracks(veredicto)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_era ON tracks(era)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_energy ON tracks(energy)")
         acols = [r[1] for r in conn.execute("PRAGMA table_info(artists)").fetchall()]
