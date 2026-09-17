@@ -1,0 +1,13 @@
+El reproductor ya no lanza un error de pagina cuando el fichero no existe
+
+Al fallar audio.play() se hacia throw e, y como los botones encadenan .then() sin catch,
+el navegador registraba en cada cancion sin archivo un error de pagina:
+"NotSupportedError: Failed to load because no supported source was found".
+
+Ahora solo se deja constancia en consola y, si el motivo es la politica de reproduccion
+del navegador (NotAllowedError), se avisa en pantalla para que el usuario toque y
+reintente. El caso del fichero ausente ya lo resuelve alFallar, que avisa y salta a la
+siguiente cancion.
+
+Ademas, al no marcar como reproducida una cancion que no ha llegado a sonar, el boton
+anterior ya no vuelve a una cancion rota.

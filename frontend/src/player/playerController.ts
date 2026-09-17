@@ -392,10 +392,17 @@ export const playerController = {
     try {
       await audio!.play();
     } catch (e) {
-      // Si el navegador lo rechaza por política de reproducción, no se puede arreglar desde
-      // aquí: hace falta otro toque. Se deja constancia en vez de fallar en silencio.
+      // No se relanza a propósito. Antes esto hacía `throw e`, y como nadie recogía la promesa
+      // (los botones hacen `.then()` sin `catch`), el navegador registraba un error de página
+      // ("NotSupportedError: Failed to load because no supported source was found") cada vez que
+      // una canción no tenía archivo. El caso del fichero ausente ya lo resuelve `alFallar`,
+      // que avisa y salta a la siguiente; aquí sólo queda dejar constancia.
       console.warn('No se pudo iniciar la reproducción:', e);
-      throw e;
+      if ((e as Error)?.name === 'NotAllowedError') {
+        // Política de reproducción del navegador: hace falta otro toque del usuario.
+        avisar('El navegador ha bloqueado la reproducción: toca la pantalla y vuelve a intentarlo.');
+      }
+      return;
     }
     mediaSession();
     signal({ completed: 0, seconds_listened: 0 });
