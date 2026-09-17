@@ -337,6 +337,18 @@ const addToQueueNext = async (uri: string) => {
   if (track) colaController.añadirAContinuacion([track]);
 };
 
+/** Quita de la cola la canción que ocupa esa posición (el panel de la cola tiene una X). */
+const removeFromQueue = async (indice: number) => { colaController.quitar(indice); };
+
+/** Reordena la cola moviendo una canción de una posición a otra. */
+const moveInQueue = async (desde: number, hasta: number) => { colaController.mover(desde, hasta); };
+
+/** Vacía lo que queda por sonar, sin cortar la canción actual. */
+const clearQueue = async () => { colaController.vaciar(); };
+
+/** Lanza el "Flow": encadena canciones parecidas a la última que ha sonado. */
+const startFlow = async () => { colaController.lanzarFlow(); };
+
 /**
  * @description Get tracks from the current user's recently played tracks. Note: Currently doesn't support podcast episodes.
  */
@@ -358,6 +370,10 @@ export const playerService = {
   addToQueue,
   addContextToQueue,
   addToQueueNext,
+  removeFromQueue,
+  moveInQueue,
+  clearQueue,
+  startFlow,
   setPlaybackDevice,
   setPlaybackDeviceName,
   fetchPlaybackState,

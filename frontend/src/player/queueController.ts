@@ -155,6 +155,28 @@ export const colaController = {
   encolar(items: ColaItem[]) { cola.push(...items); cambios(); },
   /** "Añadir a continuación": se inserta justo tras la canción actual, no al final. */
   añadirAContinuacion(items: ColaItem[]) { cola.splice(0, 0, ...items); cambios(); },
+  /** Quita de la cola la canción que ocupa esa posición. La que suena no se toca:
+   *  para eso está "siguiente". Antes el panel de la cola sólo pintaba, no se podía tocar. */
+  quitar(indice: number) {
+    if (!Number.isInteger(indice) || indice < 0 || indice >= cola.length) return;
+    cola.splice(indice, 1);
+    cambios();
+  },
+  /** Reordena la cola moviendo una canción de una posición a otra. */
+  mover(desde: number, hasta: number) {
+    if (!Number.isInteger(desde) || !Number.isInteger(hasta)) return;
+    if (desde < 0 || desde >= cola.length || desde === hasta) return;
+    const destino = Math.max(0, Math.min(cola.length - 1, hasta));
+    const [item] = cola.splice(desde, 1);
+    cola.splice(destino, 0, item);
+    cambios();
+  },
+  /** Vacía lo que queda por sonar (la canción actual sigue sonando). */
+  vaciar() {
+    if (!cola.length) return;
+    cola = [];
+    cambios();
+  },
   /** Avanza a la siguiente canción. `auto = true` viene del evento `ended` (respeta repeat=track);
    *  `false` es el botón "siguiente" (siempre salta). */
   siguiente(auto = true) { avanzar(auto); },
@@ -184,6 +206,9 @@ export const colaController = {
     if (on) cola = barajar(cola);
     cambios();
   },
+  /** Lanza el "Flow" a mano: encadena canciones parecidas a la última que ha sonado.
+   *  Antes esto sólo ocurría solo, cuando se agotaba la cola: no había forma de pedirlo. */
+  lanzarFlow() { void cargarRadio(); },
   limpiar() {
     cola = [];
     fuente = [];

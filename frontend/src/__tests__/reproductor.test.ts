@@ -331,6 +331,53 @@ describe('cola · reproducción de listas, siguiente/anterior, aleatorio y repet
     expect(colaController.cola).toHaveLength(0);
     expect(colaController.uriContexto).toBeNull();
   });
+
+  it('quitar() saca de la cola la canción de esa posición', () => {
+    colaController.cargar([pista(1), pista(2), pista(3), pista(4)], 'playlist:7', 0, 'radiopv:playlist:7');
+    colaController.quitar(1);                    // quita la 3 (la cola era [2, 3, 4])
+    expect(colaController.cola.map((t) => t.id)).toEqual(['2', '4']);
+  });
+
+  it('quitar() con una posición imposible no rompe nada', () => {
+    // Ojo: con una sola canción y offset 0 la cola queda vacía (esa canción es la que suena),
+    // por eso aquí se cargan dos.
+    colaController.cargar([pista(1), pista(2)], 'playlist:7', 0, 'radiopv:playlist:7');
+    expect(colaController.cola.map((t) => t.id)).toEqual(['2']);
+    colaController.quitar(-1);
+    colaController.quitar(99);
+    colaController.quitar(1.5);
+    expect(colaController.cola.map((t) => t.id)).toEqual(['2']);
+  });
+
+  it('mover() reordena la cola subiendo y bajando', () => {
+    colaController.cargar([pista(1), pista(2), pista(3), pista(4)], 'playlist:7', 0, 'radiopv:playlist:7');
+    expect(colaController.cola.map((t) => t.id)).toEqual(['2', '3', '4']);
+
+    colaController.mover(2, 0);                  // la 4 al principio
+    expect(colaController.cola.map((t) => t.id)).toEqual(['4', '2', '3']);
+
+    colaController.mover(0, 2);                  // y otra vez al final
+    expect(colaController.cola.map((t) => t.id)).toEqual(['2', '3', '4']);
+  });
+
+  it('mover() acota el destino a los límites de la cola', () => {
+    colaController.cargar([pista(1), pista(2), pista(3)], 'playlist:7', 0, 'radiopv:playlist:7');
+    colaController.mover(0, 99);
+    expect(colaController.cola.map((t) => t.id)).toEqual(['3', '2']);
+    colaController.mover(1, -5);
+    expect(colaController.cola.map((t) => t.id)).toEqual(['2', '3']);
+  });
+
+  it('vaciar() deja la cola vacía sin tocar la canción que suena', async () => {
+    const audio = await arrancar(pista(1));
+    colaController.cargar([pista(1), pista(2)], 'playlist:7', 0, 'radiopv:playlist:7');
+    await playerController.play(pista(1));
+    colaController.vaciar();
+    expect(colaController.cola).toHaveLength(0);
+    // Lo que está sonando sigue sonando: vaciar la cola no es parar.
+    expect(colaController.actual?.id).toBe('1');
+    expect(audio.paused).toBe(false);
+  });
 });
 
 describe('servicio · playlists, álbumes y favoritos', () => {

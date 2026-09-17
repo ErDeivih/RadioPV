@@ -215,10 +215,67 @@
   }
 }
 
+/* Botón "Vaciar la cola" de la cabecera del panel. */
+.cola-vaciar {
+  all: unset;
+  cursor: pointer;
+  color: #b3b3b3;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 8px;
+  border-radius: 4px;
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+}
+
 .queue-song {
   margin: 5px;
   padding: 5px;
   border-radius: 10px;
+
+  /* Botones de la fila de la cola: subir, bajar y quitar.
+   * Se ven siempre, también sin ratón: antes el panel de la cola sólo pintaba y no había forma
+   * de quitar ni reordenar nada. */
+  .cola-botones {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    padding-left: 8px;
+
+    button {
+      all: unset;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      // Zona táctil cómoda: en el móvil se pulsa con el dedo.
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      color: #b3b3b3;
+      -webkit-tap-highlight-color: transparent;
+
+      svg {
+        fill: currentColor;
+      }
+
+      &:hover:not(:disabled) {
+        color: #fff;
+        background: rgb(255 255 255 / 12%);
+      }
+
+      &:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+    }
+  }
 
   .queue-song-image-container {
     position: relative;
