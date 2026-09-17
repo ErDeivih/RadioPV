@@ -1,0 +1,22 @@
+export const navbar = {
+  Search: 'Search',
+  SearchPlaceholder: 'What do you want to play?',
+  Home: 'Home',
+  'Your Library': 'Your Library',
+  'Collapse your library': 'Collapse your library',
+  'Expand your library': 'Expand your library',
+  Language: 'Language',
+  'Contact me': 'Contact me',
+  'Create a new Playlist': 'Create a new Playlist',
+  Playlist: 'Playlist',
+  'Create a playlist with songs or episodes': 'Create a playlist with songs or episodes',
+  'My Playlist': 'My Playlist',
+  'Playlist created': 'Playlist created',
+  'Search in Your Library': 'Search in Your Library',
+  "Couldn't find": "Couldn't find",
+  'Try searching again using a different spelling or keyword.':
+    'Try searching again using a different spelling or keyword.',
+  COMPACT: 'Compact',
+  GRID: 'Grid',
+  LIST: 'List',
+};

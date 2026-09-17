@@ -1,0 +1,10 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy>=2.0
+pydantic[email]>=2.6
+passlib[bcrypt]>=1.7
+bcrypt==4.0.1          # passlib no es compatible con bcrypt 5.x
+python-jose[cryptography]>=3.3
+python-multipart>=0.0.9
+# Para PostgreSQL (descomenta al conectar a Postgres):
+# psycopg2-binary>=2.9

@@ -1,0 +1,101 @@
+# Pila de cine/series "Netflix casero" — Plex + Sonarr + Radarr + qBittorrent (+ Prowlarr, Overseerr).
+# Independiente de RadioPV. Arranque:  docker compose up -d
+# Imágenes de linuxserver.io (mantenidas). Fuso: Europe/Madrid. PUID/PGID 1000.
+
+name: media-stack
+
+services:
+  # ---------- 1) Cliente torrent (WebUI: http://localhost:8080) ----------
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - "E:/Videos/qbittorrent/config:/config"
+      - "E:/Videos:/media"
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    restart: unless-stopped
+
+  # ---------- 2) Índice de fuentes (add indexers aquí) ----------
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+    volumes:
+      - "E:/Videos/prowlarr/config:/config"
+    ports:
+      - "9696:9696"
+    restart: unless-stopped
+
+  # ---------- 3) Series (WebUI: http://localhost:8989) ----------
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+    volumes:
+      - "E:/Videos/sonarr/config:/config"
+      - "E:/Videos:/media"
+    ports:
+      - "8989:8989"
+    restart: unless-stopped
+
+  # ---------- 4) Películas (WebUI: http://localhost:7878) ----------
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+    volumes:
+      - "E:/Videos/radarr/config:/config"
+      - "E:/Videos:/media"
+    ports:
+      - "7878:7878"
+    restart: unless-stopped
+
+  # ---------- 5) Servidor de medios (WebUI: http://localhost:32400) ----------
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - VERSION=docker
+      # Opcional: rellena PLEX_CLAIM con tu token para auto-dar de alta la biblioteca.
+      - PLEX_CLAIM=
+    volumes:
+      - "E:/Videos/plex/config:/config"
+      - "E:/Videos:/media"
+    ports:
+      - "32400:32400"
+    restart: unless-stopped
+
+  # ---------- 6) Peticiones estilo Netflix (WebUI: http://localhost:5055) ----------
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+    volumes:
+      - "E:/Videos/overseerr/config:/config"
+    ports:
+      - "5055:5055"
+    restart: unless-stopped

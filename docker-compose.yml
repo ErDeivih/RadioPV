@@ -1,0 +1,83 @@
+# RadioPV en el servidor · API + worker + recolector + web
+#
+#   docker compose up -d
+#
+# Requiere un fichero `.env` junto a este compose con:
+#   RADIOPV_SECRET_KEY=<clave larga>
+#   RADIOPV_ALLOWED_ORIGINS=http://servidor.local:8090,http://192.168.1.139:8090
+#
+# La música vive en /srv/data/media/music del host y se monta en /music:
+#   · api y worker  -> solo lectura
+#   · collector     -> LECTURA Y ESCRITURA (descarga ahí)
+#
+# Acceso SIEMPRE por red privada (Tailscale) o LAN. Nunca expuesto a Internet.
+
+name: radiopv
+
+x-comun: &comun
+  build: .
+  restart: unless-stopped
+  environment: &entorno
+    RADIOPV_ENV: prod
+    SECRET_KEY: "${RADIOPV_SECRET_KEY:?Falta RADIOPV_SECRET_KEY en el fichero .env}"
+    DATABASE_URL: "sqlite:////app/data/backend.db"
+    OLD_SQLITE: "/app/data/radiov.db"
+    MUSIC_ROOT: /music
+    RADIOPV_BASE_MUSIC: /music
+    RADIOPV_DATA_DIR: /app/data
+    MEDIA_ROOT: /app/data
+    ALLOWED_ORIGINS: "${RADIOPV_ALLOWED_ORIGINS:-http://localhost:8090}"
+    TZ: Europe/Madrid
+
+services:
+
+  # ---------------- API (FastAPI) ----------------
+  api:
+    <<: *comun
+    container_name: radiopv-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - /srv/data/media/music:/music:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ---------------- Worker (APScheduler) ----------------
+  worker:
+    <<: *comun
+    container_name: radiopv-worker
+    command: ["python", "-m", "app.workers"]
+    volumes:
+      - ./data:/app/data
+      - /srv/data/media/music:/music:ro
+
+  # ---------------- Recolector (yt-dlp + Deezer) ----------------
+  # Obedece al interruptor de ingesta del panel de administración.
+  collector:
+    <<: *comun
+    container_name: radiopv-collector
+    command: ["python", "run_collector.py"]
+    volumes:
+      - ./data:/app/data
+      - /srv/data/media/music:/music        # ESCRITURA: aquí descarga
+    cpus: 1.5
+    mem_limit: 1500m
+
+  # ---------------- Web (build de React servido por nginx) ----------------
+  # El build se genera con `yarn build` en frontend/ (ver deploy.sh).
+  web:
+    image: nginx:1.27-alpine
+    container_name: radiopv-web
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      - TZ=Europe/Madrid

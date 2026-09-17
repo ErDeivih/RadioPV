@@ -1,0 +1,75 @@
+# ignorar entorno y datos locales
+.venv/
+.uv-cache/
+.tmp/
+data/music/
+data/playlists/
+data/*.db
+data/*.db-*
+data/settings.json
+__pycache__/
+*.pyc
+_smoke.py
+.vs/
+node_modules/
+vendor/
+_tmp/
+# build del frontend y móvil, y .env local (vite lo lee; no debe ir al repo)
+frontend/.env
+frontend/build/
+mobile/build/
+**/build/
+**/.dart_tool/
+
+# pruebas
+frontend/test-results/
+frontend/playwright-report/
+frontend/.playwright/
+_tmp/
+
+# ---------- Añadido para el despliegue en el servidor ----------
+# basura de pytest que se acumulaba en la raíz del repo
+pytest-cache-files-*/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# cachés de gestores de paquetes
+.yarn/
+.yarn-global/
+.pnpm-store/
+
+# datos y respaldos que no deben viajar
+data/
+!data/.gitkeep
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+.fuse_hidden*
+blacklist.json
+settings.json
+.backup/
+outputs/
+_to_delete/
+_test_media/
+_test_music/
+_t/
+
+# secretos
+.env
+.env.*
+!.env.dist
+!.env.example
+*.key
+*.pem
+
+# logs
+*.log
+copia-musica.log
+
+# sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp

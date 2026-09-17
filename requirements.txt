@@ -1,0 +1,7 @@
+# RadioPV - dependencias
+yt-dlp>=2025.1.1
+streamlit>=1.40
+librosa>=0.11
+requests>=2.31
+pandas>=2.2
+mutagen>=1.47

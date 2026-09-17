@@ -1,0 +1,33 @@
+# RadioPV · API + worker
+# Acceso por red privada (Tailscale), NO público. La música se monta desde el host :ro.
+#   docker compose up -d
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"          # se añade la IP Tailscale en la env ALLOWED_ORIGINS
+    environment:
+      RADIOPV_ENV: prod
+      SECRET_KEY: "${RADIOPV_SECRET_KEY}"      # obligatoria en prod (generar: python -c "import secrets;print(secrets.token_urlsafe(48))")
+      DATABASE_URL: "sqlite:////app/data/backend.db"
+      OLD_SQLITE: "/app/data/radiov.db"
+      MUSIC_ROOT: /music
+      MEDIA_ROOT: /app/data
+      ALLOWED_ORIGINS: "${RADIOPV_ALLOWED_ORIGINS}"   # "http://<tailscale-ip>:3000,http://localhost:3000"
+    volumes:
+      - ./data:/app/data                 # BDs + covers (persistente)
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["python", "-m", "app.workers"]
+    environment:
+      RADIOPV_ENV: prod
+      SECRET_KEY: "${RADIOPV_SECRET_KEY}"
+      DATABASE_URL: "sqlite:////app/data/backend.db"
+      OLD_SQLITE: "/app/data/radiov.db"
+      MUSIC_ROOT: /music
+      MEDIA_ROOT: /app/data
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+  # El frontend React se sirve de forma estática (o por dev server); aquí se deja documentado.
