@@ -83,12 +83,11 @@ def main() -> int:
             hay = _tiene_fichero(t["file_path"])
             if not hay:
                 saltos += 1
+            # Se enseñan las seis primeras (para ver por dónde empieza) y todas las que fallan.
             if i < 6 or not hay:
                 marca = "suena" if hay else "SE SALTA"
                 print(f"   [{i + 1:3d}] {marca:9s} {t['artist']} - {t['title']}")
-            if i > 40 and saltos == 0:
-                break
-        print(f"\n=> de las primeras {min(len(temas), 41)} canciones se saltarían {saltos}")
+        print(f"\n=> si se pulsa reproducir, se saltarían {saltos} de las {len(temas)} canciones")
 
     con.close()
     return 0
