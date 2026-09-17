@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from ..database import get_db
+from ..security import get_current_user
 from .. import models, schemas
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
@@ -76,8 +77,15 @@ def get_track(track_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{track_id}/report")
-def report_track(track_id: int, db: Session = Depends(get_db)):
-    """'Esta canción está mal': se marca para revisar (el worker la re-verificará)."""
+def report_track(track_id: int, db: Session = Depends(get_db),
+                 user: models.User = Depends(get_current_user)):
+    """'Esta canción está mal': se marca para revisar (el worker la re-verificará).
+
+    Exige sesión: marcar pone la pista en `revisar`, y **todos los listados sólo sirven las
+    `descargada`**, así que sin autenticación cualquiera podía sacar canciones del catálogo (y con
+    un bucle, todas). El test que lo llamaba sin cabeceras esperaba un 200: estaba confirmando el
+    agujero en vez de detectarlo.
+    """
     t = db.query(models.Track).filter(models.Track.id == track_id).first()
     if not t:
         raise HTTPException(404, "Canción no encontrada")

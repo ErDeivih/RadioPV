@@ -1,8 +1,10 @@
 """Trabajador en segundo plano. Arranque:  python -m app.workers (proceso separado, nunca uvicorn)."""
 import logging
+import threading
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+from sqlalchemy import func
 
 from .database import SessionLocal, ensure_schema
 from . import models
@@ -250,20 +252,35 @@ def refresh_trends(db, _hits=None) -> int:
 
 
 def verificar_ficheros(db) -> int:
-    """Comprueba que cada file_path existe. Si falta → status='perdida' (cola de re-descarga)."""
+    """Comprueba que cada file_path existe. Si falta → status='perdida' (se vuelve a descargar).
+
+    OJO con el `except`: antes marcaba 'perdida' ante CUALQUIER excepción, así que un fallo
+    transitorio (el disco ocupado, un permiso, el volumen montándose) sacaba de la aplicación
+    canciones que estaban perfectamente. Ahora sólo se marca cuando la comprobación dice
+    claramente que el fichero no está; si la comprobación falla, se deja como estaba y se anota.
+    """
     from .paths import resolve_music
-    n = 0
+    n = dudosos = 0
     for t in db.query(models.Track).filter(models.Track.status == "descargada").all():
         if not t.file_path:
             continue
         try:
-            if not resolve_music(t.file_path).exists():
-                t.status = "perdida"
-                n += 1
+            existe = resolve_music(t.file_path).exists()
+        except FileNotFoundError:
+            existe = False                      # no hay fichero que buscar: sí es un problema
         except Exception:  # noqa: BLE001
+            # No se sabe: no se toca la canción (mejor dejarla sonando que sacarla por un fallo
+            # momentáneo del disco).
+            dudosos += 1
+            continue
+        if not existe:
             t.status = "perdida"
             n += 1
     db.commit()
+    if dudosos:
+        log.warning("[verificar_ficheros] %s canciones no se pudieron comprobar (se dejan como estaban)", dudosos)
+    if n:
+        log.info("[verificar_ficheros] %s canciones marcadas como perdidas", n)
     return n
 
 
@@ -533,8 +550,32 @@ def rebuild_recopilaciones(db, n: int = 20) -> int:
 
 def _pasada_inicial(descargadora=None) -> None:
     """Al arrancar, corre una vez lo que regenera el catálogo y la personalización (para que
-    'python -m app.workers' haga algo ya, no espere a las horas del cron)."""
-    ensure_schema()          # añade columnas nuevas (mixes.explicacion) a BD antiguas
+    'python -m app.workers' haga algo ya, no espere a las horas del cron).
+
+    Se lanza en un hilo aparte y DESPUÉS de arrancar el planificador: antes se ejecutaba entera
+    (con `rebuild_similar`, que son 205.600 filas) ANTES de `s.start()`, así que el planificador
+    no existía durante minutos y, con el autodespliegue revisando cada 5 minutos, se repetía
+    entera en cada reinicio del contenedor.
+    """
+    ensure_schema()      # columnas e índices que falten en bases antiguas
+    # Si los mixes se regeneraron hace poco, es que ya se hizo: no se repite el trabajo pesado
+    # en cada reinicio del contenedor (el autodespliegue lo revisa cada 5 minutos).
+    try:
+        db = SessionLocal()
+        try:
+            ultimo = db.query(func.max(models.Mix.created_at)).scalar()
+        finally:
+            db.close()
+        if ultimo is not None:
+            momento = ultimo if isinstance(ultimo, datetime) else datetime.fromisoformat(str(ultimo))
+            if momento.tzinfo is not None:
+                momento = momento.replace(tzinfo=None)
+            if datetime.utcnow() - momento < timedelta(hours=6):
+                log.info("[inicial] omitida: los mixes son de hace menos de 6 h")
+                return
+    except Exception:  # noqa: BLE001
+        log.exception("[inicial] no se pudo comprobar la antigüedad de los mixes")
+
     for nombre, fn in (
         ("sync_catalogo", sync_catalogo),        # propaga géneros corregidos a backend.db
         ("rebuild_similar", rebuild_similar_job),
@@ -545,6 +586,7 @@ def _pasada_inicial(descargadora=None) -> None:
         ("refresh_popularidad", lambda db: refresh_popularidad_pasar(db, 30)),  # primer lote
         ("rebuild_mixes", rebuild_mixes),
     ):
+        db = None
         try:
             db = SessionLocal()
             n = fn(db)
@@ -552,28 +594,60 @@ def _pasada_inicial(descargadora=None) -> None:
         except Exception:  # noqa: BLE001
             log.exception("[inicial] %s FALLÓ", nombre)
         finally:
-            db.close()
+            if db is not None:
+                db.close()
+
+
+# Margen para que una tarea programada que se retrase no se pierda. Ver `_programar`.
+MARGEN_RETRASO_SEGUNDOS = 3600
+
+
+def _programar(s, nombre: str, fn, **disparo) -> None:
+    """Añade una tarea con las opciones que APScheduler NO pone por defecto.
+
+    El valor por defecto de APScheduler 3 es `misfire_grace_time=1` segundo: si una tarea
+    programada por `cron` se retrasa más de un segundo, la ejecución **se descarta sin avisar** y
+    no se recupera hasta el día siguiente. En este servidor retrasarse es lo normal (4 GB de RAM,
+    tareas que duran horas, el contenedor reiniciándose con cada despliegue), así que **todo el
+    trabajo diario llevaba desde el 7 de septiembre sin hacerse**: mixes, listas del sistema y la
+    tabla `similar` a medias. Las tareas de intervalo se salvaban porque su siguiente ejecución se
+    recalcula sola; las de `cron` no. Y como cada tarea sólo escribía una línea «ok N» en la
+    salida, nada lo decía.
+
+    `max_instances=1` evita además que una tarea larga se solape consigo misma.
+    """
+    s.add_job(_tarea(nombre, fn), id=nombre, max_instances=1, coalesce=True,
+              misfire_grace_time=MARGEN_RETRASO_SEGUNDOS, **disparo)
 
 
 def main():
     logging.basicConfig(level=logging.INFO)
     s = BlockingScheduler(timezone="Europe/Madrid")
-    s.add_job(_tarea("sync_catalogo", sync_catalogo), "interval", minutes=30)
-    s.add_job(_tarea("limpiar_catalogo", limpiar_catalogo), "interval", hours=1)
-    s.add_job(_tarea("analysis_audio", analisis_audio), "interval", hours=4)
-    s.add_job(_tarea("rebuild_similar", rebuild_similar_job), "cron", hour=4)
-    s.add_job(_tarea("rebuild_mixes", rebuild_mixes), "cron", hour=5)
-    s.add_job(_tarea("refresh_trends", refresh_trends), "interval", hours=8)
-    s.add_job(_tarea("rebuild_static_lists", rebuild_static_lists), "cron", hour=6)
-    s.add_job(_tarea("rebuild_home_tops", rebuild_home_tops), "cron", hour=6, minute=30)
-    s.add_job(_tarea("rebuild_cut_tops", rebuild_cut_tops), "cron", hour=6, minute=45)
-    s.add_job(_tarea("rebuild_recopilaciones", rebuild_recopilaciones), "cron", hour=7, minute=15)
-    s.add_job(_tarea("refresh_popularidad", lambda db: refresh_popularidad_pasar(db, 40)), "interval", hours=6)
-    s.add_job(_tarea("verificar_ficheros", verificar_ficheros), "cron", day_of_week="sun", hour=3)
-    s.add_job(_tarea("prune", prune), "cron", hour=7)
-    log.info("Worker RadioPV en marcha")
-    _pasada_inicial()          # regenera listas/mixes/tops y propaga géneros YA
-    s.start()
+    _programar(s, "sync_catalogo", sync_catalogo, trigger="interval", minutes=30)
+    _programar(s, "limpiar_catalogo", limpiar_catalogo, trigger="interval", hours=1)
+    _programar(s, "analysis_audio", analisis_audio, trigger="interval", hours=4)
+    _programar(s, "rebuild_similar", rebuild_similar_job, trigger="cron", hour=4)
+    _programar(s, "rebuild_mixes", rebuild_mixes, trigger="cron", hour=5)
+    _programar(s, "refresh_trends", refresh_trends, trigger="interval", hours=8)
+    _programar(s, "rebuild_static_lists", rebuild_static_lists, trigger="cron", hour=6)
+    _programar(s, "rebuild_home_tops", rebuild_home_tops, trigger="cron", hour=6, minute=30)
+    _programar(s, "rebuild_cut_tops", rebuild_cut_tops, trigger="cron", hour=6, minute=45)
+    _programar(s, "rebuild_recopilaciones", rebuild_recopilaciones, trigger="cron", hour=7, minute=15)
+    _programar(s, "refresh_popularidad", lambda db: refresh_popularidad_pasar(db, 40),
+               trigger="interval", hours=6)
+    # A diario, no semanal: mientras falte música en el disco, la aplicación ofrece canciones que
+    # no pueden sonar. Antes era los domingos a las 3:00, y encima esa ejecución se perdía.
+    _programar(s, "verificar_ficheros", verificar_ficheros, trigger="cron", hour=3)
+    _programar(s, "prune", prune, trigger="cron", hour=7)
+
+    log.info("Worker RadioPV en marcha (%s tareas programadas)", len(s.get_jobs()))
+
+    # La pasada inicial va en un HILO APARTE: antes se ejecutaba entera (con `rebuild_similar`,
+    # 205.600 filas) antes de `s.start()`, así que durante minutos no había planificador y, con
+    # el autodespliegue revisando cada 5 minutos, se repetía completa en cada reinicio.
+    threading.Thread(target=_pasada_inicial, name="pasada-inicial", daemon=True).start()
+
+    s.start()          # bloquea hasta que se pare el proceso
 
 
 if __name__ == "__main__":

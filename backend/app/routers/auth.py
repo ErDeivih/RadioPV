@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas
@@ -22,11 +23,29 @@ def _login_key(email: str, request: Request) -> str:
     return f"{email.lower()}|{ip}"
 
 
+def _purgar_intentos() -> None:
+    """Quita del diccionario los intentos ya caducados.
+
+    Sin esto el diccionario crecía sin límite: una entrada por cada email+IP que falló una vez,
+    para siempre. En un servidor de 4 GB y con la IP cambiando (móvil), es una fuga de memoria
+    lenta pero segura. Se purga de vez en cuando, no en cada intento, para no recorrerlo entero
+    en el caso normal.
+    """
+    ahora = datetime.utcnow()
+    for clave in [k for k, (_, ultimo) in _login_attempts.items()
+                  if (ahora - ultimo) >= _LOGIN_WINDOW]:
+        _login_attempts.pop(clave, None)
+
+
 def _check_login_limit(email: str, request: Request) -> None:
+    _purgar_intentos()
     key = _login_key(email, request)
     fails, last = _login_attempts.get(key, (0, datetime.min))
     if fails >= _LOGIN_MAX_FAILS and (datetime.utcnow() - last) < _LOGIN_WINDOW:
-        raise HTTPException(429, "Demasiados intentos. Espera unos minutos.")
+        espera = int((_LOGIN_WINDOW - (datetime.utcnow() - last)).total_seconds()) + 1
+        # `Retry-After` para que el cliente (y cualquier proxy) sepa cuándo volver.
+        raise HTTPException(429, "Demasiados intentos. Espera unos minutos.",
+                            headers={"Retry-After": str(espera)})
 
 
 def _record_login_fail(email: str, request: Request) -> None:
@@ -55,7 +74,14 @@ def register(data: schemas.RegisterIn, db: Session = Depends(get_db)):
                        display_name=data.display_name or data.email.split("@")[0],
                        is_admin=es_admin)
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Dos registros del mismo email a la vez: la comprobación de arriba no basta porque
+        # los dos pueden pasar por ella antes de que ninguno confirme. Antes esto era un 500
+        # sin explicación; lo correcto es decir lo mismo que cuando se detecta antes (400).
+        db.rollback()
+        raise HTTPException(400, "Email ya registrado") from None
     db.refresh(user)
     return {"access_token": create_access_token(user.id, user.token_version), "user": user}
 

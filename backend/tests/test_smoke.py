@@ -227,7 +227,11 @@ def test_endpoints_t16(client, token):  # T-16
     assert client.get("/playlists", headers=h).json() == []
 
     # report
-    rp = client.post(f"/tracks/{t1.id}/report")
+    # Este endpoint pone la pista en 'revisar' y todos los listados sólo sirven las 'descargada',
+    # así que sin sesión cualquiera podía sacar canciones del catálogo. Antes este test lo llamaba
+    # SIN cabeceras y esperaba un 200: estaba confirmando el agujero en vez de detectarlo.
+    assert client.post(f"/tracks/{t1.id}/report").status_code == 401
+    rp = client.post(f"/tracks/{t1.id}/report", headers=h)
     assert rp.status_code == 200 and rp.json()["status"] == "revisar"
 
 

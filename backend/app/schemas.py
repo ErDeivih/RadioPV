@@ -52,10 +52,11 @@ class TrackOut(BaseModel):
     yt_likes: Optional[int] = None
     popularidad: Optional[float] = None
     youtube_id: Optional[str] = None
-    file_path: Optional[str] = None
-    cover_path: Optional[str] = None
+    # NO se exponen `file_path`, `cover_path` ni `artist_image_path`: son rutas del sistema de
+    # ficheros del servidor y estas respuestas salen también en peticiones SIN autenticar
+    # (`/tracks` es público), así que contaban cómo está organizado el disco. El panel de
+    # administración sí las necesita y las lee de `/admin/tracks`, que va por otra vía.
     cover_url: Optional[str] = None
-    artist_image_path: Optional[str] = None
     artist_image_url: Optional[str] = None
     deezer_id: Optional[str] = None
     duration: Optional[float] = None

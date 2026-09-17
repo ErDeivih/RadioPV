@@ -1008,3 +1008,100 @@ def republicar_completas(limit: int = 2000) -> int:
     if n:
         db.log_event(f"✅ {n} incompletas republicadas a 'descargada'", "info")
     return n
+
+
+def recuperar_perdidas(limit: int = 10, *, progress: Optional[dict] = None) -> int:
+    """Vuelve a descargar las canciones marcadas 'perdida' (su fichero ya no está en el disco).
+
+    POR QUÉ HACÍA FALTA
+    -------------------
+    `verificar_ficheros` (el worker) marca 'perdida' las canciones cuyo fichero desapareció,
+    con la idea de que entran en una "cola de re-descarga"… pero **nadie las volvía a
+    descargar**: la canción desaparecía de la aplicación y no volvía **nunca**. Con miles de
+    canciones marcadas, eso es un agujero silencioso.
+
+    Y `fulfill_track` NO sirve para esto: lo primero que hace es comprobar si la canción ya está
+    en la biblioteca y, como la fila sigue ahí (sólo está marcada 'perdida'), devuelve su id sin
+    descargar nada. Por eso hace falta esta función: descarga **y actualiza esa misma fila**, de
+    forma que la canción conserva su id, sus "me gusta" y su historial.
+
+    Va de poco en poco a propósito (`limit`): cada canción es una descarga de YouTube, así que no
+    conviene lanzar miles de golpe. Se llama desde el mantenimiento del colector, que ya respeta
+    el interruptor de ingesta.
+    """
+    import os
+
+    from . import quality
+    from . import youtube as Y
+
+    conn = db.get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM tracks WHERE status=? AND title IS NOT NULL AND title != '' "
+            "ORDER BY added_at ASC LIMIT ?",
+            (M.STATUS_LOST, limit)).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return 0
+
+    recuperadas = fallos = 0
+    for r in rows:
+        t = dict(r)
+        if progress is not None:
+            progress["current_review"] = f"recuperando: {t.get('artist')} - {t.get('title')}"
+        try:
+            yt = Y.search_and_download(
+                t.get("artist") or "", t.get("title") or "",
+                expected_duration=t.get("duration"),
+                genre=t.get("genre"), language=t.get("language"),
+                source=t.get("source") or M.SOURCE_ONDEMAND,
+            )
+            if not yt or yt.get("skipped"):
+                fallos += 1
+                continue
+
+            # Mismos campos que `_persist_yt`, pero sobre la fila que ya existe.
+            rec = dict(t)
+            rec.update({
+                "file_path": yt.get("file_path"),
+                "file_size": yt.get("file_size"),
+                "duration": yt.get("duration") or t.get("duration"),
+                "youtube_id": yt.get("youtube_id") or t.get("youtube_id"),
+                "youtube_url": yt.get("youtube_url") or t.get("youtube_url"),
+                "match_score": yt.get("match_score"),
+                "status": M.STATUS_DOWNLOADED,
+            })
+            # Organizar en la carpeta catalogada, como en una descarga normal.
+            try:
+                nuevo = organize_track(rec)
+                if nuevo:
+                    rec["file_path"] = _rel_music(nuevo)
+                    rec["file_size"] = os.path.getsize(nuevo) if os.path.exists(nuevo) else 0
+            except Exception as e:  # noqa: BLE001
+                db.log_event(f"Organizar al recuperar: {e}", "warning")
+
+            # La puerta de calidad se aplica igual: si vuelve a no pasar, va a cuarentena.
+            ok, motivo = quality.revisar(rec)
+            if not ok:
+                rec["status"] = M.STATUS_QUARANTINE
+                db.log_event(f"🚧 Recuperada pero en cuarentena: {t.get('artist')} - "
+                             f"{t.get('title')} → {motivo}", "warning")
+
+            db.update_track(t["id"], **{
+                k: rec.get(k) for k in
+                ("file_path", "file_size", "duration", "youtube_id", "youtube_url",
+                 "match_score", "status")
+            })
+            if rec["status"] == M.STATUS_DOWNLOADED:
+                recuperadas += 1
+                db.log_event(f"♻️ Recuperada: {t.get('artist')} - {t.get('title')}", "info")
+        except Exception as e:  # noqa: BLE001
+            fallos += 1
+            db.log_event(f"Fallo al recuperar «{t.get('title')}»: {e}", "error")
+
+    if progress is not None:
+        progress.pop("current_review", None)
+    if recuperadas or fallos:
+        db.log_event(f"♻️ Recuperación: {recuperadas} de vuelta, {fallos} sin poder", "info")
+    return recuperadas

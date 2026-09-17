@@ -257,12 +257,15 @@ def admin_blacklist_tracks(payload: IdsRequest,
 @router.post("/artists/veto", summary="Vetar un artista (y opcionalmente borrar sus canciones)")
 def admin_veto_artist(payload: ArtistVetoRequest,
                       _: models.User = Depends(require_admin)) -> dict:
-    _, rbl, *_ = _radiov()
+    rdb, rbl, *_ = _radiov()
     if payload.delete_tracks:
         borradas = rbl.block_artist(payload.name)
     else:
-        rbl.list_blacklist  # noqa: B018  (documenta que el módulo ya está cargado)
-        _, rdb, *_ = _radiov()  # noqa: F841
+        # OJO con el desempaquetado: `_radiov()` devuelve (db, blacklist, config, ingest, models),
+        # así que el primer valor es el módulo de base de datos. Antes esto era
+        # `_, rdb, *_ = _radiov()`, con lo que `rdb` acababa siendo el módulo `blacklist`, que no
+        # tiene `add_blacklist` (está en `db`): vetar un artista sin borrar sus canciones daba
+        # un 500 seguro.
         rdb.add_blacklist("artist", payload.name, reason="vetado por el usuario")
         borradas = 0
     return {"artista": payload.name, "borradas": borradas}

@@ -7,6 +7,10 @@ STATUS_DOWNLOADED = "descargada"
 STATUS_FAILED = "fallida"
 STATUS_QUEUED = "en_cola"
 STATUS_QUARANTINE = "cuarentena"    # no pasa la puerta de calidad: no se sirve a la app
+# El fichero ya no está en el disco (lo detecta `verificar_ficheros`). Estaba escrito a mano en
+# el worker y no existía como constante; se añade aquí porque es un estado más del catálogo y
+# `catalog.recuperar_perdidas` lo usa para volver a descargarlas.
+STATUS_LOST = "perdida"
 
 # Origen de la pista
 SOURCE_AGENT = "agente"

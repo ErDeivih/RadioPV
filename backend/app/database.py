@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Por defecto SQLite local para desarrollo; con DATABASE_URL se usa Postgres/SQLAlchemy.
@@ -9,6 +9,33 @@ _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite"
 engine = create_engine(DATABASE_URL, connect_args=_connect_args, future=True, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
+
+_ES_SQLITE = DATABASE_URL.startswith("sqlite")
+
+if _ES_SQLITE:
+    @event.listens_for(engine, "connect")
+    def _configurar_sqlite(dbapi_conn, _registro):  # noqa: ANN001
+        """Ajustes de SQLite que faltaban, y que importan porque hay DOS procesos escribiendo.
+
+        La API y el worker abren la misma base a la vez. Sin esto:
+          · journal_mode por defecto (rollback) bloquea a los lectores mientras alguien escribe
+            → «database is locked» en cuanto coinciden una sincronización y una petición;
+          · sin `busy_timeout`, SQLite devuelve el error AL INSTANTE en vez de esperar un poco.
+        El módulo del colector (`radiov/db.py`) ya lo hacía así; la base de la API se había
+        quedado sin ello.
+
+        NO se activa `PRAGMA foreign_keys=ON` a propósito: al probarlo, flujos que hoy funcionan
+        fallan con «FOREIGN KEY constraint failed» (hay filas históricas que apuntan a pistas que
+        ya no están, por ejemplo reproducciones de canciones retiradas). Antes de activarlo hay
+        que limpiar esos datos; mientras tanto, activarlo rompería escrituras reales.
+        """
+        cursor = dbapi_conn.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")      # lectores y escritor a la vez
+            cursor.execute("PRAGMA busy_timeout=5000")     # espera 5 s antes de rendirse
+            cursor.execute("PRAGMA synchronous=NORMAL")    # en WAL es seguro y más rápido
+        finally:
+            cursor.close()
 
 
 def get_db():
@@ -35,6 +62,23 @@ _MIGRACIONES_COLUMNAS = {
 }
 
 
+# Índices que faltaban. `tracks.status` se filtra en casi TODAS las consultas («solo las
+# descargadas»), y sin índice eso es un recorrido completo de la tabla en cada petición; en un
+# HDD y con 5000 canciones se nota. `album` y `rank` se filtran/ordenan a menudo.
+_MIGRACIONES_INDICES = {
+    "tracks": [
+        ("ix_tracks_status", "status"),
+        ("ix_tracks_status_id", "status, id"),
+        ("ix_tracks_album", "album"),
+        ("ix_tracks_rank", "rank"),
+        ("ix_tracks_popularidad", "popularidad"),
+    ],
+    "plays": [
+        ("ix_plays_user_track", "user_id, track_id"),
+    ],
+}
+
+
 def ensure_schema(bind=None) -> None:
     """Añade a las tablas existentes las columnas que el modelo ya declara pero la BD de un
     usuario anterior no tiene. Llámalo después de Base.metadata.create_all(). No destructivo."""
@@ -47,5 +91,21 @@ def ensure_schema(bind=None) -> None:
         existentes = {c["name"] for c in insp.get_columns(tabla)}
         for nombre, ddl in columnas:
             if nombre not in existentes:
+                try:
+                    with bind.begin() as con:
+                        con.execute(text(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {ddl}"))
+                except Exception:  # noqa: BLE001
+                    # La API y el worker arrancan casi a la vez y los dos llaman aquí: el segundo
+                    # recibía «duplicate column name» y no arrancaba. Si ya está, es que lo hizo
+                    # el otro proceso, que es justo lo que queríamos.
+                    pass
+
+    for tabla, indices in _MIGRACIONES_INDICES.items():
+        if not insp.has_table(tabla):
+            continue
+        for nombre, columnas in indices:
+            try:
                 with bind.begin() as con:
-                    con.execute(text(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {ddl}"))
+                    con.execute(text(f"CREATE INDEX IF NOT EXISTS {nombre} ON {tabla} ({columnas})"))
+            except Exception:  # noqa: BLE001
+                pass
