@@ -20,4 +20,9 @@ export const search = {
   Searching: 'Buscando',
   'No results': 'No se han encontrado resultados',
   'No results where found for': 'No se han encontrado resultados para',
+  'Request received': 'Petición recibida',
+  'Log in to request songs': 'Inicia sesión para pedir canciones',
+  'Could not send the request': 'No se ha podido enviar la petición',
+  'Request this song': 'Pedir esta canción',
+  Home: 'Inicio',
 };

@@ -39,4 +39,6 @@ export const home = {
   'Recently played': 'Escuchado hace poco',
   'Featured playlists': '¡En tendencia!',
   'Popular playlists': 'Listas populares',
+  'Your favourite artists': 'Tus artistas favoritos',
+  'Inicia sesion en RadioNano': 'Inicia sesión en RadioPV',
 };

@@ -269,8 +269,14 @@
       transform: scale(0.99);
     }
 
+    // El botón de reproducir de las TARJETAS también estaba oculto a la fuerza en pantalla
+    // pequeña (`display: none !important`), igual que el de las filas de canciones: en el móvil
+    // las tarjetas de playlist se quedaban sin forma de reproducirlas. Se muestra siempre, que es
+    // lo que hace falta cuando no hay ratón.
     .circle-play-div {
-      display: none !important;
+      display: block !important;
+      opacity: 1 !important;
+      transform: none !important;
     }
 
     .playlist-card-info {

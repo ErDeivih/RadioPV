@@ -1,0 +1,36 @@
+Bloqueantes del movil y traduccion (auditoria de interfaz)
+
+**Los filtros de la barra superior no se podian usar en el movil.** `.nav-header` tenia
+`visibility: hidden !important` a <=768px, y el estado `&.active` (que se pone al
+desplazar la pagina) no podia ganarle al `!important`. Dentro de esa barra viven los
+chips de filtro (Todo/Musica en Inicio, Todo/Artistas/Canciones/Albumes/Listas en
+Buscar), asi que al desplazar aparecia un hueco vacio y ningun filtro. Ahora se ven y
+se pueden pulsar. El titulo tenia el mismo problema con `display: none !important`.
+
+**Las tarjetas de playlist se quedaban SIN boton de reproducir en el movil**: mismo
+caso que las filas de canciones (que ya arregle), pero en `.playlist-card
+.circle-play-div`, con `display: none !important`. Ahora se muestran siempre.
+
+**Las acciones de los episodios de podcast se veian pero no respondian**: el rescate
+tactil reponia opacidad y visibilidad pero no `pointer-events`, que nacia en `none`.
+
+**El final de cualquier lista quedaba debajo del reproductor.** `.Main-section` tenia
+`padding-bottom: 50px` en movil, cuando lo que queda fijo abajo (reproductor + menu)
+ronda los 150: las ultimas canciones no se podian pulsar. Ahora se reserva el hueco de
+verdad mas el area segura del sistema.
+
+**Area segura del sistema**: `.mobile-bar` se aparta con `env(safe-area-inset-bottom)`
+para no quedar bajo la barra de gestos de Android. Para que eso valga algo, el meta
+viewport necesita `viewport-fit=cover`, que faltaba.
+
+Traduccion y marca:
+
+- 19 claves que el codigo usaba y NO existian en castellano: i18next mostraba la clave
+  cruda (en ingles) en mitad de la interfaz en espanol (guardar en Me gusta, eliminar
+  lista, privacidad de la lista, pedir una cancion, tus artistas favoritos...). Anadidas.
+- El idioma de arranque era `en` con respaldo `en`: la primera pintada salia en ingles
+  hasta que el componente de arriba cambiaba el idioma (parpadeo en cada carga). Ahora
+  arranca en espanol y el respaldo tambien es espanol.
+- Las fechas relativas usaban el idioma de ARGENTINA (`es-AR`). Ahora espanol de Espana.
+- La marca decia "RadioNano" en el titulo, el manifest y el aviso de "sin JavaScript";
+  el proyecto es RadioPV.

@@ -351,12 +351,18 @@ h3 {
   transition: background-color 0.6s ease-in-out, visibility 0.4s ease-in-out;
 
   @media (max-width: $desktop-breakpoint) {
-    visibility: hidden !important;
-    opacity: 0;
+    // OJO: aquí había `visibility: hidden !important` y `display: none !important` en el título.
+    // El `!important` impedía que `&.active` (más abajo) pudiera mostrarlos, y ese estado se pone
+    // al desplazar la página: en el móvil la barra fija superior se quedaba INVISIBLE (aunque
+    // ocupando su sitio) justo cuando debía aparecer. Y dentro de esa barra viven los chips de
+    // filtro (Todo/Música en Inicio, Todo/Artistas/Canciones/Álbumes/Listas en Buscar), así que
+    // no se podían usar: se veían un hueco vacío y ningún filtro.
+    visibility: hidden;
     border-top-right-radius: 0;
     border-top-left-radius: 0;
+
     .header-title {
-      display: none !important;
+      display: none;
     }
   }
 
@@ -536,6 +542,10 @@ h3 {
   [class*="actions"] {
     opacity: 1 !important;
     visibility: visible !important;
+    // `pointer-events` también hace falta: sin esto el elemento se ve pero NO responde al dedo.
+    // Le pasaba a las acciones de los episodios de podcast (`.episode-card__actions`), que nacen
+    // con `pointer-events: none`: se veían los botones y no hacían nada al pulsarlos.
+    pointer-events: auto !important;
   }
 
   // Y los elementos que dependen del hover para verse, siempre visibles.

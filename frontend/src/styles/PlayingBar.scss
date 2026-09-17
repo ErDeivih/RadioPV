@@ -442,7 +442,10 @@
 
 .mobile-bar {
   position: fixed;
-  bottom: 5px;
+  // El área segura del sistema: en Android la barra de gestos tapa los últimos 20-30 px, y el
+  // menú Inicio/Buscar/Biblioteca quedaba justo debajo. Para que esto valga algo, `index.html`
+  // necesita `viewport-fit=cover` en el meta viewport (si no, `env()` vale 0).
+  bottom: calc(5px + env(safe-area-inset-bottom, 0px));
   width: 100%;
 
   background: linear-gradient(transparent 0%, rgb(0, 0, 0) 40%);
@@ -540,7 +543,12 @@
 
 @media (max-width: $desktop-breakpoint) {
   .Main-section {
-    padding-bottom: 50px !important;
+    // Tiene que ser al menos la altura de lo que queda fijo abajo: el reproductor móvil
+    // (~70 px) más el menú Inicio/Buscar/Biblioteca, más el margen del reproductor. Con 50 px,
+    // las últimas canciones de cualquier lista quedaban DEBAJO del reproductor y no se podían
+    // pulsar. Se suma el área segura del sistema (barra de gestos de Android) para que el menú
+    // tampoco quede tapado.
+    padding-bottom: calc(170px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 

@@ -211,7 +211,7 @@ const AddedAt = ({ addedAt }: ComponentProps) => {
   if (!addedAt) return null;
   return (
     <p className='text-left tablet-hidden' style={{ flex: 3 }}>
-      <ReactTimeAgo date={new Date(addedAt)} locale={language === 'es' ? 'es-AR' : undefined} />
+      <ReactTimeAgo date={new Date(addedAt)} locale={language === 'es' ? 'es' : undefined} />
     </p>
   );
 };

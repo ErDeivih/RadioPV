@@ -14,8 +14,12 @@ i18n
       en,
       es,
     },
-    lng: 'en',
-    fallbackLng: 'en',
+    // La aplicación es en español de España: arranca en español y no en inglés. Con `lng: 'en'`
+    // la primera pintada salía en inglés hasta que el componente de arriba llamaba a
+    // `changeLanguage` (parpadeo de idioma en cada carga). El inglés se mantiene como respaldo
+    // para las claves que aún no estén traducidas.
+    lng: 'es',
+    fallbackLng: 'es',
 
     interpolation: {
       escapeValue: false, // react already safes from xss => https://www.i18next.com/translation-function/interpolation#unescape

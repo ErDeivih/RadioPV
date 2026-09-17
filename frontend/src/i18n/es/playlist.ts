@@ -38,4 +38,18 @@ export const playlist = {
   Unfollow: 'Dejar de seguir',
   'Artist unfollowed': 'Has dejado de seguir al artista',
   'Artist followed': 'Has empezado a seguir al artista',
+  // Claves que el código usaba y NO existían en castellano: i18next mostraba la clave cruda (o
+  // sea, en inglés) en mitad de la interfaz en español.
+  'Save to Liked Songs': 'Guardar en Me gusta',
+  'Saved to Liked Songs': 'Guardada en Me gusta',
+  'Removed from Liked Songs': 'Quitada de Me gusta',
+  'Song added to Liked Songs': 'Canción añadida a Me gusta',
+  'Song removed from Liked Songs': 'Canción quitada de Me gusta',
+  'No songs to add': 'No hay canciones que añadir',
+  'Playlist deleted': 'Lista eliminada',
+  'Playlist is now private': 'La lista ahora es privada',
+  'Playlist is now public': 'La lista ahora es pública',
+  'Playlist updated successfully': 'Lista actualizada',
+  'Failed to update playlist': 'No se ha podido actualizar la lista',
+  Playlist: 'Lista',
 };
