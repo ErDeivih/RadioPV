@@ -199,6 +199,10 @@ def main() -> int:
     args = ap.parse_args()
 
     TMP_LOCAL.mkdir(parents=True, exist_ok=True)
+    # Restos de ejecuciones cortadas: los .tar se borran al terminar cada trozo, pero si el
+    # proceso muere a mitad quedan ahi y ocupan cientos de MB.
+    for viejo in TMP_LOCAL.glob("chunk_*.tar"):
+        viejo.unlink(missing_ok=True)
 
     print(f"[i] leyendo el catalogo {DB}")
     aptos, ausentes, especiales = listar()

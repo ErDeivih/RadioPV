@@ -2,6 +2,14 @@
 
 Crea una estructura local con nombres identicos a los reales del catalogo, la empaqueta
 con bsdtar, la envia al servidor y comprueba que los nombres llegan intactos.
+
+Deja constancia de tres trampas de bsdtar en Windows que costaron un rato largo:
+  · `-T fichero-de-lista` lee el fichero en la codepage ANSI, NO en UTF-8: corrompe todos
+    los acentos aunque el fichero este impecablemente en UTF-8.
+  · Pasar las rutas como ARGUMENTOS si respeta el Unicode, pero revienta a partir de ~100
+    argumentos por un limite interno de longitud.
+  · Y cualquier nombre con caracteres fuera de cp1252 (cirilico, japones, tildes
+    combinantes) falla incluso como argumento: bsdtar acaba buscando una ruta vacia.
 """
 from __future__ import annotations
 
@@ -10,7 +18,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-BASE = Path(r"F:\EspacioCodigo\RadioPV\_deploy\_prueba-tar")
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:  # noqa: BLE001
+    pass
+
+BASE = Path(__file__).resolve().parent.parent / "_deploy" / "_prueba-tar"
 SERVER = "david@servidor.local"
 REMOTO_TAR = "/tmp/_prueba-nombres.tar"
 REMOTO_DIR = "/tmp/_prueba-nombres"
