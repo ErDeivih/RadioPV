@@ -26,9 +26,14 @@ WORKDIR /app
 # leer un lockfile Berry.
 RUN corepack enable
 
-# Primero solo el manifiesto: mientras no cambie, esta capa se reutiliza y no hay que
-# reinstalar las dependencias en cada cambio de código.
-COPY frontend/package.json frontend/yarn.lock ./
+# Primero solo el manifiesto y la configuración: mientras no cambien, esta capa se reutiliza
+# y no hay que reinstalar las dependencias en cada cambio de código.
+#
+# OJO: .yarnrc.yml TIENE que copiarse aquí, antes del install. Si no, la instalación usa los
+# ajustes por defecto de Yarn, que son PnP, y crea un .pnp.cjs en vez de node_modules. Luego
+# el COPY de abajo trae el .yarnrc.yml (con nodeLinker: node-modules) y el build se encuentra
+# sin node_modules y sin estado: «Couldn't find the node_modules state file».
+COPY frontend/package.json frontend/yarn.lock frontend/.yarnrc.yml ./
 RUN yarn install
 
 COPY frontend/ ./
