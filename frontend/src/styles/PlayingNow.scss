@@ -233,6 +233,15 @@
   }
 }
 
+/* Aviso de cola vacía: se muestra en lugar de la lista, pero la cabecera (con "Radio infinita")
+ * se queda para poder volver a llenarla. */
+.cola-vacia {
+  margin: 10px 5px;
+  color: #b3b3b3;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
 .queue-song {
   margin: 5px;
   padding: 5px;

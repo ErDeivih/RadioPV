@@ -23,6 +23,7 @@ export const playingBar = {
   'Move down': 'Bajar en la cola',
   'Clear queue': 'Vaciar la cola',
   'Start radio': 'Radio infinita',
+  'Queue is empty': 'No hay nada en la cola',
   'Open Queue': 'Abrir la cola',
   'Select another device': 'Seleccionar otro dispositivo',
   'Current device': 'Dispositivo actual',

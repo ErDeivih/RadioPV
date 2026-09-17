@@ -182,6 +182,88 @@ const comprobar = (nombre, ok, detalle = '') => {
     comprobar('la barra de volumen cambia el volumen', ev.volumen > 0.1 && ev.volumen < 0.7, `volumen=${ev.volumen}`);
   }
 
+  console.log('\n== Gestión de la cola ==');
+  // Las pruebas anteriores (siguiente/anterior) han ido gastando la cola, así que se vuelve a
+  // llenar reproduciendo la playlist desde el principio.
+  await p.goto(`${URL_BASE}/playlist/${prep.playlist}`, { waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(4000);
+  await p.locator('button.circle-play.big').first().click();
+  await esperarSonido();
+  await p.waitForTimeout(1500);
+
+  await p.locator('.mobile-hidden button[aria-label="Cola"]').first().click();
+  await p.waitForTimeout(1500);
+
+  // OJO: `.queue-song` incluye también la fila de "Reproduciendo", que no lleva botones. Las
+  // filas de la COLA son las que tienen botones: contarlas mal fue lo que hizo fallar antes a
+  // estas comprobaciones.
+  const titulos = () =>
+    p.evaluate(() =>
+      [...document.querySelectorAll('.queue-song')]
+        .filter((f) => f.querySelector('.cola-botones'))
+        .map((f) => (f.querySelector('.song-title')?.textContent || '').trim())
+    );
+  const filas = () => p.locator('.queue-song .cola-botones').count();
+
+  /** Espera a que la cola deje de cambiar (la radio puede estar añadiendo canciones). */
+  const colaEstable = async () => {
+    let antes = await titulos();
+    for (let i = 0; i < 12; i++) {
+      await p.waitForTimeout(1000);
+      const ahora = await titulos();
+      if (ahora.length && ahora.join('|') === antes.join('|')) return ahora;
+      antes = ahora;
+    }
+    return antes;
+  };
+
+  const antes = await colaEstable();
+  comprobar('el panel de la cola lista las canciones que vienen', antes.length >= 2, antes.join(' | '));
+  comprobar(
+    'cada fila tiene botones de quitar y reordenar',
+    (await p.locator('.queue-song .cola-botones button[aria-label="Quitar de la cola"]').count()) >= 2 &&
+      (await p.locator('.queue-song .cola-botones button[aria-label="Subir en la cola"]').count()) >= 2
+  );
+
+  // Bajar la primera de la cola: el orden debe intercambiarse.
+  await p.locator('.queue-song .cola-botones button[aria-label="Bajar en la cola"]').first().click();
+  await p.waitForTimeout(1500);
+  const reordenado = await titulos();
+  comprobar(
+    'bajar una canción reordena la cola',
+    reordenado.length === antes.length && reordenado[0] === antes[1] && reordenado[1] === antes[0],
+    `${antes.slice(0, 2).join(' / ')}  ->  ${reordenado.slice(0, 2).join(' / ')}`
+  );
+
+  // La primera fila no puede subir: el botón está deshabilitado.
+  comprobar(
+    'la primera fila de la cola no puede subir más',
+    await p.locator('.queue-song .cola-botones button[aria-label="Subir en la cola"]').first().isDisabled()
+  );
+
+  // Quitar una canción de la cola.
+  const nFilas = await filas();
+  await p.locator('.queue-song .cola-botones button[aria-label="Quitar de la cola"]').first().click();
+  await p.waitForTimeout(1500);
+  comprobar('quitar saca la canción de la cola', (await filas()) === nFilas - 1, `${nFilas} -> ${await filas()}`);
+
+  // Vaciar la cola entera.
+  await p.locator('button[aria-label="Vaciar la cola"]').first().click();
+  await p.waitForTimeout(1500);
+  comprobar('vaciar deja la cola sin canciones', (await filas()) === 0);
+  comprobar('la canción que suena sigue sonando', (await estado()).pausado === false);
+
+  // Lanzar el "Flow" a mano: vuelve a llenar la cola con canciones parecidas.
+  // El botón tiene que seguir estando con la cola vacía (antes desaparecía justo entonces).
+  comprobar(
+    '"Radio infinita" sigue disponible con la cola vacía',
+    (await p.locator('button[aria-label="Radio infinita"]').count()) === 1
+  );
+  await p.locator('button[aria-label="Radio infinita"]').first().click();
+  await p.waitForTimeout(6000);
+  const trasFlow = await filas();
+  comprobar('"Radio infinita" vuelve a llenar la cola', trasFlow > 0, `${trasFlow} canciones`);
+
   console.log('\n== Errores ==');
   comprobar('sin errores de JavaScript', errores.length === 0, errores.slice(0, 3).join(' | ') || 'ninguno');
 

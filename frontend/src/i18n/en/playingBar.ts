@@ -13,6 +13,7 @@ export const playingBar = {
   'Move down': 'Move down',
   'Clear queue': 'Clear queue',
   'Start radio': 'Endless radio',
+  'Queue is empty': 'Nothing in the queue',
   Experience: 'Experience',
   Description: 'Description',
   Images: 'Images',

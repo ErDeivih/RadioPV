@@ -27,14 +27,14 @@ const Queueing = () => {
   const [t] = useTranslation(['playingBar']);
   const queue = useAppSelector((state) => state.queue.queue);
 
-  if (!queue || !queue.length) return null;
-
   return (
     <div style={{ marginTop: 30 }}>
       <div className='flex items-center justify-between'>
         <p className='playing-section-title'>{t('Next')}</p>
         <div className='flex items-center'>
-          {/* El "Flow" sólo entraba solo, al agotarse la cola: ahora se puede pedir. */}
+          {/* El "Flow" sólo entraba solo, al agotarse la cola: ahora se puede pedir.
+              Tiene que estar también con la cola VACÍA, que es justo cuando hace falta: antes
+              toda esta sección desaparecía al vaciarla y no había forma de rellenarla. */}
           <button
             className='cola-vaciar'
             title={t('Start radio')}
@@ -43,24 +43,29 @@ const Queueing = () => {
           >
             {t('Start radio')}
           </button>
-          {/* Antes la cola sólo se podía mirar: no había forma de quitarla entera. */}
-          <button
-            className='cola-vaciar'
-            title={t('Clear queue')}
-            aria-label={t('Clear queue')}
-            onClick={() => void playerService.clearQueue()}
-          >
-            {t('Clear queue')}
-          </button>
+          {queue && queue.length ? (
+            <button
+              className='cola-vaciar'
+              title={t('Clear queue')}
+              aria-label={t('Clear queue')}
+              onClick={() => void playerService.clearQueue()}
+            >
+              {t('Clear queue')}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div style={{ margin: 5 }}>
-        {queue.map((q, index) => (
-          // @ts-ignore
-          <QueueSongDetailsProps key={`${q.id}-${index}`} song={q} indice={index} />
-        ))}
-      </div>
+      {queue && queue.length ? (
+        <div style={{ margin: 5 }}>
+          {queue.map((q, index) => (
+            // @ts-ignore
+            <QueueSongDetailsProps key={`${q.id}-${index}`} song={q} indice={index} />
+          ))}
+        </div>
+      ) : (
+        <p className='cola-vacia'>{t('Queue is empty')}</p>
+      )}
     </div>
   );
 };
