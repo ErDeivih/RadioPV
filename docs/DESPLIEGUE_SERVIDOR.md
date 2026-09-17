@@ -87,15 +87,24 @@ robocopy F:\EspacioCodigo\RadioPV\frontend\build \\servidor.local\stacks\radiopv
 ### 2.1 Clonar el repositorio
 
 ```
-sudo apt install -y git
+sudo apt install -y git python3
 ```
 ```
 sudo git clone https://github.com/ErDeivih/RadioPV.git /opt/stacks/radiopv
 ```
+
+⚠️ **Paso imprescindible:** el `git clone` con `sudo` deja el directorio propiedad de **root**,
+y entonces `deploy.sh` no puede crear el `.env`. Devuélveselo a tu usuario:
+
+```
+sudo chown -R $USER:$USER /opt/stacks/radiopv
+```
 ```
 cd /opt/stacks/radiopv
-sudo chmod +x deploy.sh
+chmod +x deploy.sh
 ```
+
+> Si ves `./deploy.sh: línea 34: .env: Permiso denegado`, es exactamente esto.
 
 ### 2.2 Primer despliegue (genera el `.env` con la SECRET_KEY)
 
