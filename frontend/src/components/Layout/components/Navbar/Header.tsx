@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 
-import { Popconfirm, Space } from 'antd';
+import { Button, Popconfirm, Space } from 'antd';
 import { Link } from 'react-router-dom';
 import { CloseIcon } from '../../../Icons';
 import { WhiteButton } from '../../../Button';
@@ -53,6 +53,9 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
     (prev, next) => prev?.id === next?.id
   );
 
+  // `is_admin` puede no estar en el tipo del usuario: se lee de forma defensiva.
+  const esAdmin = Boolean((user as unknown as { is_admin?: boolean } | null)?.is_admin);
+
   return (
     <div
       className={`flex r-0 w-full flex-row items-center justify-between bg-gray-900 rounded-t-md z-10`}
@@ -64,6 +67,14 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
           <div className='news'>
             <News />
           </div> */}
+
+          {esAdmin && (
+            <Link to='/admin'>
+              <Button size='small' type='text'>
+                Admin
+              </Button>
+            </Link>
+          )}
 
           {user ? (
             <div className='avatar-container'>

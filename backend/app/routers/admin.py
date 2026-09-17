@@ -286,3 +286,113 @@ def admin_set_ingest(payload: IngestRequest,
     _, _, _, ric, _ = _radiov()
     ric.set_enabled(payload.enabled, by=getattr(admin, "username", None) or str(admin.id))
     return ric.status()
+
+
+# --------------------------------------------------------------- borrado en masa
+class BulkFilter(BaseModel):
+    """Filtros de una operación en masa. Al menos uno es obligatorio."""
+    q: Optional[str] = None
+    artist: Optional[str] = None
+    album: Optional[str] = None
+    genre: Optional[str] = None
+    language: Optional[str] = None
+    status: Optional[str] = None
+    source: Optional[str] = None
+    year_min: Optional[int] = None
+    year_max: Optional[int] = None
+
+
+class BulkRequest(BaseModel):
+    filters: BulkFilter
+    action: Literal["delete", "blacklist"] = "delete"
+    veto: bool = Field(True, description="Añadir a la lista negra (no se volverán a descargar)")
+    dry_run: bool = Field(False, description="Solo contar, sin tocar nada")
+    limit: int = Field(0, ge=0, description="0 = sin límite")
+
+
+def _where_bulk(f: BulkFilter) -> tuple[str, list]:
+    """Construye el WHERE del borrado en masa. Exige al menos un filtro."""
+    donde: list[str] = []
+    args: list = []
+
+    if f.q:
+        donde.append("(title LIKE ? OR artist LIKE ? OR album LIKE ?)")
+        like = f"%{f.q}%"
+        args += [like, like, like]
+    if f.artist:
+        donde.append("artist = ?"); args.append(f.artist)
+    if f.album:
+        donde.append("album = ?"); args.append(f.album)
+    if f.genre:
+        donde.append("genre = ?"); args.append(f.genre)
+    if f.language:
+        donde.append("language = ?"); args.append(f.language)
+    if f.status:
+        donde.append("status = ?"); args.append(f.status)
+    if f.source:
+        donde.append("source = ?"); args.append(f.source)
+    if f.year_min is not None:
+        donde.append("year >= ?"); args.append(f.year_min)
+    if f.year_max is not None:
+        donde.append("year <= ?"); args.append(f.year_max)
+
+    if not donde:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El borrado en masa exige al menos un filtro, para que un clic accidental "
+            "no pueda vaciar la biblioteca",
+        )
+    return "WHERE " + " AND ".join(donde), args
+
+
+@router.post("/tracks/bulk", summary="Borrar o vetar EN MASA por filtros")
+def admin_bulk(payload: BulkRequest,
+               _: models.User = Depends(require_admin)) -> dict:
+    """Borra (o veta) todo lo que encaje con los filtros, sin mandar IDs.
+
+    Es la operación pensada para limpiezas grandes: *todo lo que no sea español*,
+    *todo el género X*, *todo de este artista*. Con `dry_run=true` solo cuenta.
+
+    **Exige al menos un filtro** (ver `_where_bulk`).
+    """
+    _, rbl, *_ = _radiov()
+    clausula, args = _where_bulk(payload.filters)
+
+    limite = "" if payload.limit == 0 else f" LIMIT {int(payload.limit)}"
+    ids = [r["id"] for r in _rows(f"SELECT id FROM tracks {clausula}{limite}", tuple(args))]
+
+    if payload.dry_run:
+        return {"afectadas": len(ids), "borradas": 0, "vetadas": 0, "dry_run": True}
+
+    if payload.action == "blacklist":
+        vetadas = sum(1 for tid in ids if rbl.blacklist_song_only(tid))
+        return {"afectadas": len(ids), "borradas": 0, "vetadas": vetadas, "dry_run": False}
+
+    borradas = rbl.delete_tracks(ids, veto=payload.veto)
+    return {"afectadas": len(ids), "borradas": borradas,
+            "vetadas": borradas if payload.veto else 0, "dry_run": False}
+
+
+@router.post("/artists/bulk-veto", summary="Vetar en masa varios artistas")
+def admin_bulk_veto_artists(payload: dict = Body(...),
+                            _: models.User = Depends(require_admin)) -> dict:
+    """Veta una lista de artistas y borra sus canciones.
+
+    Cuerpo: `{"names": ["Artista A", "Artista B"], "dry_run": false}`
+    """
+    nombres = payload.get("names") or []
+    dry = bool(payload.get("dry_run", False))
+    if not nombres:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Falta la lista 'names'")
+
+    _, rbl, *_ = _radiov()
+    resultado = []
+    total = 0
+    for nombre in nombres:
+        n = _one("SELECT COUNT(*) n FROM tracks WHERE artist = ?", (nombre,))
+        cuantas = (n or {}).get("n", 0)
+        total += cuantas
+        resultado.append({"artista": nombre, "canciones": cuantas})
+        if not dry:
+            rbl.block_artist(nombre)
+    return {"dry_run": dry, "total_canciones": total, "artistas": resultado}
