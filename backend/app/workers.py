@@ -48,6 +48,13 @@ def sync_catalogo(db) -> int:
     except Exception:  # noqa: BLE001
         log.exception("[sync_catalogo] migración directa FALLÓ")
     recount_artist_tracks(db)
+    # Los recuentos de /facets cambian con el catálogo: se tira la caché para no servir los de
+    # antes de la sincronización (si no, habría hasta 5 minutos de recuentos viejos).
+    try:
+        from .routers import facets
+        facets.invalidar()
+    except Exception:  # noqa: BLE001
+        pass
     return db.query(models.Track).count()
 
 
