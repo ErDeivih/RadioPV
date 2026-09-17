@@ -338,6 +338,108 @@
   }
 }
 
+/* Pantalla "sonando ahora" del móvil.
+ *
+ * En móvil la barra de reproducción de escritorio está oculta (`.mobile-hidden`), así que el
+ * teléfono se quedaba sin barra de progreso con tiempos, sin aleatorio, sin repetir y sin
+ * volumen. Aquí se reutilizan los MISMOS componentes que en escritorio, para que todo funcione
+ * igual y no haya dos comportamientos que mantener. */
+.mobile-now-playing {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  svg {
+    fill: white !important;
+  }
+
+  .cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #fff;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    opacity: 0.85;
+
+    button {
+      all: unset;
+      cursor: pointer;
+      padding: 8px;
+      width: 40px;
+      box-sizing: border-box;
+      display: flex;
+      justify-content: center;
+    }
+  }
+
+  .portada {
+    width: min(78vw, 320px);
+    height: min(78vw, 320px);
+    object-fit: cover;
+    border-radius: 8px;
+    margin: 0 auto;
+    box-shadow: 0 12px 40px rgb(0 0 0 / 55%);
+  }
+
+  .titulo {
+    text-align: center;
+    color: #fff;
+    padding: 0 8px;
+
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    p {
+      margin: 4px 0 0;
+      font-size: 0.9rem;
+      opacity: 0.7;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  /* Los controles (progreso, play/pausa, siguiente, anterior, aleatorio, repetir) son los
+   * mismos componentes que en escritorio: basta con darles aire y tamaño cómodo para el dedo. */
+  .volume-sider-container {
+    width: 100%;
+  }
+
+  button {
+    min-width: 40px;
+    min-height: 40px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .abajo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: auto;
+    padding-top: 8px;
+
+    .volume-control-container {
+      flex: 1;
+      max-width: 200px;
+    }
+  }
+}
+
 .mobile-bar {
   position: fixed;
   bottom: 5px;

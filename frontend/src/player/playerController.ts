@@ -27,6 +27,10 @@ let onPlayed: ((track: Track) => void) | null = null;
  *  `queueController`, así que el reproductor sólo guarda la función que le pasa el puente. */
 let onNext: (() => void) | null = null;
 let onPrev: (() => void) | null = null;
+/** Qué hacer cuando una canción no se puede cargar (fichero ausente). Distinto de `onEnded`
+ *  porque aquí hay que saltar SIEMPRE: si no, con la repetición en "una sola canción" se
+ *  volvería a pedir la misma que falta y entraría en un bucle. */
+let onFallo: (() => void) | null = null;
 let precarga: HTMLAudioElement | null = null;   // audio oculto que pre-buffea la siguiente (B5)
 
 const VOLUME_KEY = 'radiopv_volume';            // volumen persistente entre sesiones (B4)
@@ -130,6 +134,11 @@ const ensure = () => {
     emit();
   });
   audio.addEventListener('play', () => { mediaSessionEstado(true); emit(); });
+  // `playing` (no `play`) es el que se dispara cuando YA hay datos sonando: es el único momento
+  // en el que se puede dar por buena la canción. Si se reiniciara el contador en `play`, el
+  // cortafuegos de canciones no disponibles no serviría de nada, porque `play` también se dispara
+  // cuando el fichero no existe.
+  audio.addEventListener('playing', () => { fallosSeguidos = 0; });
   audio.addEventListener('pause', () => { mediaSessionEstado(false); emit(); });
   audio.addEventListener('ended', () => {
     cerrar(true);
@@ -139,7 +148,8 @@ const ensure = () => {
     onEnded?.();               // deja que la cola avance (o el "Flow" encadene la radio)
   });
   // Sin esto, un 401 por token caducado o un 410 por fichero ausente son invisibles.
-  audio.addEventListener('error', () => { void recuperar(); });
+  // `alFallar` distingue los dos casos: reintenta el token o salta a la siguiente canción.
+  audio.addEventListener('error', () => { void alFallar(); });
 
   // B4: recuperar el volumen guardado (ver `volumenGuardado`: sin nada guardado sonaba a 0).
   audio.volume = volumenGuardado();
@@ -274,6 +284,78 @@ const recuperar = async () => {
   }
 };
 
+/* ─── CANCIONES SIN FICHERO ──────────────────────────────────────────────────────────────────
+ *
+ * El catálogo tiene más canciones que archivos de audio en el servidor, así que muchas devuelven
+ * 410 al pedir el stream. El comportamiento anterior era nefasto: el elemento quedaba en estado
+ * de error (`MEDIA_ERR_SRC_NOT_SUPPORTED`) con `paused = false`, o sea "reproduciendo" sin sonar
+ * y con el tiempo parado en 0:00 PARA SIEMPRE. Desde fuera eso se ve como "la playlist no
+ * suena": pulsabas el botón grande y no pasaba absolutamente nada, ni un mensaje.
+ *
+ * Ahora, cuando una canción no se puede cargar, se avisa y se pasa a la siguiente (como hace
+ * Spotify con las no disponibles). Sólo se distinguen dos casos porque el elemento de audio no
+ * expone el código HTTP: se pregunta al servidor por el mismo fichero.
+ */
+
+let fallosSeguidos = 0;              // canciones seguidas que no se han podido cargar
+let recuperaciones = 0;              // reintentos por token caducado para la canción actual
+const MAX_FALLOS_SEGUIDOS = 15;      // cortafuegos por si la radio encadena sólo no disponibles
+
+/** Evento con el que el reproductor pide a la interfaz que muestre un aviso. */
+export const AVISO = 'radiopv:aviso';
+
+const avisar = (mensaje: string) => {
+  try {
+    window.dispatchEvent(new CustomEvent(AVISO, { detail: { mensaje } }));
+  } catch { /* sin ventana (pruebas) no hay nada que avisar */ }
+};
+
+/** Motivo del fallo, preguntando al servidor por el mismo fichero. */
+const causaDelFallo = async (): Promise<'permiso' | 'ausente' | 'desconocido'> => {
+  if (!audio || !audio.src) return 'desconocido';
+  try {
+    const r = await fetch(audio.src, { headers: { Range: 'bytes=0-0' } });
+    if (r.status === 401 || r.status === 403) return 'permiso';   // token caducado
+    if (r.status === 404 || r.status === 410) return 'ausente';   // el fichero no está
+    return 'desconocido';
+  } catch {
+    return 'desconocido';
+  }
+};
+
+const alFallar = async () => {
+  if (!audio || !current || recuperando) return;
+  // Código 1 = MEDIA_ERR_ABORTED, que provocamos nosotros al cambiar de canción: no es un fallo.
+  if (audio.error && audio.error.code === 1) return;
+
+  const causa = await causaDelFallo();
+  if (causa !== 'ausente' && recuperaciones < 1) {
+    recuperaciones++;                 // puede ser el token: se reintenta una vez
+    await recuperar();
+    return;
+  }
+
+  fallosSeguidos++;
+  const titulo = current.name;
+  if (fallosSeguidos > MAX_FALLOS_SEGUIDOS) {
+    avisar(
+      'Se han saltado varias canciones seguidas: faltan sus archivos de audio en el servidor.'
+    );
+    audio.pause();
+    return;
+  }
+  avisar(
+    causa === 'ausente'
+      ? `«${titulo}» no está en el servidor: se salta a la siguiente.`
+      : `No se pudo reproducir «${titulo}»: se salta a la siguiente.`
+  );
+  cerrar(false);                       // deja constancia de la escucha parcial
+  // Salta siempre (auto = false): con la repetición en "una sola canción" repetir la misma que
+  // falta sería un bucle infinito.
+  if (onFallo) onFallo();
+  else onEnded?.();
+};
+
 export const playerController = {
   bind(onStateFn: ((s: unknown) => void) | null) { onState = onStateFn; },
   /** La cola (o el "Flow") se engancha aquí para encadenar la siguiente canción. */
@@ -281,6 +363,8 @@ export const playerController = {
   /** Siguiente / anterior desde la pantalla de bloqueo o los auriculares. */
   bindNext(fn: (() => void) | null) { onNext = fn; },
   bindPrev(fn: (() => void) | null) { onPrev = fn; },
+  /** Qué hacer si una canción no se puede cargar (normalmente: saltar a la siguiente). */
+  bindFallo(fn: (() => void) | null) { onFallo = fn; },
   /** Republica el estado ya mismo (para que la UI reaccione sin esperar al `timeupdate`). */
   refrescar,
   /** Notifica a la cola qué canción acaba de sonar (mantiene `actual` y la semilla del Flow). */
@@ -298,6 +382,7 @@ export const playerController = {
     current = track;
     contextoActual = contexto;
     escuchados = 0; ultimoTick = 0; cerrado = false;
+    recuperaciones = 0;                  // reintentos de token: se cuentan por canción
 
     gain!.gain.value = Math.pow(10, (track?.radiopv?.gain_db ?? 0) / 20);
     audio!.src = await streamUrl(track.id);

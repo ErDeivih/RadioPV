@@ -397,3 +397,80 @@ describe('servicio · playlists, álbumes y favoritos', () => {
     expect((data.currently_playing as any).id).toBe('1');
   });
 });
+
+describe('canciones cuyo archivo no está en el servidor', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    colaController.limpiar();
+    colaController.repetir(0);
+    colaController.barajar(false);
+  });
+
+  /** El servidor responde 410 al pedir el stream: el fichero no existe. */
+  const servidorSinFichero = () => {
+    (globalThis.fetch as any).mockImplementation(async (url: string) => {
+      if (String(url).startsWith('blob:falso')) return { status: 410, ok: false };
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+  };
+
+  it('avisa en pantalla y salta a la siguiente en vez de quedarse clavada', async () => {
+    const audio = await arrancar(pista(1));
+    colaController.cargar([pista(1), pista(2), pista(3)], 'playlist:7', 0, 'radiopv:playlist:7');
+    await playerController.play(pista(1));
+    playerController.bindEnded(null);
+    playerController.bindFallo(() => colaController.siguiente(false));
+
+    const avisos: string[] = [];
+    const escucha = (e: Event) => avisos.push((e as CustomEvent<{ mensaje: string }>).detail.mensaje);
+    window.addEventListener('radiopv:aviso', escucha);
+
+    servidorSinFichero();
+    audio.error = { code: 4 };            // MEDIA_ERR_SRC_NOT_SUPPORTED
+    audio.disparar('error');
+    await esperar();
+
+    window.removeEventListener('radiopv:aviso', escucha);
+
+    // Antes: el elemento quedaba con `paused = false`, sin sonido y con el tiempo en 0:00 para
+    // siempre. La playlist parecía muerta y no había ningún mensaje.
+    expect(avisos.length).toBeGreaterThan(0);
+    expect(avisos[0]).toContain('Canción 1');
+    expect(colaController.actual?.id).toBe('2');
+    expect(colaController.cola.map((t) => t.id)).toEqual(['3']);
+  });
+
+  it('no repite la canción que falta aunque la repetición esté en "una sola"', async () => {
+    const audio = await arrancar(pista(1));
+    colaController.cargar([pista(1), pista(2)], 'playlist:7', 0, 'radiopv:playlist:7');
+    await playerController.play(pista(1));
+    colaController.repetir(2);            // repetir la canción actual
+    playerController.bindFallo(() => colaController.siguiente(false));
+
+    servidorSinFichero();
+    audio.error = { code: 4 };
+    audio.disparar('error');
+    await esperar();
+    // Con `onEnded` (auto = true) se habría vuelto a pedir la misma que falta: bucle infinito.
+    expect(colaController.actual?.id).toBe('2');
+  });
+
+  it('con el token caducado (401) reintenta en vez de saltarse la canción', async () => {
+    const audio = await arrancar(pista(1));
+    colaController.cargar([pista(1), pista(2)], 'playlist:7', 0, 'radiopv:playlist:7');
+    await playerController.play(pista(1));
+    let saltos = 0;
+    playerController.bindFallo(() => { saltos++; });
+
+    (globalThis.fetch as any).mockImplementation(async (url: string) => {
+      if (String(url).startsWith('blob:falso')) return { status: 401, ok: false };
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+    audio.error = { code: 3 };            // MEDIA_ERR_DECODE
+    audio.disparar('error');
+    await esperar();
+    // Un 401 es token caducado, no fichero ausente: la canción sigue siendo la misma.
+    expect(saltos).toBe(0);
+    expect(colaController.actual?.id).toBe('1');
+  });
+});

@@ -1,8 +1,11 @@
 import SongDetails from './SongDetails';
 import { useAppDispatch, useAppSelector } from '../../../../store/store';
 import { Col, Row } from 'antd';
-import { ListIcon, Pause, Play, SkipBack, SkipNext } from '../../../Icons';
+import { ExpandOutIcon, ListIcon, Pause, Play, SkipBack, SkipNext } from '../../../Icons';
 import { Slider } from '../../../Slider';
+import SongProgressBar from './SongProgressBar';
+import ControlButtons from './ControlButtons';
+import VolumeControls from './Volume';
 
 // Redux
 import { playerService } from '../../../../services/player';
@@ -61,6 +64,10 @@ const NowPlayingBarMobile = () => {
   );
   const liked = useAppSelector((state) => state.spotify.liked);
   const [currentColor, setColor] = useState('blue');
+  // Pantalla "sonando ahora" del móvil. En móvil la barra de escritorio está oculta
+  // (`mobile-hidden`), así que sin esto el teléfono no tenía ni aleatorio, ni repetir, ni
+  // volumen, ni una barra de progreso con tiempos.
+  const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
     if (currentSong) {
@@ -74,17 +81,72 @@ const NowPlayingBarMobile = () => {
     }
   }, [currentSong]);
 
+  useEffect(() => {
+    document.body.style.overflow = abierto ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [abierto]);
+
   if (!currentSong) return <div></div>;
+
+  const fondo = `linear-gradient(${currentColor} -50%, rgb(18, 18, 18) 300%)`;
+
+  if (abierto) {
+    return (
+      <div className='mobile-now-playing' style={{ background: fondo }} role='dialog' aria-label='Sonando ahora'>
+        <div className='cabecera'>
+          <button aria-label='Cerrar' onClick={() => setAbierto(false)}>
+            <ExpandOutIcon />
+          </button>
+          <span>Sonando ahora</span>
+          <span style={{ width: 40 }} />
+        </div>
+
+        <img
+          className='portada'
+          src={currentSong.album.images[0]?.url}
+          alt={currentSong.album.name}
+        />
+
+        <div className='titulo'>
+          <h2>{currentSong.name}</h2>
+          <p>{currentSong.artists.map((a: { name: string }) => a.name).join(', ')}</p>
+        </div>
+
+        <SongProgressBar />
+        <ControlButtons />
+
+        <div className='abajo'>
+          <AddSongToLibraryButton
+            size={20}
+            isSaved={liked}
+            id={currentSong?.id!}
+            onToggle={() => dispatch(spotifyActions.setLiked({ liked: !liked }))}
+          />
+          <QueueButton />
+          <VolumeControls />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div
         className='mobile-player'
-        style={{ background: `linear-gradient(${currentColor} -50%, rgb(18, 18, 18) 300%)` }}
+        style={{ background: fondo }}
       >
         <Row justify='space-between'>
           <Col>
-            <SongDetails isMobile />
+            {/* Tocar la carátula/nombre abre la pantalla completa del móvil, con el resto de
+                controles (progreso, aleatorio, repetir, volumen). */}
+            <div
+              onClick={() => setAbierto(true)}
+              role='button'
+              aria-label='Abrir el reproductor'
+              style={{ cursor: 'pointer' }}
+            >
+              <SongDetails isMobile />
+            </div>
           </Col>
           <Col style={{ display: 'flex' }}>
             <div
@@ -120,7 +182,7 @@ const NowPlayingBarMobile = () => {
           <Slider
             isEnabled
             value={duration > 0 ? position / duration : 0}
-            ariaLabel='Barra de progreso'
+            ariaLabel='Progreso'
             onChangeEnd={(v) => {
               if (duration > 0) playerService.seekToPosition(Math.round(duration * v)).then();
             }}

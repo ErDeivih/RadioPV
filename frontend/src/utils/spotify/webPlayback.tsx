@@ -1,8 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, FC, memo, useCallback, useRef } from 'react';
+import { message } from 'antd';
 import { useAppDispatch, useAppSelector } from '../../store/store';
 import { spotifyActions } from '../../store/slices/spotify';
-import { playerController } from '../../player/playerController';
+import { playerController, AVISO } from '../../player/playerController';
 import { colaController } from '../../player/queueController';
 import { playerService } from '../../services/player';
 import { userService } from '../../services/users';
@@ -100,6 +101,18 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
     document.title = song && s?.is_playing ? `${song.name} • ${song.artists?.[0]?.name ?? ''}` : 'RadioNano';
   }, [state]);
 
+  // Avisos del reproductor: cuando una canción no se puede cargar (falta su archivo en el
+  // servidor) se salta a la siguiente. Antes esto no se veía de ninguna manera: la reproducción
+  // simplemente no arrancaba y parecía que la aplicación estaba rota.
+  useEffect(() => {
+    const alAvisar = (e: Event) => {
+      const mensaje = (e as CustomEvent<{ mensaje?: string }>).detail?.mensaje;
+      if (mensaje) message.warning({ content: mensaje, key: 'radiopv-aviso', duration: 4 });
+    };
+    window.addEventListener(AVISO, alAvisar);
+    return () => window.removeEventListener(AVISO, alAvisar);
+  }, []);
+
   useEffect(() => {
     playerController.bind(handleState);
     // Al terminar una canción, la cola avanza; al agotarse, entra el "Flow" (radio encadenada).
@@ -107,6 +120,8 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
     // Botones de la pantalla de bloqueo / auriculares del móvil.
     playerController.bindNext(() => colaController.siguiente(false));
     playerController.bindPrev(() => colaController.anterior());
+    // Canción cuyo archivo no está en el servidor: saltar siempre (nunca repetirla).
+    playerController.bindFallo(() => colaController.siguiente(false));
     // Volcar la cola del cliente a Redux para que el panel "Next" se pinte (B1).
     colaController.bindChange(() => dispatch(queueActions.setQueue([...colaController.cola])));
     onPlayerLoading();
@@ -118,6 +133,7 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
       playerController.bindEnded(null);
       playerController.bindNext(null);
       playerController.bindPrev(null);
+      playerController.bindFallo(null);
       colaController.bindChange(null);
     };
   }, [handleState, onPlayerLoading, onPlayerWaitingForDevice, onPlayerDeviceSelected]);
