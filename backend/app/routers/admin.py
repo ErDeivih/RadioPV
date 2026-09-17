@@ -142,40 +142,58 @@ def admin_tracks(
     status_: Optional[str] = Query(None, alias="status"),
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
+    title: Optional[str] = None,
+    tags: Optional[str] = None,
+    era: Optional[str] = None,
+    explicit: Optional[bool] = None,
+    is_remix: Optional[bool] = None,
+    has_file_path: Optional[bool] = None,
+    rank_min: Optional[int] = None,
+    rank_max: Optional[int] = None,
+    duration_min: Optional[float] = None,
+    duration_max: Optional[float] = None,
+    bpm_min: Optional[float] = None,
+    bpm_max: Optional[float] = None,
+    energy_min: Optional[float] = None,
+    energy_max: Optional[float] = None,
+    match_score_min: Optional[float] = None,
+    added_from: Optional[str] = None,
+    added_to: Optional[str] = None,
     sort: Literal["artist", "title", "album", "year", "genre", "language", "added_at", "file_size"] = "artist",
     order: Literal["asc", "desc"] = "asc",
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     _: models.User = Depends(require_admin),
 ) -> dict:
-    donde: list[str] = []
-    args: list = []
+    """Tabla de gestión.
 
-    if q:
-        donde.append("(title LIKE ? OR artist LIKE ? OR album LIKE ?)")
-        like = f"%{q}%"
-        args += [like, like, like]
-    if artist:
-        donde.append("artist = ?"); args.append(artist)
-    if album:
-        donde.append("album = ?"); args.append(album)
-    if genre:
-        donde.append("genre = ?"); args.append(genre)
-    if language:
-        donde.append("language = ?"); args.append(language)
-    if status_:
-        donde.append("status = ?"); args.append(status_)
-    if year_min is not None:
-        donde.append("year >= ?"); args.append(year_min)
-    if year_max is not None:
-        donde.append("year <= ?"); args.append(year_max)
+    Acepta **el mismo juego de filtros que el borrado en masa** — se construye un
+    `BulkFilter` con lo que llega y se usa la misma función `_where_bulk`. Así lo que
+    ves en pantalla es **exactamente** lo que se borraría al pulsar el botón.
+    """
+    filtro = BulkFilter(
+        q=q, artist=artist, album=album, genre=genre, language=language,
+        status=status_, year_min=year_min, year_max=year_max,
+        title=title, tags=tags, era=era, explicit=explicit, is_remix=is_remix,
+        has_file_path=has_file_path,
+        rank_min=rank_min, rank_max=rank_max,
+        duration_min=duration_min, duration_max=duration_max,
+        bpm_min=bpm_min, bpm_max=bpm_max,
+        energy_min=energy_min, energy_max=energy_max,
+        match_score_min=match_score_min,
+        added_from=added_from, added_to=added_to,
+    )
+    try:
+        clausula, args = _where_bulk(filtro)
+    except HTTPException:
+        clausula, args = "", []          # sin filtros: se listan todas
 
-    clausula = ("WHERE " + " AND ".join(donde)) if donde else ""
     # `sort` y `order` están restringidos por Literal: no hay inyección posible.
     total = _one(f"SELECT COUNT(*) n FROM tracks {clausula}", tuple(args)) or {"n": 0}
     filas = _rows(
         f"""SELECT id, title, artist, album, year, genre, language, bpm, energy,
-                   duration, file_size, status, source, added_at, file_path
+                   duration, file_size, status, source, explicit, is_remix, era,
+                   rank, match_score, added_at, file_path
             FROM tracks {clausula}
             ORDER BY {sort} {order.upper()}, title ASC
             LIMIT ? OFFSET ?""",
@@ -202,6 +220,15 @@ def admin_facets(_: models.User = Depends(require_admin)) -> dict:
                        "WHERE year IS NOT NULL GROUP BY year ORDER BY year"),
         "status": facet("status"),
         "sources": facet("source"),
+        "eras": facet("era"),
+        "duraciones": facet("duration"),   # valores exactos; sirve de referencia
+        "booleanos": {
+            "explicit": _one("SELECT COUNT(*) n FROM tracks WHERE explicit = 1") or {"n": 0},
+            "remixes": _one("SELECT COUNT(*) n FROM tracks WHERE is_remix = 1") or {"n": 0},
+            "huerfanas": _one("SELECT COUNT(*) n FROM tracks "
+                              "WHERE file_path IS NULL OR file_path = ''") or {"n": 0},
+            "total": _one("SELECT COUNT(*) n FROM tracks") or {"n": 0},
+        },
     }
 
 
@@ -316,6 +343,33 @@ class BulkFilter(BaseModel):
     languages: Optional[list[str]] = Field(None, description="Varios idiomas a la vez")
     years: Optional[list[int]] = Field(None, description="Varios años a la vez")
 
+    # --- campos exactos adicionales ---
+    title: Optional[str] = Field(None, description="Título exacto")
+    tags: Optional[str] = Field(None, description="Busca dentro de las etiquetas")
+    era: Optional[str] = Field(None, description="Época: pre2000, 2000s, 2010s…")
+
+    # --- booleanos ---
+    explicit: Optional[bool] = Field(None, description="Con o sin contenido explícito")
+    is_remix: Optional[bool] = Field(None, description="Solo remixes, o todo lo contrario")
+    has_file_path: Optional[bool] = Field(
+        None, description="True: tiene fichero asignado · False: huérfana (sin file_path)"
+    )
+
+    # --- rangos numéricos ---
+    rank_min: Optional[int] = Field(None, description="Popularidad Deezer mínima")
+    rank_max: Optional[int] = None
+    duration_min: Optional[float] = Field(None, description="Duración mínima, en segundos")
+    duration_max: Optional[float] = None
+    bpm_min: Optional[float] = None
+    bpm_max: Optional[float] = None
+    energy_min: Optional[float] = None
+    energy_max: Optional[float] = None
+    match_score_min: Optional[float] = Field(None, description="Calidad del emparejamiento")
+
+    # --- fechas de alta ---
+    added_from: Optional[str] = Field(None, description="Alta desde (AAAA-MM-DD)")
+    added_to: Optional[str] = Field(None, description="Alta hasta (AAAA-MM-DD)")
+
 
 class BulkRequest(BaseModel):
     filters: BulkFilter
@@ -368,6 +422,47 @@ def _where_bulk(f: BulkFilter) -> tuple[str, list]:
         if valores:
             donde.append(f"{columna} IN ({_marcas(len(valores))})")
             args += list(valores)
+
+    # --- campos exactos adicionales ---
+    if f.title:
+        donde.append("title = ?"); args.append(f.title)
+    if f.era:
+        donde.append("era = ?"); args.append(f.era)
+    if f.tags:
+        donde.append("tags LIKE ?"); args.append(f"%{f.tags}%")
+
+    # --- booleanos (la BD guarda 0/1) ---
+    if f.explicit is not None:
+        donde.append("explicit = ?"); args.append(1 if f.explicit else 0)
+    if f.is_remix is not None:
+        donde.append("is_remix = ?"); args.append(1 if f.is_remix else 0)
+    if f.has_file_path is not None:
+        if f.has_file_path:
+            donde.append("file_path IS NOT NULL AND file_path <> ''")
+        else:
+            # Huérfanas: la fila existe pero no apunta a ningún fichero
+            donde.append("(file_path IS NULL OR file_path = '')")
+
+    # --- rangos numéricos ---
+    for columna, minimo, maximo in (
+        ("rank", f.rank_min, f.rank_max),
+        ("duration", f.duration_min, f.duration_max),
+        ("bpm", f.bpm_min, f.bpm_max),
+        ("energy", f.energy_min, f.energy_max),
+    ):
+        if minimo is not None:
+            donde.append(f"{columna} >= ?"); args.append(minimo)
+        if maximo is not None:
+            donde.append(f"{columna} <= ?"); args.append(maximo)
+
+    if f.match_score_min is not None:
+        donde.append("match_score >= ?"); args.append(f.match_score_min)
+
+    # --- fechas de alta ---
+    if f.added_from:
+        donde.append("added_at >= ?"); args.append(f.added_from)
+    if f.added_to:
+        donde.append("added_at <= ?"); args.append(f.added_to + "T23:59:59")
 
     if not donde:
         raise HTTPException(

@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Input,
   InputNumber,
   Modal,
@@ -67,6 +68,20 @@ export const Library: FC = () => {
   const [yearMin, setYearMin] = useState<number | undefined>();
   const [yearMax, setYearMax] = useState<number | undefined>();
 
+  // Filtros avanzados («Más filtros»): para que no se escape nada
+  const [era, setEra] = useState<string | undefined>();
+  const [explicit, setExplicit] = useState<boolean | undefined>();
+  const [isRemix, setIsRemix] = useState<boolean | undefined>();
+  const [huerfanas, setHuerfanas] = useState(false);
+  const [rankMin, setRankMin] = useState<number | undefined>();
+  const [durMin, setDurMin] = useState<number | undefined>();
+  const [durMax, setDurMax] = useState<number | undefined>();
+  const [bpmMin, setBpmMin] = useState<number | undefined>();
+  const [bpmMax, setBpmMax] = useState<number | undefined>();
+  const [energyMin, setEnergyMin] = useState<number | undefined>();
+  const [energyMax, setEnergyMax] = useState<number | undefined>();
+  const [matchMin, setMatchMin] = useState<number | undefined>();
+
   // Vista: lista plana de canciones, o agrupada (por artista, álbum, género, idioma, año)
   const [vista, setVista] = useState<'tracks' | GroupBy>('tracks');
 
@@ -78,7 +93,7 @@ export const Library: FC = () => {
   const [vetoConfirmado, setVetoConfirmado] = useState(true);
   const [ejecutando, setEjecutando] = useState(false);
 
-  /** Filtros en el formato que espera la API. */
+  /** Filtros en el formato que espera la API. Mismo juego que el borrado en masa. */
   const filtros = useMemo<TrackFilters>(
     () => ({
       q: q.trim() || undefined,
@@ -88,8 +103,24 @@ export const Library: FC = () => {
       status,
       year_min: yearMin,
       year_max: yearMax,
+      era,
+      explicit,
+      is_remix: isRemix,
+      has_file_path: huerfanas ? false : undefined,
+      rank_min: rankMin,
+      duration_min: durMin,
+      duration_max: durMax,
+      bpm_min: bpmMin,
+      bpm_max: bpmMax,
+      energy_min: energyMin,
+      energy_max: energyMax,
+      match_score_min: matchMin,
     }),
-    [q, language, genre, artist, status, yearMin, yearMax]
+    [
+      q, language, genre, artist, status, yearMin, yearMax,
+      era, explicit, isRemix, huerfanas, rankMin,
+      durMin, durMax, bpmMin, bpmMax, energyMin, energyMax, matchMin,
+    ]
   );
 
   const filtrosBulk = useMemo<BulkFilter>(
@@ -107,9 +138,25 @@ export const Library: FC = () => {
           artist ||
           status ||
           yearMin !== undefined ||
-          yearMax !== undefined
+          yearMax !== undefined ||
+          era ||
+          explicit !== undefined ||
+          isRemix !== undefined ||
+          huerfanas ||
+          rankMin !== undefined ||
+          durMin !== undefined ||
+          durMax !== undefined ||
+          bpmMin !== undefined ||
+          bpmMax !== undefined ||
+          energyMin !== undefined ||
+          energyMax !== undefined ||
+          matchMin !== undefined
       ),
-    [q, language, genre, artist, status, yearMin, yearMax]
+    [
+      q, language, genre, artist, status, yearMin, yearMax,
+      era, explicit, isRemix, huerfanas, rankMin,
+      durMin, durMax, bpmMin, bpmMax, energyMin, energyMax, matchMin,
+    ]
   );
 
   const cargar = useCallback(async () => {
@@ -150,6 +197,18 @@ export const Library: FC = () => {
     setStatus(undefined);
     setYearMin(undefined);
     setYearMax(undefined);
+    setEra(undefined);
+    setExplicit(undefined);
+    setIsRemix(undefined);
+    setHuerfanas(false);
+    setRankMin(undefined);
+    setDurMin(undefined);
+    setDurMax(undefined);
+    setBpmMin(undefined);
+    setBpmMax(undefined);
+    setEnergyMin(undefined);
+    setEnergyMax(undefined);
+    setMatchMin(undefined);
   };
 
   // ------------------------------------------------------------------ acciones
@@ -403,6 +462,131 @@ export const Library: FC = () => {
             </Space>
           </Col>
         </Row>
+
+        <Collapse
+          ghost
+          size='small'
+          style={{ marginTop: 4 }}
+          items={[
+            {
+              key: 'mas',
+              label: 'Más filtros (época, explícito, remixes, popularidad, duración, BPM, energía)',
+              children: (
+                <Row gutter={[8, 8]} align='middle'>
+                  <Col xs={12} md={3}>
+                    <Select
+                      style={{ width: '100%' }}
+                      placeholder='Época'
+                      allowClear
+                      value={era}
+                      onChange={setEra}
+                      options={opciones(facets?.eras)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <Select
+                      style={{ width: '100%' }}
+                      placeholder='Explícito'
+                      allowClear
+                      value={explicit}
+                      onChange={setExplicit}
+                      options={[
+                        { value: true, label: 'Solo explícitas' },
+                        { value: false, label: 'Solo limpias' },
+                      ]}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <Select
+                      style={{ width: '100%' }}
+                      placeholder='Remixes'
+                      allowClear
+                      value={isRemix}
+                      onChange={setIsRemix}
+                      options={[
+                        { value: true, label: 'Solo remixes' },
+                        { value: false, label: 'Sin remixes' },
+                      ]}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='Popularidad mín.'
+                      value={rankMin}
+                      onChange={(v) => setRankMin(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='Duración mín. (s)'
+                      value={durMin}
+                      onChange={(v) => setDurMin(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='Duración máx. (s)'
+                      value={durMax}
+                      onChange={(v) => setDurMax(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='BPM mín.'
+                      value={bpmMin}
+                      onChange={(v) => setBpmMin(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='BPM máx.'
+                      value={bpmMax}
+                      onChange={(v) => setBpmMax(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='Energía mín.'
+                      value={energyMin}
+                      onChange={(v) => setEnergyMin(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='Energía máx.'
+                      value={energyMax}
+                      onChange={(v) => setEnergyMax(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='Calidad de match mín.'
+                      value={matchMin}
+                      onChange={(v) => setMatchMin(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={24} md={9}>
+                    <Space>
+                      <Switch checked={huerfanas} onChange={setHuerfanas} size='small' />
+                      <Text type={huerfanas ? 'danger' : 'secondary'}>
+                        Solo huérfanas (filas sin fichero)
+                        {facets?.booleanos ? ` · hay ${facets.booleanos.huerfanas.n}` : ''}
+                      </Text>
+                    </Space>
+                  </Col>
+                </Row>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       {/* ---------------------------------------------------------- vista */}

@@ -48,6 +48,22 @@ export interface Facets {
   years: FacetItem[];
   status: FacetItem[];
   sources: FacetItem[];
+  eras: FacetItem[];
+  booleanos: {
+    explicit: { n: number };
+    remixes: { n: number };
+    huerfanas: { n: number };
+    total: { n: number };
+  };
+}
+
+/** Los campos de pista que devuelve la tabla de gestión (incluye los de los filtros nuevos). */
+export interface TrackRowExtra {
+  explicit?: number | null;
+  is_remix?: number | null;
+  era?: string | null;
+  rank?: number | null;
+  match_score?: number | null;
 }
 
 export interface TrackListResponse {
@@ -66,6 +82,24 @@ export interface TrackFilters {
   status?: string;
   year_min?: number;
   year_max?: number;
+  // --- filtros adicionales (los mismos que acepta el borrado en masa) ---
+  title?: string;
+  tags?: string;
+  era?: string;
+  explicit?: boolean;
+  is_remix?: boolean;
+  has_file_path?: boolean;
+  rank_min?: number;
+  rank_max?: number;
+  duration_min?: number;
+  duration_max?: number;
+  bpm_min?: number;
+  bpm_max?: number;
+  energy_min?: number;
+  energy_max?: number;
+  match_score_min?: number;
+  added_from?: string;
+  added_to?: string;
   sort?: string;
   order?: 'asc' | 'desc';
   limit?: number;
