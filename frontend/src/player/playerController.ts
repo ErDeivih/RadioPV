@@ -28,6 +28,29 @@ let precarga: HTMLAudioElement | null = null;   // audio oculto que pre-buffea l
 const VOLUME_KEY = 'radiopv_volume';            // volumen persistente entre sesiones (B4)
 
 /**
+ * Volumen guardado, en 0..1.
+ *
+ * Si no hay nada guardado devuelve 1, NO 0. Y esto era un fallo de verdad, no un detalle:
+ * antes aquí ponía `Number(localStorage.getItem(VOLUME_KEY))` y se comprobaba con
+ * `!Number.isNaN(vol)`. En un móvil recién estrenado no hay nada guardado, `getItem`
+ * devuelve `null` y **`Number(null)` es 0** (no NaN), así que la condición se cumplía y
+ * el volumen se ponía a CERO. Resultado: la canción avanzaba, el deslizador marcaba 100%
+ * y no se oía absolutamente nada. Hay que distinguir "no hay nada guardado" de
+ * "el usuario lo dejó a 0" — sólo lo primero significa "pon el volumen normal".
+ */
+const volumenGuardado = (): number => {
+  try {
+    const bruto = localStorage.getItem(VOLUME_KEY);
+    if (bruto === null || bruto.trim() === '') return 1;
+    const v = Number(bruto);
+    if (!Number.isFinite(v)) return 1;
+    return Math.max(0, Math.min(1, v));
+  } catch {
+    return 1;                                   // modo privado o almacenamiento bloqueado
+  }
+};
+
+/**
  * DESBLOQUEO DEL AUDIO EN EL MÓVIL
  * --------------------------------
  * En iOS y Android el navegador solo deja sonar si el primer `play()` del elemento ocurre
@@ -114,9 +137,8 @@ const ensure = () => {
   // Sin esto, un 401 por token caducado o un 410 por fichero ausente son invisibles.
   audio.addEventListener('error', () => { void recuperar(); });
 
-  // B4: recuperar el volumen guardado.
-  const vol = Number(localStorage.getItem(VOLUME_KEY));
-  if (!Number.isNaN(vol)) audio.volume = Math.max(0, Math.min(1, vol));
+  // B4: recuperar el volumen guardado (ver `volumenGuardado`: sin nada guardado sonaba a 0).
+  audio.volume = volumenGuardado();
 };
 
 const emit = () => {
@@ -248,6 +270,9 @@ export const playerController = {
     try { localStorage.setItem(VOLUME_KEY, String(Math.max(0, Math.min(1, pct / 100)))); }
     catch { /* ignore */ }
   },
+  /** Volumen actual en 0..1. La interfaz lo usa para arrancar reflejando el volumen real
+   *  en vez de suponer 100% (que es lo que hacía que el deslizador mintiera). */
+  getVolume: () => (audio ? audio.volume : volumenGuardado()),
   /** B5: pre-buffear la siguiente canción en un <audio> oculto (mismo token → misma URL → cache).
    *  Llámalo cuando sepas cuál toca después (cola[0]). */
   precacheNext: async (id: string | number) => {

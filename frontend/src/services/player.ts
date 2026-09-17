@@ -226,6 +226,12 @@ const setRepeatMode = async (_state: 'track' | 'context' | 'off') => {
 const setVolume = async (volume_percent: number) => { playerController.volume(volume_percent); };
 
 /**
+ * @description Volumen actual del reproductor, en 0..1. Lo usa el deslizador de la barra
+ * de reproducción para arrancar con el volumen real en vez de dar por hecho 100%.
+ */
+const getVolume = (): number => playerController.getVolume();
+
+/**
  * @description Toggle shuffle on or off for user’s playback. This API only works for users who have Spotify Premium.
  */
 const toggleShuffle = async (_state: boolean) => { colaController.barajar(_state); };
@@ -274,6 +280,7 @@ export const playerService = {
   previousTrack,
   setRepeatMode,
   setVolume,
+  getVolume,
   toggleShuffle,
   seekToPosition,
   getRecentlyPlayed,
