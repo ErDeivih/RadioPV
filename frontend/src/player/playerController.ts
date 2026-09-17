@@ -27,6 +27,50 @@ let precarga: HTMLAudioElement | null = null;   // audio oculto que pre-buffea l
 
 const VOLUME_KEY = 'radiopv_volume';            // volumen persistente entre sesiones (B4)
 
+/**
+ * DESBLOQUEO DEL AUDIO EN EL MÓVIL
+ * --------------------------------
+ * En iOS y Android el navegador solo deja sonar si el primer `play()` del elemento ocurre
+ * DENTRO de un gesto del usuario (un toque). Y aquí había un problema de fondo: en `play()`
+ * se hace `audio.src = await streamUrl(id)` — un salto de red — y después `audio.play()`.
+ * Cuando llega ese segundo play, el gesto ya se ha consumido, así que el navegador lo
+ * RECHAZA y no suena nada. Sin error visible: simplemente silencio.
+ *
+ * La solución estándar es desbloquear el elemento una vez, con el primer toque en cualquier
+ * parte de la app: se reproduce un WAV de silencio, se pausa, y a partir de ahí el elemento
+ * queda habilitado para toda la sesión, aunque el play() llegue después de un await.
+ *
+ * Se aprovecha el mismo toque para reanudar el AudioContext, que en el móvil también nace
+ * suspendido y sin él la ganancia por `gain_db` devuelve silencio.
+ */
+const SILENCIO_WAV =
+  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
+let desbloqueado = false;
+
+const desbloquear = () => {
+  if (desbloqueado) return;
+  desbloqueado = true;
+  document.removeEventListener('pointerdown', desbloquear, true);
+  document.removeEventListener('touchend', desbloquear, true);
+  document.removeEventListener('keydown', desbloquear, true);
+  try {
+    void ctx?.resume();
+    if (!audio) return;
+    const p = audio.play();
+    if (p && typeof p.then === 'function') {
+      p.then(() => audio!.pause()).catch(() => undefined);
+    }
+  } catch { /* si no se puede, el play() normal lo intentará igual */ }
+};
+
+/** Desbloquea el audio y deja escuchando el primer toque. */
+const prepararDesbloqueo = () => {
+  document.addEventListener('pointerdown', desbloquear, true);
+  document.addEventListener('touchend', desbloquear, true);
+  document.addEventListener('keydown', desbloquear, true);
+};
+
 let contextoActual = 'player';   // "playlist:12" | "radio:88" | "daily" | "search" | "artist"
 let escuchados = 0;              // segundos realmente escuchados de la canción actual
 let ultimoTick = 0;
@@ -42,11 +86,14 @@ const ensure = () => {
   // "tainted" y createMediaElementSource devolvería SILENCIO sin error claro.
   audio.crossOrigin = 'anonymous';
   audio.preload = 'auto';
+  // El src de silencio deja el elemento listo para el desbloqueo del primer toque.
+  audio.src = SILENCIO_WAV;
   ctx = new AudioContext();
   const src = ctx.createMediaElementSource(audio);
   gain = ctx.createGain();
   src.connect(gain);
   gain.connect(ctx.destination);
+  prepararDesbloqueo();
 
   audio.addEventListener('timeupdate', () => {
     // Acumular solo el tiempo que avanza de verdad (ignora los saltos del seek).
@@ -161,9 +208,11 @@ export const playerController = {
 
   play: async (track: any, contexto = 'player') => {
     ensure();
-    // ⚠️ `resume()` ANTES de cualquier await: tras un await de red el navegador ya no
-    // considera que estamos dentro del gesto del usuario (Safari/iOS lo rechaza).
+    // ⚠️ `resume()` Y `desbloquear()` ANTES de cualquier await: tras un await de red el
+    // navegador ya no considera que estemos dentro del gesto del usuario (Safari/iOS lo
+    // rechaza). Por eso el desbloqueo va aquí arriba y no antes del `audio.play()`.
     void ctx!.resume();
+    desbloquear();
 
     cerrar(false);                       // cierra la canción anterior con sus segundos
     current = track;
@@ -172,7 +221,17 @@ export const playerController = {
 
     gain!.gain.value = Math.pow(10, (track?.radiopv?.gain_db ?? 0) / 20);
     audio!.src = await streamUrl(track.id);
-    await audio!.play();
+    // El ctx puede haberse suspendido mientras se pedía el token (sobre todo si el móvil
+    // se quedó en segundo plano). Se reanuda otra vez antes de sonar.
+    void ctx!.resume();
+    try {
+      await audio!.play();
+    } catch (e) {
+      // Si el navegador lo rechaza por política de reproducción, no se puede arreglar desde
+      // aquí: hace falta otro toque. Se deja constancia en vez de fallar en silencio.
+      console.warn('No se pudo iniciar la reproducción:', e);
+      throw e;
+    }
     mediaSession();
     signal({ completed: 0, seconds_listened: 0 });
     // Avisa a la cola de que esta canción ya suena (actualiza `actual` y la semilla del Flow).
