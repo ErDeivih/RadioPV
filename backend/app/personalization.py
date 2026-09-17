@@ -122,53 +122,100 @@ def vector(t) -> list[float]:
            [1.0 if (t.era or "") == e else 0.0 for e in _ERAS]
 
 
-def rebuild_similar(db, top: int = 40) -> int:
-    """Reconstruye la tabla `similar`: top-N vecinos por canción (coseno, numpy)."""
+def _matriz(db):
+    """(ids, vectores normalizados V, normas) del catálogo publicado.
+
+    Los vectores se normalizan UNA vez aquí (antes se normalizaba la matriz de similitudes
+    entera, que es donde se multiplicaba la memoria).
+    """
     import numpy as np
     tracks = db.query(models.Track).filter(models.Track.status == "descargada").all()
+    if len(tracks) < 2:
+        return [], None, None
     ids = [t.id for t in tracks]
-    if len(ids) < 2:
-        return 0
     V = np.array([vector(t) for t in tracks], dtype=np.float32)
     norm = np.linalg.norm(V, axis=1, keepdims=True)
     norm[norm == 0] = 1.0
-    cos = (V @ V.T) / (norm @ norm.T)
-    # borrar la tabla y rellenar (una transacción)
+    return ids, V, norm
+
+
+# Canciones por bloque al reconstruir `similar`. Ver `rebuild_similar`.
+BLOQUE_SIMILAR = 512
+
+
+def rebuild_similar(db, top: int = 40) -> int:
+    """Reconstruye la tabla `similar`: top-N vecinos por canción (coseno, numpy).
+
+    POR QUÉ VA POR BLOQUES
+    ----------------------
+    Antes se calculaba la matriz completa `V @ V.T` (N×N) y encima `norm @ norm.T` (otra N×N)
+    antes de dividir: con 5140 canciones son unos **105 MB por matriz** (float32) y se creaban
+    varias a la vez. En un servidor de 4 GB eso es pedirle a la OOM killer que elija, y pasaba
+    aquí, en `neighbors()` (que lo calculaba ENTERO dentro de una petición de la API, y lo puede
+    disparar cualquier usuario en bucle) y en `sync_catalogo` cada 30 minutos.
+
+    Ahora se procesa por bloques de filas: la memoria es del tamaño del bloque por el número de
+    canciones, no del cuadrado, y sólo se conservan los `top` vecinos de cada fila. Además se
+    confirma cada bloque, así que la transacción no se queda abierta con 205.600 inserciones
+    (que en un HDD bloquea la base para todo lo demás).
+
+    Si se corta a medias, `similar` queda parcial: no pasa nada, `/radio` tiene su respaldo
+    (`neighbors`) y la siguiente pasada lo completa.
+    """
+    import numpy as np
+    ids, V, norm = _matriz(db)
+    if V is None:
+        return 0
+
     db.query(models.Similar).delete()
-    n = 0
-    for i, tid in enumerate(ids):
-        sims = cos[i]
-        # excluir la propia fila
-        sims = sims.copy()
-        sims[i] = -1
-        best = np.argsort(sims)[::-1][:top]
-        for j in best:
-            if sims[j] <= 0:
-                continue
-            db.add(models.Similar(track_a=tid, track_b=ids[int(j)], score=float(sims[j])))
-            n += 1
     db.commit()
+
+    n = 0
+    total = len(ids)
+    for ini in range(0, total, BLOQUE_SIMILAR):
+        fin = min(ini + BLOQUE_SIMILAR, total)
+        # Sólo el bloque de filas contra todas las columnas.
+        bloque = (V[ini:fin] @ V.T) / (norm[ini:fin] * norm.T)
+        filas = []
+        for k in range(fin - ini):
+            i = ini + k
+            sims = bloque[k]
+            sims[i] = -1.0                     # excluir la propia canción
+            cuantos = min(top, len(sims) - 1)
+            if cuantos <= 0:
+                continue
+            candidatos = np.argpartition(sims, -cuantos)[-cuantos:]
+            for j in candidatos[np.argsort(sims[candidatos])[::-1]]:
+                if sims[j] <= 0:
+                    continue
+                filas.append(models.Similar(track_a=ids[i], track_b=ids[int(j)],
+                                            score=float(sims[j])))
+        if filas:
+            db.add_all(filas)
+            db.commit()
+            n += len(filas)
     return n
 
 
 def neighbors(db, seed_id, n: int = 20, top: int = 40) -> list[int]:
     """Fallback de /radio: calcula los vecinos del seed al vuelo (coseno), los guarda en `similar`
-    y devuelve sus ids. Así la radio nunca devuelve [] en silencio aunque la tabla esté vacía."""
+    y devuelve sus ids. Así la radio nunca devuelve [] en silencio aunque la tabla esté vacía.
+
+    Aquí sólo hace falta **la fila del seed**, no la matriz completa: se calcula el producto de
+    los vectores contra el del seed (un vector de N elementos) en vez de N×N. Antes esta línea
+    reservaba ~105 MB dentro de una petición HTTP, y `/radio` lo puede pedir cualquier usuario en
+    bucle: era la forma más fácil de tumbar un servidor de 4 GB.
+    """
     import numpy as np
     seed = db.get(models.Track, seed_id)
     if not seed:
         return []
-    tracks = db.query(models.Track).filter(models.Track.status == "descargada").all()
-    if len(tracks) < 2:
+    ids, V, norm = _matriz(db)
+    if V is None:
         return []
-    ids = [t.id for t in tracks]
-    V = np.array([vector(t) for t in tracks], dtype=np.float32)
-    norm = np.linalg.norm(V, axis=1, keepdims=True)
-    norm[norm == 0] = 1.0
-    cos = (V @ V.T) / (norm @ norm.T)
     i = ids.index(seed_id)
-    sims = cos[i].copy()
-    sims[i] = -1
+    sims = (V @ V[i]) / (norm[:, 0] * norm[i, 0])
+    sims[i] = -1.0
     best = np.argsort(sims)[::-1][:max(n, top)]
     out: list[int] = []
     for j in best:

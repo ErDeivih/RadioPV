@@ -1,0 +1,21 @@
+La tabla similar ya no se calcula con una matriz N x N (riesgo de quedarse sin memoria)
+
+`rebuild_similar` y `neighbors` construian `V @ V.T` COMPLETA (N x N) y encima
+`norm @ norm.T` (otra N x N) antes de dividir. Con 5140 canciones son unos 105 MB por
+matriz de float32, y se creaban varias a la vez. Peor: `neighbors` lo hacia DENTRO de
+una peticion de la API (`/radio`), que cualquier usuario puede pedir en bucle. En un
+servidor de 4 GB eso es pedirle a la OOM killer que elija, y ademas corria en
+`sync_catalogo` cada 30 minutos.
+
+- `neighbors` solo necesita LA FILA DEL SEED, no la matriz: ahora calcula el producto de
+  los vectores contra el del seed (un vector de N elementos). De ~105 MB a unos pocos KB.
+- `rebuild_similar` va por bloques de 512 filas y solo conserva los `top` vecinos de cada
+  una: la memoria es bloque x N, no N x N. Ademas confirma cada bloque en vez de dejar
+  una transaccion abierta con 205.600 inserciones (que en un HDD bloquea la base para
+  todo lo demas); si se corta a medias, `/radio` tiene su respaldo y la siguiente pasada
+  lo completa.
+- La normalizacion se hace una vez sobre los vectores, no sobre la matriz de similitudes.
+
+3 pruebas nuevas que garantizan que el resultado es EL MISMO que antes (comparado contra
+el calculo directo), y una con espia sobre `np.matmul` que falla si alguien vuelve a
+calcular una matriz N x N.
