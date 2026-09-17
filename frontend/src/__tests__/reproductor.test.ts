@@ -473,4 +473,17 @@ describe('canciones cuyo archivo no está en el servidor', () => {
     expect(saltos).toBe(0);
     expect(colaController.actual?.id).toBe('1');
   });
+
+  it('cuando ya no queda nada que reproducir, se para en vez de fingir que suena', async () => {
+    const audio = await arrancar(pista(1));
+    colaController.limpiar();             // sin cola y sin fuente
+    playerController.bindFallo(() => colaController.siguiente(false));
+    audio.paused = false;                 // el elemento quedó "sonando" tras el fallo
+
+    await colaController.siguiente(false);
+    await esperar();
+    // Antes se quedaba con `paused = false` y el tiempo en 0: la interfaz decía que sonaba algo
+    // que no sonaba, y el icono no volvía a "Reproducir".
+    expect(audio.paused).toBe(true);
+  });
 });

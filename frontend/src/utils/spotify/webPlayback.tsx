@@ -121,7 +121,8 @@ const WebPlayback: FC<WebPlaybackProps> = memo((props) => {
 
   useEffect(() => {
     if (!aviso) return;
-    const t = window.setTimeout(() => setAviso(null), 6000);
+    // 10 s: es un aviso sobre canciones que se están saltando, así que da tiempo a leerlo.
+    const t = window.setTimeout(() => setAviso(null), 10000);
     return () => window.clearTimeout(t);
   }, [aviso]);
 

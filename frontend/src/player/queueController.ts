@@ -82,7 +82,11 @@ playerController.bindPlayed((t) => {
 
 /** "Flow" §4.6: al agotarse la cola seguimos con la radio del último tema. */
 const cargarRadio = async () => {
-  if (pidiendoRadio || !ultimoId) return;
+  if (pidiendoRadio) return;
+  if (!ultimoId) {
+    playerController.detener();
+    return;
+  }
   pidiendoRadio = true;
   try {
     const { data } = await axios.get<TrackOut[]>('/recommend/radio', {
@@ -94,9 +98,14 @@ const cargarRadio = async () => {
       cola.push(...items);
       const sig = cola.shift()!;
       reproducir(sig);
+    } else {
+      // No hay nada más: se para de verdad. Sin esto el elemento quedaba en estado de error
+      // con `paused = false`, o sea la interfaz decía que estaba sonando algo que no sonaba.
+      playerController.detener();
     }
   } catch {
-    /* sin backend/red el flujo simplemente se detiene (no es un error de la UI) */
+    // Sin backend/red el flujo simplemente se detiene (no es un error de la UI).
+    playerController.detener();
   } finally {
     pidiendoRadio = false;
   }

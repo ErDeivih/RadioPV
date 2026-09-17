@@ -411,6 +411,14 @@ export const playerController = {
   },
 
   pause: () => audio?.pause(),
+  /** Para la reproducción y deja el estado en pausa. Se usa cuando ya no queda nada
+   *  reproducible: sin esto la interfaz seguía diciendo que sonaba algo que no sonaba
+   *  (el elemento quedaba con `paused = false` aunque no hubiera cargado ningún fichero). */
+  detener: () => {
+    if (!audio) return;
+    audio.pause();
+    emit();
+  },
   resume: () => { void ctx?.resume(); void audio?.play(); },
   seek: (t: number) => { if (audio) { audio.currentTime = t; ultimoTick = t; } },
   /** Posición actual en segundos (para que "anterior" sepa si reiniciar o retroceder). */
