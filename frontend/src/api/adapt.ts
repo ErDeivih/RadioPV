@@ -3,9 +3,10 @@ import type { User } from '../interfaces/user';
 import type { Artist, SimpleArtist } from '../interfaces/artist';
 import type { Album } from '../interfaces/albums';
 import type { Track } from '../interfaces/track';
+import { API_BASE } from '../apiBase';
 
 /** Traduce nuestro TrackOut/ArtistOut a la forma "estilo Spotify" que la UI ya espera. */
-const API = import.meta.env.VITE_API_URL as string;
+const API = API_BASE;
 const img = (p?: string | null) => (p ? API + p : undefined);
 const PLACEHOLDER = '/images/playlist.png';   // ya existe en public/images
 

@@ -1,10 +1,11 @@
 import { getToken, setToken, clearToken } from './token';
+import { API_BASE } from '../apiBase';
 /** Token de reproducción (ámbito `stream`, 30 min) y URL de /stream.
  *  El <audio> no puede enviar la cabecera Authorization → el token viaja en la URL.
  *  Como el token queda incrustado en `audio.src`, hay que poder INVALIDARLO y recargar:
  *  si caduca mientras la canción está pausada, el siguiente seek pediría un rango con el
  *  token viejo → 401 → la reproducción muere en silencio. Ver `recargarSrc` en playerController. */
-const API = import.meta.env.VITE_API_URL as string;
+const API = API_BASE;
 
 let token: string | null = null;
 let expira = 0;

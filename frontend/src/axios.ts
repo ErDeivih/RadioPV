@@ -1,10 +1,11 @@
 import { getToken, clearToken } from './api/token';
+import { API_BASE } from './apiBase';
 import Axios from 'axios';
 import { message } from 'antd';
 import { getFromLocalStorageWithExpiry } from './utils/localstorage';
 import { cacheGet, cacheSet } from './utils/cache';
 
-const path = import.meta.env.VITE_API_URL as string;   // ← era https://api.spotify.com/v1
+const path = API_BASE;   // ← era https://api.spotify.com/v1
 
 const access_token = getToken() as string;
 

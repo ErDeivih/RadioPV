@@ -61,6 +61,9 @@ _t/
 .env.*
 !.env.dist
 !.env.example
+# El entorno de produccion SI viaja: define la URL relativa /api, y sin el la web se
+# compilaria con la URL de desarrollo y no funcionaria en el servidor.
+!frontend/.env.production
 *.key
 *.pem
 

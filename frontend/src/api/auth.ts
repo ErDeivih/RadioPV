@@ -1,9 +1,10 @@
 import { getToken, setToken, clearToken } from './token';
+import { API_BASE } from '../apiBase';
 import Axios from 'axios';
 
 /** Autenticación con nuestra API (sustituye al OAuth de Spotify).
  *  /auth/login usa OAuth2PasswordRequestForm (formulario); /auth/register es JSON. */
-const API = import.meta.env.VITE_API_URL as string;
+const API = API_BASE;
 const raw = Axios.create({ baseURL: API });
 
 const auth = () => ({ Authorization: `Bearer ${getToken()}` });

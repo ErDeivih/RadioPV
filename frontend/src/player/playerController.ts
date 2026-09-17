@@ -1,10 +1,11 @@
 import { getToken, setToken, clearToken } from '../api/token';
 import { streamUrl, invalidarStreamToken } from '../api/stream';
+import { API_BASE } from '../apiBase';
 
 /** Controlador global de reproducción: un solo <audio> con ganancia por `gain_db`, MediaSession,
  *  señales de escucha y recuperación ante token caducado.
  *  Lo usan webPlayback (provider de estado) y playerService (comandos). */
-const API = import.meta.env.VITE_API_URL as string;
+const API = API_BASE;
 const auth = () => ({ Authorization: `Bearer ${getToken()}` });
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
