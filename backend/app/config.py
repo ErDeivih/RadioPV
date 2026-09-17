@@ -31,3 +31,10 @@ ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
 
 # Registro solo por invitación (vacío = registro abierto, solo aceptable en dev)
 INVITE_CODE = os.environ.get("INVITE_CODE", "")
+
+# Administradores por lista blanca, separados por comas:
+#   RADIOPV_ADMIN_EMAILS="yo@casa.com,mujer@casa.com"
+# Además de esta lista, si la base de datos no tiene NINGÚN admin, el primer usuario
+# que se registre pasa a ser admin (bootstrap). Así nunca hay que tocar SQL a mano.
+ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("RADIOPV_ADMIN_EMAILS", "").split(",")
+                if e.strip()]

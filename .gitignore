@@ -73,3 +73,9 @@ copia-musica.log
 Thumbs.db
 desktop.ini
 *.swp
+
+# ---------- Despliegue ----------
+# copias normalizadas para Linux y paquetes de transferencia
+_deploy/
+_transfer-*.tar
+

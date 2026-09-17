@@ -46,9 +46,14 @@ def register(data: schemas.RegisterIn, db: Session = Depends(get_db)):
         raise HTTPException(403, "Código de invitación inválido")
     if db.query(models.User).filter(models.User.email == data.email.lower()).first():
         raise HTTPException(400, "Email ya registrado")
+    # Bootstrap de administrador: si todavía no hay ningún admin en la base de datos,
+    # el primero que se registre lo es. La lista RADIOPV_ADMIN_EMAILS siempre es admin.
+    hay_admin = db.query(models.User).filter(models.User.is_admin.is_(True)).first() is not None
+    es_admin = (not hay_admin) or (data.email.lower() in _config.ADMIN_EMAILS)
     user = models.User(email=data.email.lower(),
                        hashed_password=hash_password(data.password),
-                       display_name=data.display_name or data.email.split("@")[0])
+                       display_name=data.display_name or data.email.split("@")[0],
+                       is_admin=es_admin)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -65,6 +70,9 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         raise HTTPException(401, "Credenciales inválidas")
     _reset_login_fail(form.username, request)
     user.last_login = datetime.utcnow()
+    # Un email de la lista blanca es admin siempre, aunque se registrara antes de existir la lista.
+    if form.username.lower() in _config.ADMIN_EMAILS and not user.is_admin:
+        user.is_admin = True
     db.commit()
     return {"access_token": create_access_token(user.id, user.token_version), "user": user}
 
