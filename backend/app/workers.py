@@ -459,7 +459,16 @@ def limpiar_catalogo(db=None) -> int:
     if root not in sys.path:
         sys.path.insert(0, root)
     from radiov import quality as Q
-    conn = sqlite3.connect(f"{root}\\data\\radiov.db")
+    from radiov.config import DB_PATH
+
+    # OJO: aquí había `sqlite3.connect(f"{root}\\data\\radiov.db")`, con barras invertidas de
+    # Windows escritas a mano. En Linux eso NO es una ruta: SQLite creaba un fichero nuevo
+    # con ese nombre tan raro, vacío, y al consultarlo saltaba "no such table: tracks". El
+    # worker fallaba en cada pasada y el vigilante lo avisaba por ntfy cada vez.
+    #
+    # La ruta se saca ahora de la configuración de la app, que respeta RADIOPV_DATA_DIR, así
+    # que funciona igual en Windows y en Linux.
+    conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     n = 0
     for row in conn.execute("SELECT id,title,artist,duration,status FROM tracks WHERE status='descargada'"):
