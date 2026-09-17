@@ -72,8 +72,37 @@ export interface TrackFilters {
   offset?: number;
 }
 
-/** Filtros que entiende el borrado en masa (mismo subconjunto que /admin/tracks). */
-export type BulkFilter = Omit<TrackFilters, 'sort' | 'order' | 'limit' | 'offset'>;
+/** Filtros que entiende el borrado en masa (mismo subconjunto que /admin/tracks)
+ *  más las **listas**, que permiten operar sobre muchos elementos elegidos a la vez. */
+export type BulkFilter = Omit<TrackFilters, 'sort' | 'order' | 'limit' | 'offset'> & {
+  ids?: number[];
+  artists?: string[];
+  albums?: string[];
+  genres?: string[];
+  languages?: string[];
+  years?: number[];
+};
+
+/** Una fila de la vista agrupada (por artista, álbum, género, idioma o año). */
+export interface GroupRow {
+  valor: string | number | null;
+  n: number;
+  size: number;
+  languages: string | null;
+  genres: string | null;
+  year_min: number | null;
+  year_max: number | null;
+}
+
+export interface GroupResponse {
+  by: string;
+  total_grupos: number;
+  limit: number;
+  offset: number;
+  items: GroupRow[];
+}
+
+export type GroupBy = 'artist' | 'album' | 'genre' | 'language' | 'year' | 'status' | 'source';
 
 export interface BlacklistEntry {
   id: number;
@@ -106,6 +135,23 @@ export const adminApi = {
 
   tracks: (f: TrackFilters) =>
     axios.get<TrackListResponse>('/admin/tracks', { params: f }).then((r) => r.data),
+
+  /** Biblioteca agrupada (por artista, álbum, género, idioma o año) con recuentos. */
+  group: (params: {
+    by: GroupBy;
+    q?: string;
+    artist?: string;
+    genre?: string;
+    language?: string;
+    status?: string;
+    year_min?: number;
+    year_max?: number;
+    min_tracks?: number;
+    sort?: 'n' | 'size' | 'valor';
+    order?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  }) => axios.get<GroupResponse>('/admin/group', { params }).then((r) => r.data),
 
   facets: () => axios.get<Facets>('/admin/facets').then((r) => r.data),
 

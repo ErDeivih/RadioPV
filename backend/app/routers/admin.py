@@ -290,7 +290,14 @@ def admin_set_ingest(payload: IngestRequest,
 
 # --------------------------------------------------------------- borrado en masa
 class BulkFilter(BaseModel):
-    """Filtros de una operación en masa. Al menos uno es obligatorio."""
+    """Filtros de una operación en masa. Al menos uno es obligatorio.
+
+    Los campos en singular filtran por un valor exacto; los que son **listas** (`artists`,
+    `albums`, `genres`, `languages`, `years`, `ids`) permiten operar sobre **muchos
+    elementos elegidos a la vez** — que es como se limpia una biblioteca grande:
+    filtrar por idioma, seleccionar 80 artistas y borrarlos de un golpe.
+    """
+    # --- valores únicos ---
     q: Optional[str] = None
     artist: Optional[str] = None
     album: Optional[str] = None
@@ -301,6 +308,14 @@ class BulkFilter(BaseModel):
     year_min: Optional[int] = None
     year_max: Optional[int] = None
 
+    # --- listas: selección múltiple ---
+    ids: Optional[list[int]] = Field(None, description="IDs concretos de pista")
+    artists: Optional[list[str]] = Field(None, description="Varios artistas a la vez")
+    albums: Optional[list[str]] = Field(None, description="Varios álbumes a la vez")
+    genres: Optional[list[str]] = Field(None, description="Varios géneros a la vez")
+    languages: Optional[list[str]] = Field(None, description="Varios idiomas a la vez")
+    years: Optional[list[int]] = Field(None, description="Varios años a la vez")
+
 
 class BulkRequest(BaseModel):
     filters: BulkFilter
@@ -308,6 +323,11 @@ class BulkRequest(BaseModel):
     veto: bool = Field(True, description="Añadir a la lista negra (no se volverán a descargar)")
     dry_run: bool = Field(False, description="Solo contar, sin tocar nada")
     limit: int = Field(0, ge=0, description="0 = sin límite")
+
+
+def _marcas(n: int) -> str:
+    """Devuelve '?,?,?' para un IN parametrizado de n elementos."""
+    return ",".join("?" * n)
 
 
 def _where_bulk(f: BulkFilter) -> tuple[str, list]:
@@ -336,6 +356,19 @@ def _where_bulk(f: BulkFilter) -> tuple[str, list]:
     if f.year_max is not None:
         donde.append("year <= ?"); args.append(f.year_max)
 
+    # --- listas (selección múltiple) ---
+    for columna, valores in (
+        ("id", f.ids),
+        ("artist", f.artists),
+        ("album", f.albums),
+        ("genre", f.genres),
+        ("language", f.languages),
+        ("year", f.years),
+    ):
+        if valores:
+            donde.append(f"{columna} IN ({_marcas(len(valores))})")
+            args += list(valores)
+
     if not donde:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -343,6 +376,65 @@ def _where_bulk(f: BulkFilter) -> tuple[str, list]:
             "no pueda vaciar la biblioteca",
         )
     return "WHERE " + " AND ".join(donde), args
+
+
+@router.get("/group", summary="Agrupar la biblioteca (por artista, álbum, género, idioma o año)")
+def admin_group(
+    by: Literal["artist", "album", "genre", "language", "year", "status", "source"] = "artist",
+    q: Optional[str] = None,
+    artist: Optional[str] = None,
+    genre: Optional[str] = None,
+    language: Optional[str] = None,
+    status_: Optional[str] = Query(None, alias="status"),
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None,
+    min_tracks: int = Query(1, ge=1, description="Oculta grupos con menos pistas que esto"),
+    sort: Literal["n", "size", "valor"] = "n",
+    order: Literal["asc", "desc"] = "desc",
+    limit: int = Query(300, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    _: models.User = Depends(require_admin),
+) -> dict:
+    """Devuelve la biblioteca **agrupada**, con el recuento de cada grupo.
+
+    Es la vista con la que se limpia de verdad: en vez de 12.000 canciones sueltas,
+    ves *"Inglés · 412 artistas · 3.180 canciones"* y puedes seleccionar 80 artistas
+    de una vez. `by` está restringido por `Literal`, así que no hay inyección posible.
+    """
+    filtro = BulkFilter(
+        q=q, artist=artist, genre=genre, language=language,
+        status=status_, year_min=year_min, year_max=year_max,
+    )
+    # Sin filtros, agrupar es legítimo: se agrupa toda la biblioteca.
+    try:
+        clausula, args = _where_bulk(filtro)
+    except HTTPException:
+        clausula, args = "", []
+
+    orden_col = {"n": "n", "size": "size", "valor": "valor"}[sort]
+    total = _one(
+        f"""SELECT COUNT(*) n FROM (
+                SELECT 1 FROM tracks {clausula} GROUP BY {by} HAVING COUNT(*) >= ?
+            )""",
+        tuple(args) + (min_tracks,),
+    ) or {"n": 0}
+
+    filas = _rows(
+        f"""SELECT {by} AS valor,
+                   COUNT(*) AS n,
+                   SUM(COALESCE(file_size, 0)) AS size,
+                   GROUP_CONCAT(DISTINCT language) AS languages,
+                   GROUP_CONCAT(DISTINCT genre) AS genres,
+                   MIN(year) AS year_min,
+                   MAX(year) AS year_max
+            FROM tracks {clausula}
+            GROUP BY {by}
+            HAVING n >= ?
+            ORDER BY {orden_col} {order.upper()}
+            LIMIT ? OFFSET ?""",
+        tuple(args) + (min_tracks, limit, offset),
+    )
+    return {"by": by, "total_grupos": total["n"], "limit": limit, "offset": offset, "items": filas}
 
 
 @router.post("/tracks/bulk", summary="Borrar o vetar EN MASA por filtros")

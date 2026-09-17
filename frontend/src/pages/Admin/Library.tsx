@@ -9,6 +9,7 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Segmented,
   Select,
   Space,
   Switch,
@@ -30,7 +31,9 @@ import {
   mb,
   TrackFilters,
   TrackRow,
+  GroupBy,
 } from './api';
+import GroupsTable from './GroupsTable';
 
 const { Text, Title } = Typography;
 
@@ -63,6 +66,9 @@ export const Library: FC = () => {
   const [status, setStatus] = useState<string | undefined>();
   const [yearMin, setYearMin] = useState<number | undefined>();
   const [yearMax, setYearMax] = useState<number | undefined>();
+
+  // Vista: lista plana de canciones, o agrupada (por artista, álbum, género, idioma, año)
+  const [vista, setVista] = useState<'tracks' | GroupBy>('tracks');
 
   // Confirmación del borrado en masa
   const [confirmacion, setConfirmacion] = useState<{
@@ -399,6 +405,26 @@ export const Library: FC = () => {
         </Row>
       </Card>
 
+      {/* ---------------------------------------------------------- vista */}
+      <div style={{ marginBottom: 16 }}>
+        <Segmented
+          value={vista}
+          onChange={(v) => setVista(v as 'tracks' | GroupBy)}
+          options={[
+            { label: 'Canciones', value: 'tracks' },
+            { label: 'Por artista', value: 'artist' },
+            { label: 'Por álbum', value: 'album' },
+            { label: 'Por género', value: 'genre' },
+            { label: 'Por idioma', value: 'language' },
+            { label: 'Por año', value: 'year' },
+          ]}
+        />
+      </div>
+
+      {vista !== 'tracks' ? (
+        <GroupsTable by={vista as GroupBy} filtros={filtrosBulk} onHecho={cargar} />
+      ) : (
+        <>
       {/* ---------------------------------------------------------- acciones en masa */}
       <Card
         size='small'
@@ -548,6 +574,8 @@ export const Library: FC = () => {
           </Space>
         )}
       </Modal>
+        </>
+      )}
     </div>
   );
 };
