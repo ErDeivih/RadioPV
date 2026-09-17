@@ -68,9 +68,9 @@ if [ "$BUILD_WEB" -eq 1 ]; then
   paso "Construyendo el frontend"
   if command -v node >/dev/null 2>&1; then
     ( cd frontend && yarn install --immutable && yarn build )
-    ok "frontend/dist generado"
+    ok "frontend/build generado"
   else
-    err "Node no esta instalado; usa el dist que venga en el repo o compila en tu PC"
+    err "Node no esta instalado; compila el frontend en tu PC (WSL) y copia frontend/build al servidor"
   fi
 fi
 
