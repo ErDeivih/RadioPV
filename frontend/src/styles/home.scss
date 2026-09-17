@@ -724,3 +724,80 @@
     }
   }
 }
+
+/* ---------------------------------------------------------------------------
+   ACCESO EN EL MÓVIL
+   ---------------------------------------------------------------------------
+   En un móvil el modal de acceso quedaba inservible: la carátula ocupaba media
+   pantalla y, como `.ant-modal-content` tiene `overflow: hidden` y el contenido
+   era más alto que la caja, el botón de "Iniciar sesión"/"Crear cuenta" quedaba
+   RECORTADO por abajo y no había manera de llegar a él. O sea que no se podía ni
+   registrarse desde el móvil.
+
+   Tres arreglos: la caja se puede desplazar, la imagen se hace pequeña (es
+   decorativa, no tiene por qué comerse la pantalla) y los botones pasan a tener
+   tamaño de dedo.
+   --------------------------------------------------------------------------- */
+@media (max-width: 576px) {
+  .ant-modal.login-modal {
+    max-width: calc(100vw - 20px) !important;
+    margin: 10px auto !important;
+    top: 0;
+    padding-bottom: 0;
+
+    .ant-modal-content {
+      // Lo importante: que se pueda desplazar y que la altura no se pase de la
+      // pantalla. Sin esto, el botón de enviar es inalcanzable.
+      overflow-y: auto !important;
+      max-height: calc(100vh - 20px);
+      min-height: 0;
+      padding: 18px 16px 22px;
+    }
+
+    .img-container {
+      margin-left: 0;
+      margin-right: 0;
+
+      img {
+        max-width: 110px;
+        max-height: 110px;
+        margin-top: 0;
+      }
+    }
+
+    .content-container {
+      max-width: 100%;
+
+      h2 {
+        font-size: 1.05rem;
+        margin-top: 12px;
+        margin-bottom: 0;
+      }
+
+      // Campos y botones a tamaño de dedo (44 px es el mínimo cómodo táctil).
+      input,
+      .ant-input,
+      .ant-input-affix-wrapper {
+        min-height: 44px;
+        font-size: 16px; // 16px o más, si no iOS hace zoom solo al enfocar
+      }
+
+      .ant-btn {
+        min-height: 40px;
+        padding: 0 18px;
+      }
+
+      button.white-button,
+      .white-button {
+        min-height: 48px;
+        font-size: 1rem;
+        margin-top: 4px;
+      }
+    }
+  }
+
+  // El pie "Vista previa" del acceso estorba en un móvil: ya hay un botón arriba.
+  .login-footer {
+    display: none !important;
+  }
+}
