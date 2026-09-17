@@ -43,6 +43,7 @@ COLORES = {
     CO.OTRA_VERSION: "\033[95m",   # magenta
     CO.OTRA_CANCION: "\033[91m",   # rojo
     CO.FICHERO_MAL: "\033[91m",    # rojo
+    CO.DUDOSO: "\033[96m",         # cian
     CO.SIN_DATOS: "\033[90m",      # gris
 }
 FIN = "\033[0m"
@@ -53,6 +54,7 @@ ETIQUETA = {
     CO.OTRA_VERSION: "OTRA VERSIÓN",
     CO.OTRA_CANCION: "OTRA CANCIÓN",
     CO.FICHERO_MAL: "fichero mal",
+    CO.DUDOSO: "dudoso",
     CO.SIN_DATOS: "sin datos",
 }
 

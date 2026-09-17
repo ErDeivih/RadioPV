@@ -73,31 +73,42 @@ METADATOS = "metadatos"                  # el audio está bien, los datos no
 OTRA_VERSION = "otra_version"            # misma canción, grabación/versión distinta
 OTRA_CANCION = "otra_cancion"            # el fichero no es esa canción
 FICHERO_MAL = "fichero_mal"              # ausente, ilegible, silencio o duración disparada
+DUDOSO = "dudoso"                        # el audio no cuadra del todo: que lo mire alguien
 SIN_DATOS = "sin_datos"                  # no se pudo comprobar contra internet
 
-VEREDICTOS = (CORRECTA, METADATOS, OTRA_VERSION, OTRA_CANCION, FICHERO_MAL, SIN_DATOS)
+VEREDICTOS = (CORRECTA, METADATOS, OTRA_VERSION, OTRA_CANCION, FICHERO_MAL, DUDOSO, SIN_DATOS)
 
 # Los que se pueden arreglar solos (solo tocan la ficha, no el fichero)
 AUTOARRGLABLES = (CORRECTA, METADATOS)
-# Los que necesitan volver a descargar la canción
+# Los que justifican volver a descargar la canción. Ojo: DUDOSO NO está aquí a propósito.
 NECESITAN_DESCARGA = (OTRA_VERSION, OTRA_CANCION, FICHERO_MAL)
 
 # Umbrales.
 #
 # ESTÁN MEDIDOS, no inventados. Con `scripts/calibrar_corrector.py` se compara cada canción
-# contra su propio preview (positivo) y contra el preview de otras canciones (negativo):
+# contra su propio preview (positivo) y contra el preview de otras canciones (negativo),
+# ya con la compensación de velocidad activada:
 #
 #                     croma (composición)      mfcc (grabación)
-#   su propia canción   0.974 – 0.995            0.588 – 0.887
-#   otra canción        0.573 – 0.931            0.044 – 0.225
+#   su propia canción   0.932 – 0.994            0.318 – 0.669
+#   otra canción        0.575 – 0.930            0.046 – 0.226
 #
-# La separación es limpia en las dos, así que los umbrales van en medio del hueco. Ojo:
-# la primera versión de esto usaba 0.78 y 0.80, que eran inservibles — una canción
-# completamente distinta daba 0.931 (habría pasado por buena) y una grabación correcta con
-# 0.588 se habría marcado como «otra versión».
-UMBRAL_CROMA_MISMA = 0.95      # a partir de aquí, misma composición
+# Dos conclusiones que cambiaron el diseño:
+#
+#  · El CROMA se solapa (0.932 contra 0.930). No sirve como criterio principal: canciones
+#    distintas comparten progresiones de acordes, así que el croma se parece por casualidad.
+#    Y la primera versión de esto usó 0.78 «a ojo», con lo que todo pasaba por bueno.
+#  · El MFCC sí separa (0.318 contra 0.226), así que es el que MANDA.
+#
+# Aun así los márgenes son estrechos, y por eso existe el veredicto `dudoso`: entre los
+# umbrales no se decide solo, se marca para que lo mire una persona. Reemplazar un fichero
+# por error cuesta una descarga y una canción perdida; marcarlo de más solo cuesta mirarlo.
+UMBRAL_CROMA_MISMA = 0.93      # a partir de aquí, misma composición
 UMBRAL_CROMA_DUDOSA = 0.88     # por debajo, canción distinta sin duda
-UMBRAL_MFCC_MISMA = 0.40       # a partir de aquí, misma grabación
+UMBRAL_MFCC_MISMA = 0.28       # a partir de aquí, misma grabación
+# Solo con las DOS señales por debajo de esto se da por seguro que es otra canción.
+SEGURO_CROMA = 0.88
+SEGURO_MFCC = 0.24
 UMBRAL_DURACION = 0.08         # 8% de desviación entre el fichero y Deezer
 UMBRAL_SILENCIO_RMS = 0.0015
 
@@ -439,26 +450,96 @@ def _sin_ruido_de_audio():
             os.close(guardado)
 
 
-def _mejor_alineamiento(A, B, paso: int = 4) -> tuple[float, float]:
-    """Desliza B (el preview) sobre A (el fichero) y devuelve la mejor similitud media."""
+def _mejor_alineamiento(A, B, paso: int = 4, refinado: bool = True) -> tuple[float, float]:
+    """Desliza B (el preview) sobre A (el fichero) y devuelve la mejor similitud media.
+
+    Se hace en dos pasadas (gruesa y fina) porque la búsqueda exhaustiva con paso 1 sobre
+    una canción de cuatro minutos son miles de posiciones por cada factor de velocidad que
+    se pruebe, y la mayor parte de ese trabajo no aporta nada.
+    """
     import numpy as np
 
     Ta, Tb = A.shape[1], B.shape[1]
     if Ta < Tb or Tb < 8:
         return 0.0, 0.0
-    mejor, mejor_off = -1.0, 0
-    for off in range(0, Ta - Tb + 1, paso):
-        seg = A[:, off:off + Tb]
-        sim = float(np.mean(np.sum(seg * B, axis=0)))
-        if sim > mejor:
-            mejor, mejor_off = sim, off
-    return mejor, float(mejor_off)
+
+    def barrido(desde: int, hasta: int, salto: int) -> tuple[float, int]:
+        mejor, mejor_off = -1.0, desde
+        for off in range(desde, max(desde + 1, hasta), salto):
+            if off + Tb > Ta:
+                break
+            seg = A[:, off:off + Tb]
+            sim = float(np.mean(np.sum(seg * B, axis=0)))
+            if sim > mejor:
+                mejor, mejor_off = sim, off
+        return mejor, mejor_off
+
+    grueso, off_g = barrido(0, Ta - Tb + 1, max(paso * 4, 16))
+    if not refinado:
+        return grueso, float(off_g)
+    margen = max(paso * 4, 16)
+    fino, off_f = barrido(max(0, off_g - margen), min(Ta - Tb + 1, off_g + margen + 1), paso)
+    return (fino, float(off_f)) if fino >= grueso else (grueso, float(off_g))
 
 
-def comparar_audio(track: dict, preview_url: Optional[str], *, hop: int = 2048) -> dict:
+def _reescalar_tiempo(matriz, factor: float):
+    """Estira o encoge una matriz de características a lo largo del tiempo.
+
+    Sirve para compensar que una copia vaya a distinta velocidad que la referencia. Se hace
+    sobre la MATRIZ ya calculada, no sobre el audio: recalcular el croma del fichero entero
+    para cada factor costaría segundos por canción, y así es una interpolación de nada.
+    """
+    import numpy as np
+
+    if abs(factor - 1.0) < 1e-9:
+        return matriz
+    filas, T = matriz.shape
+    nuevo_T = max(2, int(round(T / factor)))
+    idx = np.linspace(0, T - 1, nuevo_T)
+    base = np.arange(T)
+    return np.stack([np.interp(idx, base, matriz[f]) for f in range(filas)])
+
+
+def _desplazar_tono(croma, factor: float):
+    """Gira las 12 clases de croma para compensar el cambio de tono.
+
+    **NO SE USA**, y se deja aquí documentado para que nadie lo vuelva a intentar sin
+    medirlo: un cambio de velocidad arrastra el tono, así que en teoría habría que
+    compensarlo. En la práctica empeora el resultado en las DOS direcciones. Medido en una
+    copia al 0.5%:
+
+        factor 1.005   solo tiempo 0.9379   tono (un signo) 0.9158   tono (otro) 0.9158
+
+    La interpolación entre clases vecinas reparte la energía y difumina más de lo que
+    corrige. El desplazamiento real es de 0.086 semitonos, tan pequeño que la energía ya
+    está bien donde tiene que estar.
+    """
+    import numpy as np
+
+    if abs(factor - 1.0) < 1e-9:
+        return croma
+    semitonos = 12.0 * np.log2(factor)
+    dest = np.arange(12)
+    origen = (dest - semitonos) % 12
+    izq = np.floor(origen).astype(int) % 12
+    der = (izq + 1) % 12
+    peso = (origen - np.floor(origen))[:, None]
+    return croma[izq, :] * (1 - peso) + croma[der, :] * peso
+
+
+# Factores de velocidad que se prueban cuando la comparación directa no cuadra.
+# Un 1-2% de diferencia es lo normal en subidas a YouTube (PAL/NTSC, o ajustes de quien
+# subió el vídeo). Medido: una copia al 1.005 pasaba de croma 0.877 a 0.951.
+FACTORES_VELOCIDAD = (1.0, 0.98, 1.02, 0.99, 1.01, 0.97, 1.03, 0.96, 1.04,
+                      0.995, 1.005)
+
+
+def comparar_audio(track: dict, preview_url: Optional[str], *, hop: int = 2048,
+                   probar_velocidad: bool = True) -> dict:
     """Compara el fichero con el preview de 30 s de Deezer.
 
-    Devuelve `croma` (¿misma composición?) y `mfcc` (¿misma grabación?).
+    Devuelve `croma` (¿misma composición?) y `mfcc` (¿misma grabación?), y el factor de
+    velocidad al que mejor cuadran (1.0 si cuadran tal cual).
     """
     import numpy as np
     import librosa
@@ -520,16 +601,45 @@ def comparar_audio(track: dict, preview_url: Optional[str], *, hop: int = 2048) 
     try:
         croma_p, mfcc_p = _huellas(y_prev, sr_p, hop)
         croma_f, mfcc_f = _huellas(y, sr, hop)
-        croma, off_c = _mejor_alineamiento(croma_f, croma_p)
-        mfcc, off_m = _mejor_alineamiento(mfcc_f, mfcc_p)
     except Exception as e:  # noqa: BLE001
         salida["problemas"].append(f"falló el cálculo de las huellas: {type(e).__name__}: {e}")
         return salida
+
+    def puntuar(factor: float) -> tuple[float, float, float, float]:
+        # Solo se compensa el TIEMPO. Compensar además el tono empeora (ver _desplazar_tono).
+        cf = _reescalar_tiempo(croma_f, factor)
+        mf = _reescalar_tiempo(mfcc_f, factor)
+        c, off_c = _mejor_alineamiento(cf, croma_p)
+        m, off_m = _mejor_alineamiento(mf, mfcc_p)
+        return c, m, off_c, off_m
+
+    # --- primer intento tal cual: es el caso normal y sale barato ---
+    croma, mfcc, off_c, off_m = puntuar(1.0)
+    factor = 1.0
+
+    # --- si no cuadra, se prueba a otras velocidades ---
+    #
+    # Hace falta: las copias de YouTube van a veces un 0.5-2% más rápidas o más lentas que la
+    # referencia (PAL/NTSC, o el ajuste de quien subió el vídeo), y con esa diferencia las
+    # tramas no se alinean y la similitud se hunde aunque la grabación sea EXACTAMENTE la
+    # misma. Medido en una copia real: al 1.0 el croma daba 0.877 y al 1.005 subía a 0.951.
+    # Sin esto, el corrector marcaría como «otra canción» un montón de pistas correctas y
+    # mandaría a volver a descargarlas sin motivo.
+    if probar_velocidad and (croma < UMBRAL_CROMA_MISMA or mfcc < UMBRAL_MFCC_MISMA):
+        for f in FACTORES_VELOCIDAD:
+            if f == 1.0:
+                continue
+            c, m, oc, om = puntuar(f)
+            if c > croma:
+                croma, mfcc, off_c, off_m, factor = c, m, oc, om, f
+            if croma >= UMBRAL_CROMA_MISMA and mfcc >= UMBRAL_MFCC_MISMA:
+                break
 
     salida.update({
         "ok": True,
         "croma": round(croma, 4),
         "mfcc": round(mfcc, 4),
+        "factor_velocidad": round(factor, 4),
         "segundo_fichero_croma": round(off_c * hop / 22050, 1),
         "segundo_fichero_mfcc": round(off_m * hop / 22050, 1),
         "segundos_fichero": round(float(y.size) / sr, 1),
@@ -537,6 +647,10 @@ def comparar_audio(track: dict, preview_url: Optional[str], *, hop: int = 2048) 
         "misma_composicion": croma >= UMBRAL_CROMA_MISMA,
         "misma_grabacion": mfcc >= UMBRAL_MFCC_MISMA,
     })
+    if factor != 1.0:
+        salida["aviso_velocidad"] = (
+            f"esta copia va un {abs(factor - 1) * 100:.1f}% "
+            f"{'más rápida' if factor > 1 else 'más lenta'} que la referencia de Deezer")
     return salida
 
 
@@ -648,35 +762,38 @@ def decidir(track: dict, fichero: dict, tags: dict, tags_cmp: dict,
     #   croma -> ¿es la misma COMPOSICIÓN?   (un cover la conserva)
     #   mfcc  -> ¿es la misma GRABACIÓN?     (un cover NO la conserva)
     #
-    # Y el mfcc es el discriminador más fuerte según la medición: las grabaciones correctas
-    # dieron 0.588–0.887 y las canciones ajenas 0.044–0.225. El croma también separa
-    # (0.974–0.995 contra 0.573–0.931) pero con menos margen, así que se usa como apoyo.
+    # El MFCC es el que manda: en la calibración separa (0.318–0.669 las correctas contra
+    # 0.046–0.226 las ajenas), mientras que el croma se solapa (0.932 contra 0.930) porque
+    # dos canciones distintas pueden compartir la misma progresión de acordes.
     if audio.get("ok"):
         croma, mfcc = audio["croma"], audio["mfcc"]
-        misma_composicion = croma >= UMBRAL_CROMA_MISMA
         misma_grabacion = mfcc >= UMBRAL_MFCC_MISMA
+        misma_composicion = croma >= UMBRAL_CROMA_MISMA
 
-        if misma_composicion and misma_grabacion:
+        if misma_grabacion:
             pass                                   # el fichero es lo que dice ser
-        elif misma_composicion and not misma_grabacion:
+        elif misma_composicion:
             problemas.append(
                 f"misma canción pero OTRA GRABACIÓN (cover, directo u otra versión): la "
                 f"composición cuadra (croma {croma:.2f}) pero el timbre no "
                 f"(mfcc {mfcc:.2f}, se espera ≥{UMBRAL_MFCC_MISMA})")
             return OTRA_VERSION, problemas, {}
-        elif croma < UMBRAL_CROMA_DUDOSA:
+        elif croma < SEGURO_CROMA and mfcc < SEGURO_MFCC:
+            # Las dos señales claramente mal: no hay duda razonable.
             problemas.append(
-                f"el audio NO es esa canción: no cuadra ni la composición (croma {croma:.2f}, "
-                f"se espera ≥{UMBRAL_CROMA_MISMA}) ni la grabación (mfcc {mfcc:.2f})")
+                f"el audio NO es esa canción: ni la composición (croma {croma:.2f}, se "
+                f"espera ≥{UMBRAL_CROMA_MISMA}) ni la grabación (mfcc {mfcc:.2f}, se espera "
+                f"≥{UMBRAL_MFCC_MISMA})")
             return OTRA_CANCION, problemas, {}
         else:
-            # Composición dudosa y timbre distinto: casi siempre es otra canción, pero se
-            # deja como problema en vez de veredicto para que lo mire una persona.
+            # Zona gris. Los márgenes de estas medidas son estrechos, así que aquí NO se
+            # decide solo: se marca para que lo mire una persona. Reemplazar por error
+            # cuesta una descarga y una canción; marcar de más solo cuesta mirarlo.
             problemas.append(
-                f"el audio no cuadra: composición dudosa (croma {croma:.2f}, frontera "
-                f"{UMBRAL_CROMA_DUDOSA}–{UMBRAL_CROMA_MISMA}) y grabación distinta "
-                f"(mfcc {mfcc:.2f})")
-            return OTRA_CANCION, problemas, {}
+                f"el audio no cuadra del todo y no hay certeza: composición {croma:.2f} "
+                f"(se espera ≥{UMBRAL_CROMA_MISMA}) y grabación {mfcc:.2f} "
+                f"(se espera ≥{UMBRAL_MFCC_MISMA}). Hace falta que lo escuche una persona")
+            return DUDOSO, problemas, {}
 
     # --- los datos ---
     if dz.get("id_guardado_valido") is False:

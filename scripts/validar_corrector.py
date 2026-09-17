@@ -94,7 +94,10 @@ def main() -> int:
             v2, probs2, _ = CO.decidir(
                 falsa, fichero_ok_sintetico(falsa), {}, {"ok": None},
                 {"ok": True, "candidato": {}, "guardado": {}}, audio2, {"ok": False})
-            ok2 = v2 == CO.OTRA_CANCION
+            # Se acepta otra_cancion u otra_version: lo que importa es que quede marcado como
+            # «hay que reemplazar el fichero». Distinguir un cover de una cancion distinta
+            # con estas medidas no siempre es posible, y el corrector no lo finge.
+            ok2 = v2 in CO.NECESITAN_DESCARGA
             aciertos += 1 if ok2 else 0
             fallos += 0 if ok2 else 1
             cola = f"  <- {probs2[-1][:60]}" if probs2 else ""
