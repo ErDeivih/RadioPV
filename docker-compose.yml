@@ -68,16 +68,28 @@ services:
     cpus: 1.5
     mem_limit: 1500m
 
-  # ---------------- Web (build de React servido por nginx) ----------------
-  # El build se genera con `yarn build` en frontend/ (ver deploy.sh).
+  # ---------------- Web (React compilado y servido por nginx) ----------------
+  #
+  # El frontend se COMPILA dentro de la imagen (ver frontend/Dockerfile), no se copia un
+  # build hecho a mano. Antes se montaba ./frontend/build, y como el servidor no tiene
+  # Node, el autodespliegue bajaba los cambios del frontend pero no los aplicaba: solo
+  # dejaba un aviso en el log y la interfaz se quedaba vieja.
+  #
+  # El contexto de construcción es la RAÍZ del repositorio porque el Dockerfile copia
+  # también deploy/nginx.conf. El .dockerignore de la raíz evita que se envíen al demonio
+  # los 1,29 GB de carátulas de data/ y los node_modules.
   web:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: radiopv-web
     container_name: radiopv-web
     restart: unless-stopped
     ports:
       - "8090:80"
     volumes:
-      - ./frontend/build:/usr/share/nginx/html:ro
+      # Se monta encima de la copia que trae la imagen: así se puede retocar la config de
+      # nginx y recargar sin reconstruir la imagen entera.
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     environment:
       - TZ=Europe/Madrid

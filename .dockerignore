@@ -1,0 +1,52 @@
+# Qué NO se le envía al demonio de Docker al construir las imágenes.
+#
+# Sin este fichero, cada `docker compose build` manda TODO el repositorio. En este proyecto
+# eso eran 1,29 GB de carátulas en data/ más 0,58 GB de node_modules del frontend, en cada
+# construcción y para nada: ninguna imagen los usa.
+
+# --- control de versiones y basura de Python ---
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+.venv
+.uv-cache
+.tmp
+_tmp
+_test_media
+_test_music
+_to_delete
+pytest-cache-files-*
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# --- cachés de gestores de paquetes ---
+.yarn
+.yarn-global
+.pnpm-store
+**/node_modules
+
+# --- datos: no van dentro de ninguna imagen ---
+# Las bases de datos y las carátulas viven en data/ del host, montadas como volumen.
+data
+backup
+outputs
+_deploy
+_transfer-*.tar
+*.log
+
+# --- el frontend se compila en su propia imagen ---
+# node_modules y el build se generan dentro del contenedor; no se envían desde aquí.
+frontend/build
+frontend/test-results
+frontend/playwright-report
+mobile
+
+# --- secretos y ficheros locales ---
+# OJO: NO se excluye .env.* en general, porque frontend/.env.production SÍ tiene que
+# llegar (define VITE_API_URL=/api para el build de producción).
+.env
+.env.local
+*.key
+*.pem
