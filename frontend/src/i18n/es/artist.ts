@@ -5,6 +5,7 @@ export const artist = {
   Discography: 'Discografía',
   'Popular releases': 'Lanzamientos populares',
   Popular: 'Popular',
+  Play: 'Reproducir la lista del artista',
   Albums: 'Álbumes',
   Singles: 'Sencillos',
   All: 'Todos',
