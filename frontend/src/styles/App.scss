@@ -986,6 +986,31 @@ a {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
+   TAMBIÉN EN ESCRITORIO (con ratón)
+   ══════════════════════════════════════════════════════════════════════════════════════════════
+
+   Aquí no hace falta llegar a 44 px —el ratón es preciso—, pero la auditoría encontró menús de
+   fila de **49x12 px** y el botón de «me gusta» de 18x18: se fallan con el ratón igual, sólo que
+   con menos frecuencia. Se les da un mínimo razonable sin cambiar el dibujo.
+   ────────────────────────────────────────────────────────────────────────────────────────────── */
+.ant-dropdown-trigger {
+  min-block-size: 32px;
+}
+
+/* El disparador suele ser un `span` en línea, y a los elementos en línea `min-height` no les
+   afecta: hay que cambiarle el `display` o la regla de arriba no hace nada. */
+span.ant-dropdown-trigger,
+.ant-dropdown-trigger:not(button) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.song-details .actions {
+  min-inline-size: 28px;
+  min-block-size: 28px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
    OBJETIVOS TÁCTILES EN MÓVIL
    ══════════════════════════════════════════════════════════════════════════════════════════════
 
