@@ -1010,6 +1010,16 @@ span.ant-dropdown-trigger,
   min-block-size: 28px;
 }
 
+/* La barra de reproducción de escritorio: los iconos de aleatorio, repetir, letra, cola,
+   dispositivo y silencio tenían un hueco de 16x17 px. Con el ratón se falla menos que con el
+   dedo, pero se falla: el hueco pasa a 32 px sin tocar el tamaño del dibujo. */
+.w-full.bg-black .ant-col button,
+.mobile-menu button,
+.volume-control-container button {
+  min-inline-size: 32px;
+  min-block-size: 32px;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    OBJETIVOS TÁCTILES EN MÓVIL
    ══════════════════════════════════════════════════════════════════════════════════════════════
