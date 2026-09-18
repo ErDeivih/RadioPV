@@ -52,6 +52,16 @@ la API**, no contra lo que dice la pantalla, y además se comprueba que los avis
 la foto **se carga de verdad** (`naturalWidth > 0`): un `<img>` con la dirección correcta pero
 la imagen rota pasaría una comprobación ingenua, y de hecho pasó.
 
+`probar-usabilidad.js` (**auditoría**): recorre diez pantallas en móvil (390×844 táctil) y en
+escritorio (1440×900) y **mide**, por pantalla, cuántas canciones sueltas se pintan, cuántos
+controles son invisibles pero siguen recibiendo el toque, cuántos objetivos táctiles bajan de
+44 px, qué se sale de la pantalla, si hay callejones sin salida y si aparece texto en inglés en
+el cromo de la interfaz. No "pasa" o "falla": ordena los problemas por gravedad y dice dónde
+está cada uno. Ver `docs/29-usabilidad.md` en el repositorio de documentación.
+
+`probar-perfil.js`: que el perfil (la biblioteca) ofrezca una **lista** y no canciones sueltas,
+que la tarjeta lleve a la lista y que dentro estén las canciones.
+
 > Los guiones crean usuarios, playlists y canciones de prueba (`*@radiopv-test.com`) en el
 > servidor. **Bórralos después de cada tanda**, porque sus reproducciones entran en la
 > popularidad, en las tendencias y en los mixes que ve el usuario de verdad:
