@@ -109,7 +109,51 @@ const medir = (p, vista) =>
         ? [...barra.querySelectorAll('a, button, [role="button"]')].filter(visible).length
         : 0;
 
-      return { vista, cancionesSueltas, invisibles, pequenos, recortados, desborda, salidas };
+      // 6) Textos que deberían estar en castellano y están en inglés. Se mira sólo el "cromo" de
+      //    la interfaz (botones, títulos, etiquetas y los textos accesibles), nunca el contenido:
+      //    el título de una canción puede llamarse "Home" y no es un fallo de traducción.
+      const INGLES = [
+        'Your Library', 'Recently played', 'Show more', 'Show less', 'Songs', 'Song',
+        'Playlists', 'Albums', 'Artists', 'Top Result', 'Browse all', 'Followers',
+        'Public Playlist', 'Private Playlist', 'Queue', 'Lyrics', 'Devices', 'Volume',
+        'Mute', 'Shuffle', 'Repeat', 'Next', 'Previous', 'Cancel', 'Save', 'Delete',
+        'Loading', 'No results', 'Search', 'Home', 'Settings', 'Expand your library',
+        'Collapse your library', 'Log in', 'Log out', 'Sign up', 'Create a new Playlist',
+        'Add to queue', 'Play', 'Pause',
+      ];
+      const cromo = [
+        ...document.querySelectorAll(
+          'button, h1, h2, h3, h4, label, [role="button"], .section-title, .playlist-header, .showMore'
+        ),
+      ].filter(visible);
+      const enIngles = new Set();
+      cromo.forEach((el) => {
+        const trozos = [
+          el.textContent || '',
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('title') || '',
+          el.getAttribute('placeholder') || '',
+        ];
+        trozos.forEach((texto) => {
+          INGLES.forEach((palabra) => {
+            // Palabra completa: "Home" sí, "Hometown" no.
+            if (new RegExp(`(^|[^A-Za-zÁÉÍÓÚáéíóúñÑ])${palabra}([^A-Za-zÁÉÍÓÚáéíóúñÑ]|$)`).test(texto)) {
+              enIngles.add(palabra);
+            }
+          });
+        });
+      });
+
+      return {
+        vista,
+        cancionesSueltas,
+        invisibles,
+        pequenos,
+        recortados,
+        desborda,
+        salidas,
+        enIngles: [...enIngles],
+      };
     },
     { vista, minimo: MINIMO_TACTIL }
   );
@@ -253,6 +297,26 @@ const medir = (p, vista) =>
   if (sinSalida.length) {
     console.log('\nPantallas SIN forma visible de salir (callejón sin salida):');
     sinSalida.forEach((i) => console.log(`   ${i.pantalla.padEnd(8)} ${i.vista}`));
+  }
+
+  // Textos en inglés donde debería haber castellano de España.
+  const ingles = new Map();
+  inventario.forEach((i) =>
+    (i.enIngles || []).forEach((palabra) => {
+      const e = ingles.get(palabra) || new Set();
+      e.add(`${i.pantalla}/${i.vista}`);
+      ingles.set(palabra, e);
+    })
+  );
+  if (ingles.size) {
+    console.log('\nTextos en INGLÉS en el cromo de la interfaz (deberían ir en castellano):');
+    [...ingles.entries()]
+      .sort((a, b) => b[1].size - a[1].size)
+      .forEach(([palabra, donde]) =>
+        console.log(`   ${palabra.padEnd(28)} en ${donde.size} pantalla(s): ${[...donde].slice(0, 3).join(', ')}`)
+      );
+  } else {
+    console.log('\nNingún texto en inglés en el cromo de las pantallas auditadas.');
   }
 
   // Detalle de los pequeños EN MÓVIL, con su posición: así se distingue la barra de abajo

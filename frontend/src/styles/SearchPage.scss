@@ -1,3 +1,5 @@
+@use './variables.scss' as *;
+
 /* Barra de filtros de la búsqueda (Todo / Artistas / Canciones / Álbumes / Listas).
    En ESCRITORIO los chips viven en la barra fija superior, así que esta barra propia se oculta.
    En MÓVIL es al revés: la barra fija no se ve hasta desplazarse, de modo que aquí es el único
