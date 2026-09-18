@@ -26,4 +26,6 @@ export const search = {
   'Request this song': 'Pedir esta canción',
   Home: 'Inicio',
   'See all songs': 'Ver todas las canciones',
+  'Lists of this genre': 'Listas de este género',
+  'Show more': 'Mostrar más',
 };

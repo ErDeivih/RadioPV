@@ -67,8 +67,47 @@ const medir = (p, vista) =>
       };
 
       const interactivos = [
-        ...document.querySelectorAll('button, a, [role="button"], input, select, textarea'),
+        ...document.querySelectorAll('button, a, [role="button"], input, select, textarea, label'),
       ];
+
+      /**
+       * El elemento que de verdad recibe el toque. Medir el que no toca da falsos positivos:
+       *  · un `checkbox` pequeño dentro de un `<label>` grande: el dedo toca el label y funciona;
+       *  · el `input` interno de un desplegable de antd: el que se pulsa es el recuadro visible.
+       */
+      const objetivoReal = (el) => {
+        if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {
+          const lab = el.closest('label');
+          if (lab) return lab;
+        }
+        const caja = el.closest('.ant-select-selector, .ant-input-affix-wrapper');
+        if (caja && caja !== el) return caja;
+        return el;
+      };
+
+      /**
+       * Alto EFECTIVO: hay controles que se agrandan por dentro con un pseudo-elemento invisible
+       * (el interruptor de antd, sin ir más lejos). Su caja mide 22 px, pero el dedo acierta en
+       * 44 porque el pseudo-elemento también recibe el toque. Se comprueba sondeando hacia
+       * arriba y hacia abajo con `elementFromPoint`, que es exactamente lo que hace un dedo.
+       */
+      const altoEfectivo = (el) => {
+        const r = el.getBoundingClientRect();
+        const cx = Math.min(Math.max(r.left + r.width / 2, 1), window.innerWidth - 1);
+        let arriba = r.top;
+        let abajo = r.bottom;
+        for (let d = 4; d <= 24; d += 4) {
+          const t = document.elementFromPoint(cx, r.top - d);
+          if (t && (t === el || el.contains(t))) arriba = r.top - d;
+          else break;
+        }
+        for (let d = 4; d <= 24; d += 4) {
+          const t = document.elementFromPoint(cx, r.bottom + d);
+          if (t && (t === el || el.contains(t))) abajo = r.bottom + d;
+          else break;
+        }
+        return Math.round(abajo - arriba);
+      };
       const nombre = (el) =>
         (el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 44);
       const clase = (el) => String(el.className || '').slice(0, 46);
@@ -81,16 +120,23 @@ const medir = (p, vista) =>
         .filter((el) => !visible(el) && sePuedePulsar(el))
         .map((el) => ({ etiqueta: nombre(el), clase: clase(el) }));
 
-      // 3) Objetivos táctiles pequeños.
+      // 3) Objetivos táctiles pequeños (con la medida EFECTIVA, no sólo la caja).
+      const vistos = new Set();
       const pequenos = interactivos
-        .filter(visible)
+        .map(objetivoReal)
+        .filter((el) => {
+          if (vistos.has(el)) return false;
+          vistos.add(el);
+          return visible(el);
+        })
         .map((el) => {
           const r = el.getBoundingClientRect();
+          const alto = Math.max(Math.round(r.height), altoEfectivo(el));
           return {
             etiqueta: nombre(el),
             clase: clase(el),
             w: Math.round(r.width),
-            h: Math.round(r.height),
+            h: alto,
             y: Math.round(r.top),
             x: Math.round(r.left),
           };

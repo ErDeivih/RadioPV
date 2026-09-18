@@ -1163,4 +1163,45 @@ span.ant-dropdown-trigger,
   .artist-page-content button {
     min-block-size: 44px;
   }
+
+  /* Los títulos que son enlaces (p. ej. «Discografía», que lleva a la discografía completa):
+     medían 36 px de alto. */
+  .grid-item-list-header a,
+  .artist-page-content a:has(h1) {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 44px;
+  }
+
+  /* Enlaces de texto cortos (el nombre del artista dentro de una fila): el alto ya era 44, pero
+     un nombre de dos letras dejaba 28 px de ancho. */
+  .link-text,
+  a.ant-dropdown-trigger {
+    min-inline-size: 44px;
+  }
+
+  /* Botones de acción con icono (p. ej. «guardar en tu biblioteca» en la página del álbum):
+     el icono mide 32 px y el botón era exactamente eso. */
+  .icon-action-button {
+    min-inline-size: 44px;
+    min-block-size: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Interruptor de antd: la pastilla mide 22 px de alto por dentro y estirarla quedaría fea, así
+     que se le agranda la ZONA QUE RECIBE EL TOQUE con un pseudo-elemento invisible (44 px de
+     alto). El dibujo sigue igual. */
+  .ant-switch {
+    position: relative;
+    overflow: visible;
+    min-block-size: 32px;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -6px 0;
+    }
+  }
 }

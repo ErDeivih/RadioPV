@@ -119,7 +119,9 @@ export const LikedSongsHeader: FC<LikedSongsHeaderProps> = ({
               <Col span={24}>
                 <Space className='owner'>
                   {user?.images?.[0]?.url ? (
-                    <Link to='/profile'>
+                    // `/profile` no es una ruta del enrutador: era un callejón sin salida (la
+                    // página de «no encontrado»). Va al perfil del usuario que ha iniciado sesión.
+                    <Link to={user?.id ? `/users/${user.id}` : '/'} className='avatar-link'>
                       <img
                         id='user-avatar'
                         alt='User Avatar'

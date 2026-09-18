@@ -2,13 +2,14 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
 // Interfaz
 import axios from '../../axios';
-import { toTrack } from '../../api/adapt';
+import { toTrack, toPlaylist } from '../../api/adapt';
 
 // Interfaces
 import type { Pagination } from '../../interfaces/api';
 import type { Track } from '../../interfaces/track';
 import type { Category } from '../../interfaces/categories';
-import type { TrackOut } from '../../api/types';
+import type { Playlist } from '../../interfaces/playlists';
+import type { PlaylistOut, TrackOut } from '../../api/types';
 
 const PLACEHOLDER = '/images/playlist.png';
 
@@ -18,14 +19,40 @@ const parseId = (id: string): { param: string; value: string } => {
   return i === -1 ? { param: 'genre', value: id } : { param: id.slice(0, i), value: id.slice(i + 1) };
 };
 
+/**
+ * Las listas que la aplicación genera PARA ESE GÉNERO (`Top pop`, `Top bachata`…).
+ *
+ * La página de género enseñaba sólo una rejilla de canciones sueltas. Como la música se escucha
+ * en listas, primero van las listas del género (que la aplicación ya crea) y las canciones
+ * después. Si no hay ninguna lista para ese facet (las eras y los estados de ánimo no tienen
+ * «Top …»), la sección simplemente no aparece: mejor nada que un hueco vacío.
+ *
+ * Se compara en minúsculas y sin acentos, porque el nombre de la lista y el valor del facet no
+ * siempre se escriben igual.
+ */
+const sinAcentos = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const listasDelGenero = async (param: string, value: string): Promise<Playlist[]> => {
+  if (param !== 'genre') return [];
+  const { data } = await axios.get<PlaylistOut[]>('/playlists/system');
+  const objetivo = `top ${sinAcentos(value)}`;
+  return data
+    .filter((p) => sinAcentos(p.name) === objetivo)
+    .sort((a, b) => (b.n_tracks ?? 0) - (a.n_tracks ?? 0))
+    .map((p) => toPlaylist(p) as unknown as Playlist);
+};
+
 const initialState: {
   category: Category | null;
   playlists: Track[];
+  listas: Playlist[];
   loading: boolean;
   total: number;
 } = {
   category: null,
   playlists: [],
+  listas: [],
   loading: true,
   total: 0,
 };
@@ -33,7 +60,7 @@ const initialState: {
 /** RadioPV: /genre/:id lista canciones por facet (género/era/mood/idioma), paginado por
  *  X-Total-Count. El estado `playlists` se reutiliza pero ahora lleva Track[] (GridItemList los
  *  pinta como TrackCard). */
-export const fetchGenre = createAsyncThunk<[Category, Track[], number], string>(
+export const fetchGenre = createAsyncThunk<[Category, Track[], number, Playlist[]], string>(
   'genre/fetchGenre',
   async (id) => {
     const { param, value } = parseId(id);
@@ -44,7 +71,10 @@ export const fetchGenre = createAsyncThunk<[Category, Track[], number], string>(
       icons: [{ url: PLACEHOLDER, width: 300, height: 300 }],
       count: total,
     };
-    return [category, r.data.map(toTrack), total];
+    // Las listas del género se piden en paralelo y no pueden tumbar la página: si fallan, la
+    // rejilla de canciones se sigue viendo.
+    const listas = await listasDelGenero(param, value).catch(() => [] as Playlist[]);
+    return [category, r.data.map(toTrack), total, listas];
   }
 );
 
@@ -75,6 +105,7 @@ const genreSlice = createSlice({
       state.category = action.payload[0];
       state.playlists = action.payload[1];
       state.total = action.payload[2];
+      state.listas = action.payload[3];
       state.loading = false;
     });
     builder.addCase(fetchMoreGenre.fulfilled, (state, action) => {

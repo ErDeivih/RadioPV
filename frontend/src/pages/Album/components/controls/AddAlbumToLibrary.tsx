@@ -32,7 +32,9 @@ const FollowAlbum: FC<{ id: string; onToggle: () => void; size?: number }> = ({
 
   return (
     <Tooltip title={t('Add to Your Library')}>
-      <button onClick={handleAddToLibrary}>
+      {/* El icono se dibuja a 32 px, pero el botón tiene una zona pulsable mayor en táctil: el
+          icono se acierta con el dedo o no. */}
+      <button className='icon-action-button' onClick={handleAddToLibrary}>
         <AddToLibrary height={size} width={size} />
       </button>
     </Tooltip>
@@ -58,7 +60,7 @@ const UnfollowAlbum: FC<{ id: string; onToggle: () => void; size?: number }> = (
 
   return (
     <Tooltip title={t('Remove from Your Library')}>
-      <button onClick={handleDeleteFromLibrary}>
+      <button className='icon-action-button' onClick={handleDeleteFromLibrary}>
         <AddedToLibrary height={size} width={size} />
       </button>
     </Tooltip>

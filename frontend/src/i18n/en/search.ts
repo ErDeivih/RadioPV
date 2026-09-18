@@ -19,4 +19,6 @@ export const search = {
   'Recent Searches': 'Recent Searches',
   'Clear recent searches': 'Clear recent searches',
   'See all songs': 'See all songs',
+  'Lists of this genre': 'Lists of this genre',
+  'Show more': 'Show more',
 };

@@ -115,10 +115,13 @@ export const AlbumHeader: FC<AlbumHeaderProps> = ({ container, sectionContainer,
               <Col span={24}>
                 <Space className='owner'>
                   {artist ? (
-                    <Link to='/profile'>
+                    // La foto de aquí es la del ARTISTA, y el enlace apuntaba a `/profile`, que
+                    // **no existe como ruta** en el enrutador: pulsarla llevaba a la página de
+                    // «no encontrado». Va al artista, que es lo que se está viendo.
+                    <Link to={`/artist/${artist.id}`} className='avatar-link'>
                       <img
                         id='user-avatar'
-                        alt='User Avatar'
+                        alt={artist.name}
                         className='playlist-avatar'
                         src={artist.images[0]?.url || ARTISTS_DEFAULT_IMAGE}
                       />
