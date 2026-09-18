@@ -1,7 +1,7 @@
 import { FC, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaLock, FaUnlock } from 'react-icons/fa6';
-import { Dropdown, MenuProps, message } from 'antd';
+import { Dropdown, MenuProps, message, Modal } from 'antd';
 import { DeleteIcon, AddToQueueIcon, EditIcon, AddedToLibrary, AddToLibrary } from '../Icons';
 
 // Services
@@ -34,6 +34,8 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
   const { children, playlist } = props;
 
   const { t } = useTranslation(['playlist']);
+  // `Modal.confirm` estático: funciona gracias al puente de React 19 de `index.tsx`.
+  const [modal, contextoModal] = Modal.useModal();
 
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -76,9 +78,21 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
           icon: <DeleteIcon />,
           onClick: () => {
             if (!handleUserValidation()) return;
-            return playlistService.deletePlaylist(playlist.id).then(() => {
-              message.open({ type: 'success', content: t('Playlist deleted') });
-              navigate('/library');
+            // Confirmación ANTES de borrar. Antes se borraba directamente al tocar la opción del
+            // menú: en el móvil, un toque de más en una lista con su nombre y su foto la borraba
+            // sin preguntar y sin vuelta atrás.
+            modal.confirm({
+              title: t('Delete playlist question'),
+              content: t('This cannot be undone'),
+              okText: t('Delete'),
+              okButtonProps: { danger: true },
+              cancelText: t('Cancel'),
+              centered: true,
+              onOk: () =>
+                playlistService.deletePlaylist(playlist.id).then(() => {
+                  message.open({ type: 'success', content: t('Playlist deleted') });
+                  navigate('/library');
+                }),
             });
           },
         },
@@ -190,11 +204,14 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
     });
 
     return items;
-  }, [canEdit, dispatch, handleUserValidation, inLibrary, navigate, playlist, props, t]);
+  }, [canEdit, dispatch, handleUserValidation, inLibrary, modal, navigate, playlist, props, t]);
 
   return (
-    <Dropdown menu={{ items }} trigger={props.trigger}>
-      {children}
-    </Dropdown>
+    <>
+      {contextoModal}
+      <Dropdown menu={{ items }} trigger={props.trigger}>
+        {children}
+      </Dropdown>
+    </>
   );
 });

@@ -1,4 +1,6 @@
 import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
+import { unstableSetRender } from 'antd';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
@@ -14,6 +16,27 @@ import es from 'javascript-time-ago/locale/es';
 
 TimeAgo.addDefaultLocale(en);
 TimeAgo.addLocale(es);
+
+// ── Avisos de antd (message/notification) en React 19 ────────────────────────────────────────
+// Los métodos ESTÁTICOS de antd (`message.success(...)`, que es como los usa media aplicación)
+// pintan su propio árbol con la API de React 18 (`ReactDOM.render`), que en React 19 ya no
+// existe. Resultado real y comprobado: se guardaba el nombre de una lista, el servidor lo
+// guardaba bien, y en pantalla no aparecía NINGUNA confirmación (parecía que no había hecho
+// nada). Esto es exactamente lo que hace el parche oficial @ant-design/v5-patch-for-react-19,
+// pero escrito aquí para no añadir otra dependencia al build.
+unstableSetRender((node, container) => {
+  const caja = container as Element & { _radiopvRoot?: ReturnType<typeof createRoot> };
+  caja._radiopvRoot ||= createRoot(caja);
+  const raiz = caja._radiopvRoot;
+  raiz.render(node);
+  return async () => {
+    // Se espera un tick antes de desmontar: si no, React avisa de que se desmonta mientras
+    // todavía se está renderizando.
+    await new Promise((listo) => setTimeout(listo, 0));
+    raiz.unmount();
+    delete caja._radiopvRoot;
+  };
+});
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 // NOTE: StrictMode is intentionally disabled. In dev it double-invokes every effect, which

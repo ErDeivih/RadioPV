@@ -37,6 +37,8 @@ export interface PlaylistOut {
   n_tracks: number;
   /** Dueno de la lista. Nulo en las que genera la aplicacion para todos. */
   user_id?: number | null;
+  /** URL de la portada propia de la lista (/media/covers/...), o nulo si no tiene. */
+  cover?: string | null;
 }
 
 export interface FacetValue {

@@ -81,6 +81,9 @@ _MIGRACIONES_COLUMNAS = {
         ("yt_likes", "BIGINT"),
         ("popularidad", "FLOAT"),
     ],
+    "playlists": [
+        ("cover_path", "TEXT"),       # portada propia de la lista
+    ],
 }
 
 

@@ -1,10 +1,12 @@
 /*
- * Ciclo de vida de una lista en el MÓVIL: crear, renombrar, borrar y reproducir.
+ * Ciclo de vida COMPLETO de una lista, en MÓVIL y por la INTERFAZ:
+ * crear con canciones -> abrir -> menú -> RENOMBRAR -> comprobar -> PONER FOTO -> comprobar
+ * -> REPRODUCIR -> BORRAR (con su confirmación) -> comprobar.
  *
- * Es lo que el usuario dice que no le funciona. La lista se crea por la API (para no depender de
- * encontrar el botón de crear, que es otra cosa) y el resto se hace como lo haría una persona con
- * el dedo: abrir la lista, tocar los tres puntos, elegir "Editar detalles", cambiar el nombre,
- * guardar, tocar los tres puntos otra vez y borrar.
+ * Todo se hace con toques reales y cada paso se comprueba CONTRA LA API, no contra lo que dice
+ * la pantalla: así se sabe si el cambio llegó de verdad al servidor. También se comprueba que
+ * salen los avisos, porque durante un tiempo el servidor guardaba los cambios y en pantalla no
+ * aparecía NADA (los avisos de antd no se pintaban con React 19).
  *
  * Uso: node probar-listas.js
  */
@@ -17,12 +19,26 @@ const ok = (n, bien, detalle = '') => {
   console.log(`  ${bien ? 'OK   ' : 'FALLO'}  ${n}${detalle ? `  ->  ${detalle}` : ''}`);
 };
 
+// PNG de 2x2 (de sobra: el navegador lo recorta y lo reescala a 640 antes de subirlo).
+const PNG_2X2 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR4nGP8z8DAwMDAxMDAwMAABAAA//8DAAX+Av7q1s3sAAAAAElFTkSuQmCC',
+  'base64'
+);
+
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ args: ['--autoplay-policy=user-gesture-required', '--mute-audio'] });
   const c = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await c.addInitScript(() => {
+    window.__audio = null;
+    const orig = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (...a) {
+      if (!window.__audio) window.__audio = this;
+      return orig.apply(this, a);
+    };
+  });
   const p = await c.newPage();
   const errores = [];
-  p.on('pageerror', (e) => errores.push(String(e).split('\n')[0].slice(0, 140)));
+  p.on('pageerror', (e) => errores.push(String(e).split('\n')[0].slice(0, 130)));
 
   await p.goto(URL_BASE, { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(5000);
@@ -31,74 +47,97 @@ const ok = (n, bien, detalle = '') => {
   await p.getByRole('button', { name: 'Registrarse', exact: true }).first().click();
   await p.waitForTimeout(1000);
   const n = p.locator('input[placeholder="Nombre"]');
-  if (await n.count()) await n.first().fill('Listas');
-  await p.locator('input[placeholder="Email"]').first().fill(`ciclo-${Date.now()}@radiopv-test.com`);
+  if (await n.count()) await n.first().fill('Ciclo');
+  await p.locator('input[placeholder="Email"]').first().fill(`ciclo2-${Date.now()}@radiopv-test.com`);
   await p.locator('input[placeholder="Contraseña"]').first().fill('clave-de-pruebas-larga-123');
   await p.getByRole('button', { name: 'Crear cuenta', exact: true }).first().click();
   await p.waitForTimeout(8000);
-  ok('sesión iniciada', !/inicia sesión para acceder/i.test(await p.evaluate(() => document.body.innerText)));
 
-  // 1) Crear la lista POR LA INTERFAZ si se encuentra el botón; si no, por la API.
-  const creada = await p.evaluate(async () => {
+  // Lista CON canciones
+  const id = await p.evaluate(async () => {
     const t = localStorage.getItem('access_token');
-    const r = await fetch('/api/playlists', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Ciclo de prueba' }),
-    });
-    return r.ok ? (await r.json()).id : null;
+    const cab = { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' };
+    const pl = await (await fetch('/api/playlists', {
+      method: 'POST', headers: cab, body: JSON.stringify({ name: 'Original de prueba' }),
+    })).json();
+    const ts = await (await fetch('/api/tracks?limit=4', { headers: cab })).json();
+    for (const tr of ts) await fetch(`/api/playlists/${pl.id}/tracks/${tr.id}`, { method: 'POST', headers: cab });
+    return pl.id;
   });
-  ok('la lista se crea', creada !== null, `id=${creada}`);
 
-  // 2) Abrirla y buscar el botón de los tres puntos
-  await p.goto(`${URL_BASE}/playlist/${creada}`, { waitUntil: 'domcontentloaded' });
+  const enApi = () =>
+    p.evaluate(async (pid) => {
+      const t = localStorage.getItem('access_token');
+      const r = await fetch(`/api/playlists/${pid}`, { headers: { Authorization: 'Bearer ' + t } });
+      if (r.status !== 200) return { estado: `HTTP ${r.status}` };
+      const d = await r.json();
+      return { estado: 'ok', nombre: d.name, portada: d.cover };
+    }, id);
+
+  const abrirMenu = async () => {
+    await p.locator('button[aria-label*="Más opciones"]').first().click({ timeout: 10000 });
+    await p.waitForTimeout(1500);
+  };
+
+  // Los avisos de antd: si no se pintan, el usuario no sabe si el cambio se ha guardado.
+  const verAviso = async (texto) => {
+    for (let i = 0; i < 20; i++) {
+      const hay = await p.evaluate(
+        (t) => [...document.querySelectorAll('.ant-message-notice')].some((e) => e.innerText.includes(t)),
+        texto
+      );
+      if (hay) return true;
+      await p.waitForTimeout(250);
+    }
+    return false;
+  };
+
+  await p.goto(`${URL_BASE}/playlist/${id}`, { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(5000);
-  ok('la lista se abre con el nombre puesto', (await p.evaluate(() => document.body.innerText)).includes('Ciclo de prueba'));
+  ok('la lista se crea con su nombre', (await enApi()).nombre === 'Original de prueba', (await enApi()).nombre);
 
-  const puntos = p.locator('.playlist-controls .scale').first();
-  comprobarPuntos();
-  function comprobarPuntos() {}
-  const hayPuntos = await puntos.count();
-  ok('existe el botón de opciones (tres puntos)', hayPuntos > 0);
-  ok('el botón de opciones se ve y se puede tocar',
-    hayPuntos > 0 && (await puntos.first().isVisible()),
-    hayPuntos ? JSON.stringify(await puntos.first().boundingBox()) : 'no está');
-
-  if (hayPuntos) {
-    await puntos.first().click({ timeout: 8000 }).catch((e) => console.log('    (el toque falló: ' + String(e).split('\n')[0].slice(0, 80) + ')'));
+  // --- RENOMBRAR ---
+  await abrirMenu();
+  const editar = p.getByText('Editar detalles', { exact: true }).first();
+  ok('el menú ofrece "Editar detalles"', (await editar.count()) > 0);
+  if (await editar.count()) {
+    await editar.click();
     await p.waitForTimeout(2000);
-    const items = await p.evaluate(() =>
-      [...document.querySelectorAll('.ant-dropdown li, .ant-dropdown-menu-item, [role="menuitem"]')]
-        .map((x) => (x.textContent || '').trim()).filter(Boolean));
-    ok('al tocarlo se abre el menú de la lista', items.length > 0, items.join(' · ') || 'no se abrió nada');
+    // El campo VISIBLE (dentro del formulario hay además un input oculto de ProForm).
+    const campo = p.locator('.ant-modal input[type="text"]:visible').first();
+    ok('se abre el diálogo con el nombre actual', (await campo.inputValue().catch(() => '')) === 'Original de prueba',
+      await campo.inputValue().catch(() => '(sin campo)'));
+    if (await campo.count()) {
+      await campo.fill('Renombrada desde el móvil');
+      await p.waitForTimeout(400);
 
-    // 3) Renombrar
-    const editar = p.getByText(/editar|renombrar|edit details/i).first();
-    if (await editar.count()) {
-      await editar.click().catch(() => undefined);
-      await p.waitForTimeout(2000);
-      const campo = p.locator('input[type="text"], input[name="name"], input[id*="name"]').first();
-      if (await campo.count()) {
-        await campo.fill('Ciclo renombrado');
-        await p.waitForTimeout(500);
-        const guardar = p.getByRole('button', { name: /guardar|save/i }).first();
-        if (await guardar.count()) {
-          await guardar.click().catch(() => undefined);
-          await p.waitForTimeout(3000);
-          const nombre = await p.evaluate(() => document.body.innerText.split('\n').slice(0, 6).join(' | '));
-          ok('el cambio de nombre se guarda', nombre.includes('Ciclo renombrado'), nombre.slice(0, 80));
-        } else {
-          ok('hay botón de guardar en el diálogo', false);
-        }
-      } else {
-        ok('el diálogo de editar tiene campo de nombre', false);
-      }
-    } else {
-      ok('el menú ofrece editar/renombrar', false);
+      // --- FOTO DE LA LISTA ---
+      const fichero = p.locator('.ant-modal input[type="file"]').first();
+      const hayFichero = (await fichero.count()) > 0;
+      ok('el diálogo deja elegir foto', hayFichero);
+      if (hayFichero) await fichero.setInputFiles({ name: 'portada.png', mimeType: 'image/png', buffer: PNG_2X2 });
+      await p.waitForTimeout(600);
+
+      const guardar = p.locator('.ant-modal button:visible', { hasText: /^Guardar$/ }).first();
+      if (await guardar.count()) await guardar.click();
+      const aviso = await verAviso('Lista actualizada');
+      ok('sale el aviso de "Lista actualizada"', aviso);
+      await p.waitForTimeout(3500);
+
+      const tras = await enApi();
+      ok('el nombre NUEVO queda guardado en el servidor', tras.nombre === 'Renombrada desde el móvil', tras.nombre);
+      const enPantalla = await p.evaluate(() => document.body.innerText.slice(0, 400));
+      ok('la pantalla muestra el nombre nuevo', enPantalla.includes('Renombrada desde el móvil'));
+      ok('la FOTO de la lista se sube al servidor',
+        typeof tras.portada === 'string' && tras.portada.startsWith('/media/covers/'), String(tras.portada));
+      const imagenEnPantalla = await p.evaluate(() =>
+        [...document.querySelectorAll('img')].some((i) => i.src.includes('/media/covers/playlist-'))
+      );
+      ok('la pantalla usa la foto nueva', imagenEnPantalla);
     }
   }
 
-  // 4) Reproducir la lista entera (con la cola llena, no una canción suelta)
+  // --- REPRODUCIR ---
   const play = p.locator('.playlist-controls button[aria-label="Reproducir"]').first();
   if (await play.count()) {
     await play.click().catch(() => undefined);
@@ -106,40 +145,49 @@ const ok = (n, bien, detalle = '') => {
     const est = await p.evaluate(() => {
       const a = window.__audio;
       const ms = navigator.mediaSession && navigator.mediaSession.metadata;
-      return { hay: !!a, t: a ? +a.currentTime.toFixed(1) : 0, pausado: a ? a.paused : null, titulo: ms ? ms.title : null };
+      return { t: a ? +a.currentTime.toFixed(1) : 0, pausado: a ? a.paused : null, titulo: ms ? ms.title : null };
     });
-    ok('el botón de la lista empieza a sonar', est.hay && est.pausado === false && est.t > 0.5, `t=${est.t}s ${est.titulo ?? ''}`);
+    ok('la lista se reproduce', est.pausado === false && est.t > 0.5, `t=${est.t}s ${est.titulo ?? ''}`);
   } else {
     ok('la lista tiene botón de reproducir', false);
   }
 
-  // 5) Borrar
-  if (hayPuntos) {
-    await p.goto(`${URL_BASE}/playlist/${creada}`, { waitUntil: 'domcontentloaded' });
-    await p.waitForTimeout(4000);
-    await p.locator('.playlist-controls .scale').first().click().catch(() => undefined);
+  // --- BORRAR, pero primero se comprueba que PREGUNTA ---
+  await p.goto(`${URL_BASE}/playlist/${id}`, { waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(4500);
+  await abrirMenu();
+  const borrar = p.getByText('Eliminar la lista', { exact: true }).first();
+  ok('el menú ofrece "Eliminar la lista"', (await borrar.count()) > 0);
+  if (await borrar.count()) {
+    await borrar.click();
     await p.waitForTimeout(1500);
-    const borrar = p.getByText(/eliminar|borrar|delete/i).first();
-    if (await borrar.count()) {
-      await borrar.click().catch(() => undefined);
-      await p.waitForTimeout(1500);
-      const confirmar = p.getByRole('button', { name: /eliminar|borrar|delete|sí|si/i }).last();
-      if (await confirmar.count()) await confirmar.click().catch(() => undefined);
-      await p.waitForTimeout(3000);
-      const sigue = await p.evaluate(async (id) => {
-        const t = localStorage.getItem('access_token');
-        const r = await fetch(`/api/playlists/${id}`, { headers: { Authorization: 'Bearer ' + t } });
-        return r.status;
-      }, creada);
-      ok('la lista se borra', sigue === 404, `la API responde ${sigue} (404 = borrada)`);
-    } else {
-      ok('el menú ofrece eliminar', false);
+    const confirmacion = p.locator('.ant-modal-confirm');
+    ok('borrar PIDE CONFIRMACIÓN (antes borraba al primer toque)', (await confirmacion.count()) > 0);
+
+    // Cancelar no debe borrar nada.
+    const cancelar = p.locator('.ant-modal-confirm button', { hasText: /^Cancelar$/ }).first();
+    if (await cancelar.count()) {
+      await cancelar.click();
+      await p.waitForTimeout(2000);
+      ok('al cancelar la lista SIGUE existiendo', (await enApi()).estado === 'ok', (await enApi()).estado);
     }
+
+    await abrirMenu();
+    await p.getByText('Eliminar la lista', { exact: true }).first().click();
+    await p.waitForTimeout(1500);
+    await p.locator('.ant-modal-confirm button', { hasText: /^Eliminar$/ }).first().click();
+    const avisoBorrado = await verAviso('Lista eliminada');
+    ok('sale el aviso de "Lista eliminada"', avisoBorrado);
+    await p.waitForTimeout(3000);
+    const estado = await enApi();
+    ok('la lista queda BORRADA en el servidor', estado.estado === 'HTTP 404', estado.estado);
   }
 
-  ok('sin errores de JavaScript', errores.length === 0, errores.slice(0, 2).join(' | '));
+  const graves = errores.filter((e) => !/404/.test(e));
+  ok('sin errores de JavaScript (aparte de 404 esperados)', graves.length === 0, graves.slice(0, 2).join(' | '));
   await p.screenshot({ path: 'ciclo-listas.png' });
   await b.close();
+
   const fallos = res.filter((r) => !r.bien);
   console.log(`\n================  ${res.length - fallos.length}/${res.length} OK  ================`);
   fallos.forEach((f) => console.log(`  · ${f.n}`));

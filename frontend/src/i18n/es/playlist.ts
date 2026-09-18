@@ -52,4 +52,15 @@ export const playlist = {
   'Playlist updated successfully': 'Lista actualizada',
   'Failed to update playlist': 'No se ha podido actualizar la lista',
   Playlist: 'Lista',
+  // Diálogo «Editar detalles»: los marcadores estaban a fuego en inglés ('Add a name',
+  // 'Add an optional description') y salían en inglés dentro de la interfaz en castellano.
+  'Add a name': 'Ponle un nombre',
+  'Add an optional description': 'Añade una descripción (opcional)',
+  'Remove photo': 'Quitar la foto',
+  'Could not read that image': 'No se ha podido leer esa imagen',
+  'Saving…': 'Guardando…',
+  'Delete playlist question': '¿Seguro que quieres eliminar la lista?',
+  'This cannot be undone': 'Esto no se puede deshacer',
+  Delete: 'Eliminar',
+  Cancel: 'Cancelar',
 };

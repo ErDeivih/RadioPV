@@ -77,7 +77,30 @@ const deletePlaylist = async (playlistId: string) => {
   return { data: true };
 };
 
-const changePlaylistImage = async (_id: string, _image: string, _content: string) => ({ data: true });
+/**
+ * Sube (o sustituye) la portada de la lista.
+ *
+ * Antes esto era un `return { data: true }` a secas: no llamaba a nadie. La interfaz decía
+ * "elegir foto", el usuario elegía una y no pasaba absolutamente nada, ni siquiera un error.
+ */
+const changePlaylistImage = async (playlistId: string, image: string, contentType: string) => {
+  const binario = atob(image);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  const formulario = new FormData();
+  formulario.append('file', new Blob([bytes], { type: contentType }), `portada.${extDe(contentType)}`);
+  const { data } = await axios.put<PlaylistOut>(`/playlists/${playlistId}/cover`, formulario);
+  return { data: toPlaylist(data) };
+};
+
+/** Quita la portada propia y vuelve a la imagen de relleno. */
+const removePlaylistImage = async (playlistId: string) => {
+  const { data } = await axios.delete<PlaylistOut>(`/playlists/${playlistId}/cover`);
+  return { data: toPlaylist(data) };
+};
+
+const extDe = (contentType: string) =>
+  contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
 
 const getRecommendations = async (params: { seed_artists?: string; seed_genres?: string; seed_tracks?: string; limit?: number }) => {
   const { data } = await axios.get<TrackOut[]>('/recommend', { params: { n: params.limit ?? 25 } });
@@ -94,6 +117,7 @@ export const playlistService = {
   addPlaylistItems,
   getRecommendations,
   changePlaylistImage,
+  removePlaylistImage,
   removePlaylistItems,
   getFeaturedPlaylists,
   reorderPlaylistItems,

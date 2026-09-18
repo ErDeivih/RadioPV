@@ -127,8 +127,18 @@ class Playlist(Base):
     name = Column(String(255))
     description = Column(Text)
     type = Column(String(20), default="user")
+    # Nombre del fichero de portada dentro de MEDIA_ROOT/covers (solo el nombre, igual que en
+    # Track.cover_path: la raiz la monta el servidor).
+    cover_path = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def cover(self) -> str | None:
+        """URL con la que la interfaz pide la portada de la lista."""
+        from .paths import media_filename
+        n = media_filename(self.cover_path)
+        return f"/media/covers/{n}" if n else None
 
 
 class PlaylistTrack(Base):

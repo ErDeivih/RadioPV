@@ -95,7 +95,7 @@ export const toPlaylist = (p: PlaylistOut, cover?: string) => ({
   type: 'playlist' as const,
   uri: `radiopv:playlist:${p.id}`,
   href: '',
-  images: [{ url: cover ?? PLACEHOLDER, height: 640, width: 640 }],
+  images: [{ url: p.cover ?? cover ?? PLACEHOLDER, height: 640, width: 640 }],
   tracks: { href: '', total: p.n_tracks },
   followers: { href: '', total: 0 },
   owner: {

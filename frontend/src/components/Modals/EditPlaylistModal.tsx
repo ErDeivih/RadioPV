@@ -21,12 +21,51 @@ import { PLAYLIST_DEFAULT_IMAGE } from '../../constants/spotify';
 // Interfaces
 import type { FormInstance } from 'antd/lib';
 
-const toBase64 = (file: File): Promise<string> =>
+// Lado de la portada que se sube. La lista se pinta como mucho a ~640 px, así que mandar la foto
+// original de la cámara (5-10 MB) por Tailscale es tirar datos y tiempo: se recorta cuadrada y se
+// reescala aquí, en el móvil, antes de subirla.
+const LADO_PORTADA = 640;
+
+/**
+ * Recorta la imagen a un cuadrado centrado, la reescala a 640 px y la devuelve en JPEG.
+ * Se hace con un lienzo (canvas) del navegador: no hace falta ninguna librería.
+ */
+const recortarCuadrada = (file: File): Promise<{ base64: string; contentType: string }> =>
   new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
+    const url = URL.createObjectURL(file);
+    const imagen = new Image();
+    imagen.onload = () => {
+      try {
+        const lado = Math.min(imagen.width, imagen.height);
+        const lienzo = document.createElement('canvas');
+        lienzo.width = LADO_PORTADA;
+        lienzo.height = LADO_PORTADA;
+        const ctx = lienzo.getContext('2d');
+        if (!ctx) throw new Error('El navegador no ha dado un lienzo');
+        ctx.drawImage(
+          imagen,
+          (imagen.width - lado) / 2,
+          (imagen.height - lado) / 2,
+          lado,
+          lado,
+          0,
+          0,
+          LADO_PORTADA,
+          LADO_PORTADA
+        );
+        const dataUrl = lienzo.toDataURL('image/jpeg', 0.88);
+        resolve({ base64: dataUrl.split(',')[1], contentType: 'image/jpeg' });
+      } catch (e) {
+        reject(e);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    imagen.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('No se ha podido leer la imagen'));
+    };
+    imagen.src = url;
   });
 
 export const EditPlaylistModal = memo(() => {
@@ -38,6 +77,9 @@ export const EditPlaylistModal = memo(() => {
 
   const [file, setFile] = useState<File>();
   const [fileUrl, setFileUrl] = useState<string>();
+  // Si se ha pulsado «quitar foto»: la vista previa vuelve al relleno aunque la lista todavía
+  // tenga portada en el servidor (el borrado se manda al guardar, igual que el nombre).
+  const [sinFoto, setSinFoto] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
 
   function handleChange(e: any) {
@@ -49,6 +91,7 @@ export const EditPlaylistModal = memo(() => {
     const url = URL.createObjectURL(e.target.files[0]);
     setFileUrl(url);
     setFile(e.target.files[0]);
+    setSinFoto(false);
   }
 
   useEffect(() => {
@@ -60,9 +103,29 @@ export const EditPlaylistModal = memo(() => {
     }
   }, [playlist]);
 
+  // Al abrir otra lista (o la misma de nuevo) no debe arrastrarse la foto elegida antes.
+  useEffect(() => {
+    setFile(undefined);
+    setFileUrl(undefined);
+    setSinFoto(false);
+  }, [playlist?.id]);
+
   const onClose = useCallback(() => {
     dispatch(editPlaylistModalActions.setPlaylist({ playlist: null }));
   }, [dispatch]);
+
+  const refrescarPantalla = useCallback(() => {
+    dispatch(yourLibraryActions.fetchMyPlaylists());
+    if (currentPlaylist) dispatch(refreshPlaylist(currentPlaylist.id));
+  }, [currentPlaylist, dispatch]);
+
+  const portadaActual = sinFoto
+    ? PLAYLIST_DEFAULT_IMAGE
+    : fileUrl
+    ? fileUrl
+    : playlist?.images && playlist.images.length
+    ? playlist.images[0].url
+    : PLAYLIST_DEFAULT_IMAGE;
 
   return (
     <>
@@ -92,47 +155,70 @@ export const EditPlaylistModal = memo(() => {
           onFinish={async (values) => {
             try {
               setLoading(true);
-              const promises = [playlistService.changePlaylistDetails(playlist!.id, values)];
+              const promesas: Promise<unknown>[] = [
+                playlistService.changePlaylistDetails(playlist!.id, values),
+              ];
               if (file) {
-                const base64File = await toBase64(file);
-                const contentType = file.type;
-                const fileWithoutPrefix = base64File.split(',')[1];
-                promises.push(
-                  playlistService.changePlaylistImage(playlist!.id, fileWithoutPrefix, contentType)
-                );
-              }
-              await Promise.all(promises);
-              message.success('Playlist updated successfully');
-              setLoading(false);
-
-              if (currentPlaylist) {
-                if (playlist?.id === currentPlaylist.id) {
-                  dispatch(refreshPlaylist(currentPlaylist.id));
-                  dispatch(yourLibraryActions.fetchMyPlaylists());
+                try {
+                  const { base64, contentType } = await recortarCuadrada(file);
+                  promesas.push(
+                    playlistService.changePlaylistImage(playlist!.id, base64, contentType)
+                  );
+                } catch {
+                  message.error(t('Could not read that image'));
                 }
-              } else {
-                dispatch(yourLibraryActions.fetchMyPlaylists());
+              } else if (sinFoto) {
+                promesas.push(playlistService.removePlaylistImage(playlist!.id));
               }
-
+              await Promise.all(promesas);
+              message.success(t('Playlist updated successfully'));
+              setLoading(false);
+              refrescarPantalla();
               dispatch(editPlaylistModalActions.setPlaylist({ playlist: null }));
-
               return true;
             } catch (error) {
               setLoading(false);
-              message.error('Failed to update playlist');
+              message.error(t('Failed to update playlist'));
               return false;
             }
           }}
           submitter={{
             render: (props) => (
               <div>
-                <div style={{ textAlign: 'right' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  {/* Quitar la portada solo tiene sentido si la lista tiene una propia. */}
+                  {playlist?.images?.[0]?.url && playlist.images[0].url !== PLAYLIST_DEFAULT_IMAGE ? (
+                    <button
+                      type='button'
+                      className='edit-playlist-submit-button'
+                      style={{ background: 'transparent', color: '#b3b3b3' }}
+                      onClick={() => {
+                        // No se borra aquí: se marca y se borra al guardar, igual que el nombre.
+                        // Si el usuario se arrepiente, cerrar el diálogo no ha cambiado nada.
+                        setFile(undefined);
+                        setFileUrl(undefined);
+                        setSinFoto(true);
+                      }}
+                    >
+                      <span>{t('Remove photo')}</span>
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                   <button
+                    type='button'
                     disabled={loading}
                     className='edit-playlist-submit-button'
                     onClick={props.submit || props.onSubmit}
                   >
-                    <span>{t('Save')}</span>
+                    <span>{loading ? t('Saving…') : t('Save')}</span>
                   </button>
                 </div>
               </div>
@@ -144,7 +230,7 @@ export const EditPlaylistModal = memo(() => {
               <div className='playlist-img-container'>
                 <div className='playlist-img-overlay'>
                   <div className='playlist-img-overlay-container'>
-                    <button aria-haspopup='true'>
+                    <button type='button' aria-haspopup='true'>
                       <div className='icon'>
                         <svg
                           data-encore-id='icon'
@@ -160,31 +246,27 @@ export const EditPlaylistModal = memo(() => {
                         <span data-encore-id='text'>{t('Choose photo')}</span>
                       </div>
                     </button>
-                    <input type='file' onChange={handleChange} accept='image/.jpg, image/.jpeg' />
+                    {/* El `accept` estaba mal escrito (`image/.jpg`): algunos móviles mostraban
+                        la galería entera o directamente no dejaban elegir nada. */}
+                    <input
+                      type='file'
+                      onChange={handleChange}
+                      accept='image/jpeg,image/png,image/webp'
+                    />
                   </div>
                 </div>
-                <img
-                  src={
-                    fileUrl
-                      ? fileUrl
-                      : playlist?.images && playlist?.images.length
-                      ? playlist?.images[0].url
-                      : PLAYLIST_DEFAULT_IMAGE
-                  }
-                  alt=''
-                  className='playlist-img'
-                />
+                <img src={portadaActual} alt='' className='playlist-img' />
               </div>
             </Col>
             <Col span={16}>
               <ProFormText
-                placeholder={'Add a name'}
+                placeholder={t('Add a name')}
                 name={'name'}
                 rules={[{ required: true, message: '' }]}
               />
               <ProFormTextArea
                 name={'description'}
-                placeholder={'Add an optional description'}
+                placeholder={t('Add an optional description')}
                 fieldProps={{ autoSize: { minRows: 4 } }}
               />
             </Col>
