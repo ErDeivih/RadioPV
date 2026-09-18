@@ -6,4 +6,7 @@ export const profile = {
   'Public playlists': 'Public playlists',
   Profile: 'Profile',
   Followers: 'Followers',
+  'Your most played this month': 'Your most played this month',
+  song: 'song',
+  songs: 'songs',
 };

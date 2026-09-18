@@ -46,8 +46,7 @@ export const ProfileContainer: FC<ProfilePageProps> = (props) => {
         <Songs />
 
         <MyPlaylistsSection />
-      </div>
-    </div>
+      </div>    </div>
   );
 };
 

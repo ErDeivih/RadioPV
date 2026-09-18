@@ -17,4 +17,7 @@ export const profile = {
   'Sleep timer': 'Temporizador',
   'End of song': 'Al acabar la canción',
   Cancel: 'Cancelar',
+  'Your most played this month': 'Tus más escuchadas este mes',
+  song: 'canción',
+  songs: 'canciones',
 };

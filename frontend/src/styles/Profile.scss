@@ -1,5 +1,51 @@
 @use './variables.scss' as *;
 
+/* Tarjeta-lista del perfil ("Tus más escuchadas este mes"). Se entra en ella para ver las
+   canciones: en el perfil se ofrecen LISTAS, no canciones sueltas. */
+.profile-top-list {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: hsla(0, 0%, 100%, 0.07);
+  color: inherit;
+  text-decoration: none;
+  min-block-size: 56px;
+
+  &:hover {
+    background: hsla(0, 0%, 100%, 0.14);
+    color: inherit;
+  }
+
+  &__play {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 40px;
+    block-size: 40px;
+    flex: 0 0 40px;
+    border-radius: 50%;
+    background: #1ed760;
+    color: #000;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+
+    b {
+      font-size: 0.95rem;
+    }
+
+    small {
+      color: #b3b3b3;
+    }
+  }
+}
+
 .Profile-section {
   .playlist-grid {
     --min-column-width: 190px;

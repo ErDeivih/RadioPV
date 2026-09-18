@@ -205,16 +205,33 @@ const medir = (p, vista) =>
       const cuenta = new Map();
       for (const x of pistas) cuenta.set(x.artist, (cuenta.get(x.artist) || 0) + 1);
       const mejor = [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0];
+      // El id del propio usuario, para poder auditar SU perfil (que es la biblioteca).
+      let yo = null;
+      try {
+        yo = (await (await fetch('/api/auth/me', { headers: cab })).json())?.id ?? null;
+      } catch {
+        /* sin perfil */
+      }
+      // Un género que exista de verdad, para la página de género.
+      let genero = null;
+      try {
+        const f = await (await fetch('/api/facets', { headers: cab })).json();
+        genero = f?.genres?.[0]?.value ?? null;
+      } catch {
+        /* sin facetas */
+      }
       return {
         artista: mejor ? mejor[0] : 'rosalia',
         cancionesDelArtista: mejor ? mejor[1] : 0,
         album: pistas[0]?.album ?? null,
         albumKey: pistas[0] && pistas[0].album ? `${pistas[0].artist}::${pistas[0].album}` : null,
+        yo,
+        genero,
       };
     });
     console.log(
       `  (artista de prueba: ${datos.artista} con ${datos.cancionesDelArtista} canciones en la ` +
-        `muestra; álbum: ${datos.album ?? 'ninguno'})`
+        `muestra; álbum: ${datos.album ?? 'ninguno'}; género: ${datos.genero ?? 'ninguno'})`
     );
 
     const vistas = [
@@ -226,6 +243,9 @@ const medir = (p, vista) =>
       ['Me gusta', '/collection/tracks'],
       ['Mis listas', '/users/1/playlists'],
       ['Ajustes', '/settings'],
+      // El perfil es la biblioteca: ahí también se ofrecen listas.
+      ['Perfil', datos.yo ? `/users/${datos.yo}` : '/'],
+      ['Género', datos.genero ? `/genre/${encodeURIComponent(datos.genero)}` : '/'],
     ];
 
     for (const [nombre, ruta] of vistas) {
