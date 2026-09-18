@@ -1015,8 +1015,10 @@ span.ant-dropdown-trigger,
    dedo, pero se falla: el hueco pasa a 32 px sin tocar el tamaño del dibujo. (En táctil son 44,
    ver el bloque de abajo.) */
 .playing-bar-desktop button,
+.playing-bar-desktop [role='button'],
 .mobile-menu button,
-.volume-control-container button {
+.volume-control-container button,
+.volume-control-container [role='button'] {
   min-inline-size: 32px;
   min-block-size: 32px;
 }
@@ -1102,7 +1104,10 @@ span.ant-dropdown-trigger,
      controles que más se tocan con el pulgar, así que el hueco mínimo es de 44 px aunque el
      dibujo siga siendo pequeño. */
   .mobile-player button,
-  .mobile-now-playing button {
+  .mobile-now-playing button,
+  .mobile-menu button,
+  .volume-control-container button,
+  .volume-control-container [role='button'] {
     min-inline-size: 44px;
     min-block-size: 44px;
   }
