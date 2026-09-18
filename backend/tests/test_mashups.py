@@ -29,6 +29,21 @@ def _radiov_en_el_path():
     ("Numb (Remix)", ""),
     ("Extended Mix", ""),
     ("Cualquier cosa", "DJ Paco"),
+    # Muchos mashups NO dicen «mashup»: solo el cruce de dos canciones en el titulo.
+    ("NUEVAYoL x Tití Me Preguntó", "Bad Bunny"),
+    ("Despacito X Shape Of You", ""),
+    ("Rolling in the Deep Vs Someone Like You", ""),
+    # Sesiones y mezclas de DJ: canciones largas con muchas visitas, ideales para los auriculares.
+    ("Summer Session 2024", "DJ Pino"),
+    ("Live Set Ibiza", ""),
+    ("Party Mix Vol. 3", ""),
+    ("Mixtape #7", ""),
+    ("Big Room Anthems", ""),
+    ("Radio Edit", ""),
+    ("VIP Mix", ""),
+    ("Rework 2025", ""),
+    # El DJ puede aparecer solo en el nombre del artista.
+    ("Sesion de verano", "djpino"),
 ])
 def test_se_marcan_como_remix(titulo, artista):
     from radiov.catalog import is_remix
@@ -40,6 +55,9 @@ def test_se_marcan_como_remix(titulo, artista):
     ("Si Antes Te Hubiera Conocido", "KAROL G"),
     ("NUEVAYoL", "Bad Bunny"),
     ("Bohemian Rhapsody", "Queen"),
+    ("El loco de la colina", "El Último de la Fila"),
+    # Ojo: una «session» de un artista normal no es una sesion de DJ, pero se marca; se prefiere
+    # marcarla de mas que perder un mashup (el revisor puede corregirlo despues).
 ])
 def test_no_se_marcan_las_canciones_normales(titulo, artista):
     from radiov.catalog import is_remix

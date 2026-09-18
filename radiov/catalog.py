@@ -304,16 +304,29 @@ _REMIX_RE = re.compile(
     # MASHUPS: canciones que mezclan dos o tres temas, hechas por gente en YouTube. Se marcan
     # como remix a proposito, para poder buscarlas y sacarlas aparte en la interfaz en vez de
     # que se pierdan mezcladas entre las canciones normales.
+    # OJO: muchas NO llevan la palabra «mashup» en el titulo; van como «cancion 1 x cancion 2»
+    # o «cancion 1 vs cancion 2», asi que hay que mirar tambien esos cruces.
     r"mashup|mash up|mash-up|megamix|blend|vs\.?|versus|"
-    # "X x Y" tambien suele ser un cruce de dos canciones (por ejemplo "Titanium x Without You").
-    r"\sx\s)\b",
+    r"\sx\s|"
+    # SESIONES Y MEZCLAS DE DJ: suelen ser canciones largas con muchas visitas, y van muy bien
+    # para escuchar de un tiron con los auriculares.
+    r"session|sessions|dj set|live set|party mix|mixtape|big room|"
+    r"edit|vip mix|rework|refix|flip)\b",
     re.I,
 )
 
 
 def is_remix(title: str = "", artist: str = "") -> bool:
+    """¿Es un remix, un mashup o una sesion de DJ?
+
+    Se mira el titulo Y el artista: hay mashups que en el titulo solo llevan el cruce de dos
+    canciones y el DJ aparece unicamente en el nombre del artista (o al reves).
+
+    El «dj» se busca SIN exigir un espacio detras, porque muchos nombres van pegados: `djpino`,
+    `djmarko`... Con `\\bdj\\b` no coincidian y esos mashups se perdian sin marcar.
+    """
     text = f"{title} {artist}"
-    return bool(_REMIX_RE.search(text)) or bool(re.search(r"\bdj\b", artist, re.I))
+    return bool(_REMIX_RE.search(text)) or bool(re.search(r"\bdj", text, re.I))
 
 
 def derive_tags(bpm=None, energy=None, genre="other", year=None, title="", artist="",

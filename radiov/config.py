@@ -176,6 +176,15 @@ DEFAULT_SETTINGS: dict = {
     {"mode": "query", "genre": "pop", "query": "mashup 3 songs", "language": "en"},
     {"mode": "query", "genre": "reggaeton", "query": "mashup reggaeton", "language": "es"},
     {"mode": "query", "genre": "dance", "query": "remix mashup", "language": "en"},
+    # SESIONES DE DJ: sesiones y mezclas de DJs conocidos (djpino y muchos parecidos). Son
+    # canciones largas, con muchas visitas, y van muy bien para escuchar de un tiron con los
+    # auriculares. Se buscan por texto y ademas por DJ concreto.
+    {"mode": "explore", "genre": "dance", "language": "en",
+     "seeds": ["DJ Pino", "DJ Snake", "Tiesto", "Marshmello", "Robin Schulz"]},
+    {"mode": "query", "genre": "dance", "query": "dj session mix", "language": "en"},
+    {"mode": "query", "genre": "dance", "query": "dj set live mix", "language": "en"},
+    {"mode": "query", "genre": "reggaeton", "query": "dj session reggaeton", "language": "es"},
+    {"mode": "query", "genre": "pop", "query": "party mix session", "language": "es"},
     ],
     "max_per_artist": 10,
     # Actividades/ritmos: subdivisión de BPM + orientación para el usuario.
