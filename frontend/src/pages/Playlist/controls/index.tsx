@@ -131,13 +131,27 @@ export const PlaylistControls: FC = () => {
                 dispatch(refreshPlaylist(playlist!.id));
               }}
             >
-              <div>
-                <Tooltip title={`${tor('More options for')} ${playlist?.name}`}>
-                  <div className='scale'>
-                    <MenuDots />
-                  </div>
-                </Tooltip>
-              </div>
+              {/* Botón DE VERDAD, no un div: en el móvil el toque sobre un `div` no siempre
+                * llegaba (el menú de renombrar/borrar/privacidad no se abría al tocarlo, aunque
+                * el botón se viera), y además así se puede enfocar con el teclado y tiene nombre
+                * para los lectores de pantalla. */}
+              <button
+                type='button'
+                className='scale'
+                aria-label={`${tor('More options for')} ${playlist?.name}`}
+                title={`${tor('More options for')} ${playlist?.name}`}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 8,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: 'inherit',
+                }}
+              >
+                <MenuDots />
+              </button>
             </PlayistActionsWrapper>
           </Space>
         </Col>
