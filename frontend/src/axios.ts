@@ -53,8 +53,22 @@ const releaseSlot = () => {
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // catalog is static; 24h is safe
 const CACHEABLE_PATH = /^\/(tracks|artists|playlists)(\/|$)/;   // ← catálogo nuestro
 
+/**
+ * ¿Es una BÚSQUEDA? Las búsquedas nunca se cachean.
+ *
+ * El comentario de arriba ya decía que las búsquedas van siempre a la red, pero el código no lo
+ * cumplía: `/tracks?q=...` encaja en CACHEABLE_PATH, así que la respuesta se guardaba 24 horas en
+ * IndexedDB. El efecto real era que una búsqueda que devolvía «sin resultados» se quedaba pegada
+ * todo el día: arreglar el buscador en el servidor no cambiaba nada en el navegador, y al usuario
+ * le seguía pareciendo roto. (Pasó justo así al arreglar las tildes.)
+ */
+const esBusqueda = (config: any) =>
+  ['q', 'search', 'query'].some((k) => (config.params ?? {})[k] != null);
+
 const isCacheableGet = (config: any) =>
-  (config.method || 'get').toLowerCase() === 'get' && CACHEABLE_PATH.test(config.url || '');
+  (config.method || 'get').toLowerCase() === 'get' &&
+  CACHEABLE_PATH.test(config.url || '') &&
+  !esBusqueda(config);
 
 const cacheKeyFor = (config: any) =>
   `${config.url}?${JSON.stringify(config.params || {})}|hide_explicit=${

@@ -5,14 +5,24 @@
 
 const DB_NAME = 'spotify-api-cache';
 const STORE = 'responses';
+// v2: en la v1 se llegaron a guardar RESPUESTAS DE BÚSQUEDA (ver `axios.ts`), incluidas las que
+// devolvían «sin resultados». Servirlas durante 24 h hacía que el buscador pareciera roto aunque
+// el servidor ya estuviera arreglado, así que al subir de versión se tira todo lo viejo.
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 const openDb = (): Promise<IDBDatabase> => {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      const store = db.objectStoreNames.contains(STORE)
+        ? request.transaction!.objectStore(STORE)
+        : db.createObjectStore(STORE);
+      store.clear();          // empezar limpio al cambiar de versión
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
