@@ -66,8 +66,17 @@ async function mirarPortada(p, etiqueta) {
       await p.getByRole('button', { name: 'Crear cuenta', exact: true }).first().click();
       await p.waitForTimeout(8000);
     } else {
-      await p.reload({ waitUntil: 'domcontentloaded' });
-      await p.waitForTimeout(8000);
+      // El móvil es OTRO contexto de navegador: no hereda la sesión del PC, hay que entrar.
+      await p.getByRole('button', { name: 'Iniciar sesión', exact: true }).first().click();
+      await p.waitForTimeout(2500);
+      await p.locator('input[placeholder="Email"]').first().fill(email);
+      await p.locator('input[placeholder="Contraseña"]').first().fill('clave-de-pruebas-larga-123');
+      await p
+        .getByRole('button', { name: /^(Iniciar sesión|Entrar)$/ })
+        .last()
+        .click()
+        .catch(() => undefined);
+      await p.waitForTimeout(9000);
     }
 
     const dentro = !/inicia sesión para acceder/i.test(await p.evaluate(() => document.body.innerText));
@@ -84,9 +93,22 @@ async function mirarPortada(p, etiqueta) {
     comprobar(`[${etiqueta}] la portada NO enseña canciones sueltas`, info.sueltas === 0, `${info.sueltas} rejillas`);
     comprobar(`[${etiqueta}] hay listas en la portada`, info.imagenes >= 8, `${info.imagenes} imágenes`);
 
-    // Las tarjetas de lista se pueden pulsar
-    const tarjeta = p.locator('.home a[href*="/playlist/"]').first();
-    comprobar(`[${etiqueta}] hay tarjetas de lista enlazadas`, (await tarjeta.count()) > 0);
+    // Las tarjetas navegan por JavaScript (no son un <a href>). OJO: pulsar la CARÁTULA activa el
+    // botón de reproducir que va encima, así que para ENTRAR en la lista se pulsa su nombre.
+    const nombre = p.getByText('Novedades', { exact: true }).first();
+    comprobar(`[${etiqueta}] hay tarjetas de lista`, (await nombre.count()) > 0);
+    if (await nombre.count()) {
+      await nombre.click({ timeout: 8000 }).catch(() => undefined);
+      await p.waitForTimeout(3500);
+      const url = await p.evaluate(() => location.pathname);
+      comprobar(`[${etiqueta}] al pulsar el nombre de una lista se entra en ella`,
+        /^\/playlist\/\d+/.test(url), url);
+      const info2 = await p.evaluate(() => ({
+        canciones: document.querySelectorAll('img').length,
+        titulo: document.body.innerText.split('\n').slice(0, 3).join(' | ').slice(0, 90),
+      }));
+      console.log(`  [${etiqueta}] dentro: ${info2.titulo}`);
+    }
 
     comprobar(`[${etiqueta}] sin errores de JavaScript`, errores.length === 0, errores.slice(0, 2).join(' | '));
     await p.screenshot({ path: `portada-${etiqueta.toLowerCase()}.png` });
