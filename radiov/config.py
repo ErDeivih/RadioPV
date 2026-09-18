@@ -128,10 +128,7 @@ DEFAULT_SETTINGS: dict = {
         {"mode": "hits_apple", "country": "mx", "genre": "latin", "language": "es", "limit": 20},
         {"mode": "hits_apple", "country": "ar", "genre": "latin", "language": "es", "limit": 20},
         {"mode": "hits_apple", "country": "co", "genre": "latin", "language": "es", "limit": 20},
-        {"mode": "hits_apple", "country": "br", "genre": "latin", "language": "pt", "limit": 20},
-        {"mode": "hits_apple", "country": "it", "genre": "pop", "language": "it", "limit": 20},
-        {"mode": "hits_apple", "country": "fr", "genre": "pop", "language": "fr", "limit": 20},
-        {"mode": "hits_apple", "country": "gb", "genre": "pop", "language": "en", "limit": 20},
+                                {"mode": "hits_apple", "country": "gb", "genre": "pop", "language": "en", "limit": 20},
         # Lista de Los 40 (España)
         {"mode": "hits_40", "genre": "pop", "language": "es", "limit": 20},
         # Éxitos de diferentes años/épocas (español y en inglés) → artistas → expansión
@@ -144,10 +141,7 @@ DEFAULT_SETTINGS: dict = {
         {"mode": "year_sweep", "language": "en", "genre": "pop", "years": [1965, 1970, 1975, 1980, 1985, 1990, 1995, 2000]},
         {"mode": "year_sweep", "language": "en", "genre": "pop", "years": [2003, 2005, 2008, 2010, 2012, 2014, 2016]},
         {"mode": "year_sweep", "language": "en", "genre": "pop", "years": [2018, 2020, 2022, 2024]},
-        {"mode": "year_sweep", "language": "it", "genre": "pop", "years": [1970, 1980, 1990, 2000, 2010, 2020]},
-        {"mode": "year_sweep", "language": "fr", "genre": "pop", "years": [1970, 1980, 1990, 2000, 2010, 2020]},
-        {"mode": "year_sweep", "language": "pt", "genre": "latin", "years": [1970, 1980, 1990, 2000, 2010, 2020]},
-        # Expansión por géneros desde pocos artistas semilla; crece con artistas relacionados
+                                # Expansión por géneros desde pocos artistas semilla; crece con artistas relacionados
         {"mode": "explore", "genre": "reggaeton", "language": "es", "seeds": ["Bad Bunny", "KAROL G", "Daddy Yankee"]},
         {"mode": "explore", "genre": "bachata", "language": "es", "seeds": ["Romeo Santos", "Aventura", "Prince Royce"]},
         {"mode": "explore", "genre": "salsa", "language": "es", "seeds": ["Marc Anthony", "Hector Lavoe", "Celia Cruz"]},
@@ -165,8 +159,7 @@ DEFAULT_SETTINGS: dict = {
         {"mode": "explore", "genre": "latin", "language": "es", "seeds": ["Maluma", "Rauw Alejandro", "Feid"]},
         {"mode": "explore", "genre": "pop", "language": "it", "seeds": ["Eros Ramazzotti", "Laura Pausini", "Andrea Bocelli"]},
         {"mode": "explore", "genre": "pop", "language": "fr", "seeds": ["Edith Piaf", "Stromae", "Indila"]},
-        {"mode": "explore", "genre": "latin", "language": "pt", "seeds": ["Anitta", "Roberto Carlos", "Caetano Veloso"]},
-        {"mode": "explore", "genre": "ballad", "language": "en", "seeds": ["Adele", "Celine Dion", "Elton John"]},
+                {"mode": "explore", "genre": "ballad", "language": "en", "seeds": ["Adele", "Celine Dion", "Elton John"]},
         {"mode": "explore", "genre": "disco", "language": "en", "seeds": ["Bee Gees", "ABBA", "Dua Lipa"]},
         {"mode": "explore", "genre": "rock", "language": "it", "seeds": ["Maneskin", "Zucchero"]},
         {"mode": "explore", "genre": "classical", "language": "other", "seeds": ["Ludovico Einaudi", "Hans Zimmer", "Vangelis", "Beethoven"]},
@@ -175,6 +168,14 @@ DEFAULT_SETTINGS: dict = {
         {"mode": "explore", "genre": "electro", "language": "en", "seeds": ["Avicii", "Martin Garrix", "Alan Walker", "Swedish House Mafia"]},
         {"mode": "query", "genre": "pop", "query": "top hits", "language": "en"},
         {"mode": "query", "genre": "reggaeton", "query": "reggaeton hits", "language": "es"},
+
+    # MASHUPS Y REMIXES: canciones que mezclan dos o tres temas, hechas por gente en YouTube.
+    # Se buscan por texto (es lo que mejor encuentra ese tipo de contenido).
+    {"mode": "query", "genre": "dance", "query": "mashup two songs", "language": "en"},
+    {"mode": "query", "genre": "dance", "query": "best mashup mix", "language": "en"},
+    {"mode": "query", "genre": "pop", "query": "mashup 3 songs", "language": "en"},
+    {"mode": "query", "genre": "reggaeton", "query": "mashup reggaeton", "language": "es"},
+    {"mode": "query", "genre": "dance", "query": "remix mashup", "language": "en"},
     ],
     "max_per_artist": 10,
     # Actividades/ritmos: subdivisión de BPM + orientación para el usuario.
