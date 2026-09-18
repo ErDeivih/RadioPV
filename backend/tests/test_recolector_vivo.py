@@ -109,3 +109,21 @@ def test_solo_se_reinicia_si_toca_descargar_y_el_hilo_esta_muerto():
     assert modulo.debe_reiniciarse(True, True) is False     # todo en orden
     assert modulo.debe_reiniciarse(False, False) is False   # apagado a propósito: no se reinicia
     assert modulo.debe_reiniciarse(False, True) is False
+
+
+# --- 4 · las canciones perdidas se vuelven a descargar -------------------------------------------
+
+def test_el_mantenimiento_recupera_las_canciones_perdidas():
+    """`recuperar_perdidas` existía y decía en su documentación que se llamaba desde aquí… pero no
+    la llamaba nadie: una canción cuyo fichero desaparecía se marcaba 'perdida' y no volvía
+    NUNCA. Esta prueba sujeta las dos mitades: que el mantenimiento la llama, y que la función
+    busca sólo las 'perdida'."""
+    import inspect
+    from radiov.agent import AgentManager
+    from radiov import catalog as CAT
+
+    fuente = inspect.getsource(AgentManager._maybe_maintenance)
+    assert "recuperar_perdidas" in fuente, "el mantenimiento no recupera las canciones perdidas"
+
+    fuente_cat = inspect.getsource(CAT.recuperar_perdidas)
+    assert "STATUS_LOST" in fuente_cat, "debe buscar sólo las marcadas como perdidas"

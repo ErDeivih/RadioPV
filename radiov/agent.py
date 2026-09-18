@@ -229,10 +229,16 @@ class AgentManager:
             med = C.enrich_media(limit=100)
             img = C.fetch_media(limit=100)
             rep = C.republicar_completas(limit=600)
+            # Las canciones cuyo fichero desapareció se marcaban 'perdida' y **nadie las volvía a
+            # descargar**: desaparecían de la aplicación para siempre. La función existía
+            # (`recuperar_perdidas`) y su propia documentación decía que se llamaba desde aquí…
+            # pero no la llamaba nadie. De poco en poco (5 por pasada) porque cada una es una
+            # descarga de YouTube.
+            perd = C.recuperar_perdidas(limit=5)
             with self._lock:
                 self.progress["last"] = (f"mantenimiento: {r} metadatos, {b} BPM, {e} energías, "
                                          f"{g} gain_db, {art} artistas, {med} metadatos, {img} imágenes, "
-                                         f"{rep} republicadas")
+                                         f"{rep} republicadas, {perd} recuperadas")
         except Exception as e:  # noqa: BLE001
             db.log_event(f"Fallo en mantenimiento: {e}", "error")
 

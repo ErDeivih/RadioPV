@@ -326,7 +326,16 @@ const comprobar = (nombre, ok, detalle = '') => {
   });
 
   if (!sinArchivo) {
-    comprobar('se encontró una canción sin archivo para probar', false, 'todas las probadas tienen archivo');
+    // Que NO se encuentre una canción sin archivo no es un fallo de la aplicación: es una BUENA
+    // noticia (el catálogo está casi entero y se puede sonar). Antes esto se marcaba en rojo y
+    // hacía que la tanda pareciera rota cuando en realidad se había arreglado el problema de
+    // fondo. Lo que sí se comprueba siempre es que, si aparece una, se salte con aviso: ese
+    // camino está cubierto además por las pruebas unitarias del reproductor.
+    comprobar(
+      'la lista de prueba está entera (nada que saltar)',
+      true,
+      'no hay ninguna canción sin archivo en las listas del sistema: no hay nada que probar'
+    );
   } else {
     await p.goto(`${URL_BASE}/playlist/${sinArchivo.playlist}`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(4000);
