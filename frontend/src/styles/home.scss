@@ -650,7 +650,7 @@
 @media (max-width: $desktop-breakpoint) {
   .Main-section {
     border-radius: 0px !important;
-    width: 104%;
+    width: 100%;
     margin-top: -10px;
 
     .home {
@@ -809,6 +809,7 @@
       // pantalla. Sin esto, el botón de enviar es inalcanzable.
       overflow-y: auto !important;
       max-height: calc(100vh - 20px);
+      max-height: calc(100dvh - 20px);
       min-height: 0;
       padding: 18px 16px 22px;
     }

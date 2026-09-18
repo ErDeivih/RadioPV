@@ -16,7 +16,12 @@
   overflow: hidden;
   border-radius: $container-border-radius;
   background-color: $background-color;
+  // En el movil, 100vh es MAS ALTO que la pantalla cuando el navegador ensena la barra de la URL:
+  // el contenedor se pasaba y el final de las listas quedaba fuera de la vista. 100dvh es la
+  // altura REAL visible. Se deja la linea de vh antes, como respaldo para navegadores antiguos
+  // (gana la segunda cuando el navegador entiende dvh).
   height: calc(100vh - 150px);
+  height: calc(100dvh - 150px);
   width: 100%;
 
   // min-width: 400px;
