@@ -1,0 +1,32 @@
+Inicio centrado en listas y listas personales con nombre y dueno
+
+Peticion: que la interfaz no ofrezca canciones sueltas sino listas creadas o generadas por
+la aplicacion, y que eso valga tanto en PC como en movil.
+
+**La portada ya no empieza con canciones sueltas.** `TopTracks` (la seccion "Para ti") pintaba
+DOCE CANCIONES sueltas y era lo primero que veia un usuario con sesion. Se ha quitado: ahora
+Inicio abre con "Hecho para ti" (los mixes, que son listas generadas) y con "Tus listas". Las
+recomendaciones no se pierden: son el contenido de los mixes y de la radio de cada cancion.
+Las otras secciones de canciones sueltas que quedaban (Rankings, Trending) ya eran listas.
+
+**Las listas personales tenian nombre de error y las veia todo el mundo.** `rebuild_home_tops`
+creaba "Top {id_del_usuario}" y "Subiendo {id_del_usuario}" con `user_id=None`, o sea SIN DUEÑO:
+
+- salian en `/playlists/system`, que es la fila de listas destacadas que ve cualquiera, con
+  nombres tipo "Top 12" que parecen un error de programacion;
+- al abrirlas desde otra cuenta daban 404 (la comprobacion de propiedad las oculta), asi que
+  eran una fila de enlaces rotos.
+
+Ahora se llaman **"Tus mas escuchadas"** y **"Descubrimientos de la semana"**, llevan dueno
+(`user_id`) y aparecen en "Tus listas". `/playlists/system` solo devuelve las que la aplicacion
+genera para todos.
+
+Tests: 3 nuevos (la personal no sale en las destacadas vistas por OTRO usuario, si sale en las
+del dueno, y otro usuario no puede abrirla). Se actualizan dos pruebas que fijaban lo viejo, y
+se corrige un test mio que vaciaba la tabla `similar` entera y dejaba sin vecinos a los que
+corrian despues.
+
+Limpieza de la base real (scripts/limpiar_datos_de_prueba.py): 36 listas con nombre tecnico y
+**26 usuarios de prueba** que habian creado mis propias pruebas end-to-end contra el servidor.
+No era solo desorden: sus reproducciones entraban en la popularidad, en las tendencias y en los
+mixes, o sea que estaban ensuciando lo que ve el usuario de verdad. Queda 1 usuario (el real).

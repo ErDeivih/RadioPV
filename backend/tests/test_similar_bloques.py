@@ -65,8 +65,13 @@ def catalogo(client):
     tracks = db.query(models.Track).filter(models.Track.status == "descargada").all()
     ids = [t.id for t in tracks]
     yield db, ids, tracks
-    db.query(models.Similar).delete()
+    # Limpieza: se quitan SÓLO las filas de esta prueba. Antes se vaciaba la tabla `similar`
+    # entera, y como la base es compartida eso dejaba sin vecinos a los tests que corren después
+    # (`/recommend/radio` los lee de ahí): fallaban sólo al ejecutar la suite completa.
     for tid in _MIAS:
+        (db.query(models.Similar)
+         .filter((models.Similar.track_a == tid) | (models.Similar.track_b == tid))
+         .delete(synchronize_session=False))
         obj = db.get(models.Track, tid)
         if obj is not None:
             db.delete(obj)

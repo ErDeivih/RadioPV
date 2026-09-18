@@ -10,7 +10,6 @@ import { NewReleases } from '../../components/newReleases';
 import { RecentlyPlayed } from '../../components/recentlyPlayed';
 import { Rankings } from '../../components/rankings';
 import { TopMixes } from '../../components/topMixes';
-import { TopTracks } from '../../components/topTracks';
 import { Tendencias } from '../../components/tendencias';
 import { Estadisticas } from '../../components/estadisticas';
 import { Trending } from '../../components/trending';
@@ -36,29 +35,35 @@ const MoreLikeArtistCol = memo(({ index }: { index: number }) => {
   );
 });
 
-export const HomeAllMusicSection = memo(({ setColor }: HomeAllMusicSectionProps) => {
+export const HomeAllMusicSection = memo((_props: HomeAllMusicSectionProps) => {
   const user = useAppSelector((state) => !!state.auth.user);
   const section = useAppSelector((state) => state.home.section);
-  const topTracks = useAppSelector((state) => state.home.topTracks);
   const madeForYou = useAppSelector((state) => state.home.madeForYou);
   const recentlyPlayed = useAppSelector((state) => state.home.recentlyPlayed);
 
-  const hasTopTracks = !!topTracks?.length;
   const hasMadeForYou = !!madeForYou?.length;
   const hasRecentlyPlayed = !!recentlyPlayed?.length;
   const hasTopMixes = !!madeForYou?.some((p) => p.name?.toLowerCase().includes('mix'));
 
   return (
     <>
-      {user && hasTopTracks ? (
-        <Col span={24}>
-          <TopTracks setColor={setColor} />
-        </Col>
-      ) : null}
+      {/* NOTA: aquí estaba `TopTracks`, la sección «Para ti» con DOCE CANCIONES SUELTAS, y era lo
+       * primero que veía un usuario con sesión. Se ha quitado: la música se escucha en listas, y
+       * lo que ofrece la portada son listas (los mixes, las que genera la aplicación y las tuyas).
+       * Las recomendaciones personalizadas no se pierden: son justo el contenido de los mixes de
+       * «Hecho para ti» y de la radio de cada canción. */}
 
       {user ? (
         <Col span={24}>
           <HechoParaTi />
+        </Col>
+      ) : null}
+
+      {/* Las listas del usuario van arriba, no al final: incluyen las que genera la aplicación
+       * para él ("Tus más escuchadas", "Descubrimientos de la semana"). */}
+      {user ? (
+        <Col span={24}>
+          <YourPlaylists />
         </Col>
       ) : null}
 
@@ -101,12 +106,6 @@ export const HomeAllMusicSection = memo(({ setColor }: HomeAllMusicSectionProps)
       </Col>
 
       <MoreLikeArtistCol index={2} />
-
-      {user ? (
-        <Col span={24}>
-          <YourPlaylists />
-        </Col>
-      ) : null}
 
       <Col span={24}>
         <NewReleases />

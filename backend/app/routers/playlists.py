@@ -12,9 +12,16 @@ router = APIRouter(prefix="/playlists", tags=["playlists"],
 
 @router.get("/system", response_model=list[schemas.PlaylistOut])
 def system_playlists(db: Session = Depends(get_db)):
-    """Playlists del sistema (Trending, Novedades…) — pueden ser de cualquier usuario o NULL."""
+    """Listas que la aplicación genera PARA TODOS (Trending, Novedades, Top pop…).
+
+    Se excluyen las que tienen dueño (`user_id` no nulo): son las personales ("Tus más
+    escuchadas", "Descubrimientos de la semana"). Sin este filtro aparecían aquí con el nombre de
+    otra persona, y al abrirlas daban 404 (la comprobación de propiedad las oculta), o sea una
+    fila de listas rotas para todo el mundo.
+    """
     out = []
-    for p in db.query(models.Playlist).filter(models.Playlist.type == "system"):
+    for p in db.query(models.Playlist).filter(models.Playlist.type == "system",
+                                              models.Playlist.user_id.is_(None)):
         n = db.query(models.PlaylistTrack).filter_by(playlist_id=p.id).count()
         out.append(schemas.PlaylistOut(id=p.id, name=p.name, description=p.description,
                                        type=p.type, n_tracks=n))

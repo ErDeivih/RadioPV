@@ -418,11 +418,19 @@ def rebuild_external_tops(db, sources=None) -> int:
     return n
 
 
-def _swap_system_playlist(db, nombre: str, track_ids: list) -> int:
-    """Crea/actualiza una playlist 'system' con esas pistas. Devuelve cuántas pistas hay."""
-    pl = db.query(models.Playlist).filter_by(type="system", name=nombre).first()
+def _swap_system_playlist(db, nombre: str, track_ids: list, user_id=None) -> int:
+    """Crea/actualiza una playlist 'system' con esas pistas. Devuelve cuántas pistas hay.
+
+    `user_id` distingue las listas generadas PARA UNA PERSONA (sus más escuchadas, sus
+    descubrimientos) de las que la aplicación genera para todos (Top pop, Fiesta, Novedades…).
+    Antes las personales se guardaban sin dueño y con el id del usuario metido en el nombre
+    («Top 12», «Subiendo 12») porque la búsqueda era sólo por nombre: el resultado era que
+    **todo el mundo veía las listas de todo el mundo** con nombres que parecían un error.
+    """
+    pl = (db.query(models.Playlist)
+          .filter_by(type="system", name=nombre, user_id=user_id).first())
     if not pl:
-        pl = models.Playlist(user_id=None, name=nombre, type="system")
+        pl = models.Playlist(user_id=user_id, name=nombre, type="system")
         db.add(pl)
         db.commit()
     db.query(models.PlaylistTrack).filter_by(playlist_id=pl.id).delete()
@@ -452,18 +460,21 @@ def rebuild_home_tops(db) -> int:
                   if tid not in played]
     n += _swap_system_playlist(db, "Rescatadas", rescatadas[:50])
 
-    # 3) Top por usuario + Subiendo (crecimiento semanal) — por usuario con señales
+    # 3) Listas personales: "Tus más escuchadas" y "Descubrimientos de la semana".
+    #    Van con dueño (user_id) y con nombre de verdad, para que aparezcan en "Tus listas" y no
+    #    las vea nadie más. Antes se llamaban «Top {uid}» y «Subiendo {uid}» y eran de todos.
     usuarios = {u[0] for u in db.query(models.Play.user_id).distinct()}
     for uid in usuarios:
         sub = db.query(models.Play).filter_by(user_id=uid)
         player = Counter(p.track_id for p in sub.filter(models.Play.played_at >= last30))
-        n += _swap_system_playlist(db, f"Top {uid}", [tid for tid, _ in player.most_common(50)])
+        n += _swap_system_playlist(db, "Tus más escuchadas",
+                                   [tid for tid, _ in player.most_common(50)], user_id=uid)
         this_week = {p.track_id for p in sub.filter(models.Play.played_at >= week)}
         prev_week = {p.track_id for p in sub.filter(models.Play.played_at < week,
                                                     models.Play.played_at >= last30)}
         subiendo = [tid for tid in this_week if tid in player and tid not in prev_week][:50]
         if subiendo:
-            n += _swap_system_playlist(db, f"Subiendo {uid}", subiendo)
+            n += _swap_system_playlist(db, "Descubrimientos de la semana", subiendo, user_id=uid)
     return n
 
 
