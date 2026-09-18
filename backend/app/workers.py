@@ -519,7 +519,14 @@ def limpiar_catalogo(db=None) -> int:
 
 def analisis_audio(db=None) -> int:
     """T-24: pasada de análisis (rms + gain_db + percentil de energía) sobre radiov.db.
-    Lenta (lee cada MP3); se programa aparte y corre con el recolector PAUSADO."""
+    Lenta (lee cada MP3); se programa aparte y corre con el recolector PAUSADO.
+
+    Al terminar **publica las que ya estén completas** (`republicar_completas`). Van juntas a
+    propósito: el análisis es justo lo que rellena el `gain_db` que les falta a las
+    'incompleta', y publicarlas es lo que las hace visibles en la aplicación. Antes eran dos
+    pasos separados y el segundo no lo llamaba nadie: el análisis se hacía y las canciones
+    seguían ocultas igual.
+    """
     import subprocess, sys, os
     root = _root()
     try:
@@ -527,9 +534,29 @@ def analisis_audio(db=None) -> int:
             [sys.executable, os.path.join(root, "scripts", "analisis_completo.py")],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=7200)
         log.info("[analisis_audio] %s", (r.stdout or "")[-200:])
-        return 0
     except Exception:  # noqa: BLE001
         log.exception("[analisis_audio] FALLÓ")
+        return -1
+    return republicar_completas()
+
+
+def republicar_completas(db=None) -> int:
+    """Publica (`descargada`) las 'incompleta' que ya tienen todos sus metadatos.
+
+    Con `metadata_strict=True` toda descarga nueva nace 'incompleta' y sólo se publica cuando el
+    análisis rellena lo que le faltaba. Esta función existía en `radiov/catalog.py`… y **no la
+    llamaba nadie**: las canciones se quedaban 'incompleta' para siempre aunque ya estuvieran
+    completas, y la aplicación (que sólo publica 'descargada') no las enseñaba nunca.
+    """
+    import sys
+    root = _root()
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    try:
+        from radiov import catalog as CAT
+        return CAT.republicar_completas()
+    except Exception:  # noqa: BLE001
+        log.exception("[republicar_completas] FALLÓ")
         return -1
 
 
@@ -596,6 +623,9 @@ def _pasada_inicial(descargadora=None) -> None:
 
     for nombre, fn in (
         ("sync_catalogo", sync_catalogo),        # propaga géneros corregidos a backend.db
+        # Antes que nada: publicar las que ya estén completas. Es barato (una consulta) y hace
+        # visibles de golpe las canciones que llevaban meses descargadas pero ocultas.
+        ("republicar_completas", republicar_completas),
         ("rebuild_similar", rebuild_similar_job),
         ("rebuild_static_lists", rebuild_static_lists),
         ("rebuild_home_tops", rebuild_home_tops),
@@ -643,7 +673,12 @@ def main():
     s = BlockingScheduler(timezone="Europe/Madrid")
     _programar(s, "sync_catalogo", sync_catalogo, trigger="interval", minutes=30)
     _programar(s, "limpiar_catalogo", limpiar_catalogo, trigger="interval", hours=1)
+    # El análisis dura mucho (lee cada MP3) y al final publica las que ya estén completas. Cada
+    # media hora se publica lo que haya quedado listo, porque el análisis sólo corre cada 4 h y no
+    # tiene sentido que una canción ya completa espere horas a que le toque el turno: son las que
+    # rellena el revisor (carátula/metadatos), no el análisis.
     _programar(s, "analysis_audio", analisis_audio, trigger="interval", hours=4)
+    _programar(s, "republicar", republicar_completas, trigger="interval", minutes=30)
     _programar(s, "rebuild_similar", rebuild_similar_job, trigger="cron", hour=4)
     _programar(s, "rebuild_mixes", rebuild_mixes, trigger="cron", hour=5)
     _programar(s, "refresh_trends", refresh_trends, trigger="interval", hours=8)

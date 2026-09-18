@@ -77,9 +77,14 @@ def main() -> int:
             limit = int(_s.argv[i + 1])
     conn = sqlite3.connect(str(DB), timeout=300)
     conn.row_factory = sqlite3.Row
+    # OJO con el `status`: aquí ponía solo `status='descargada'`, y las canciones que NECESITAN el
+    # gain_db son justo las `incompleta` (con `metadata_strict`, una descarga nueva se marca
+    # 'incompleta' precisamente PORQUE le falta gain_db). Es decir: esta pasada no las miraba
+    # nunca y no había forma de que salieran de ahí. Un bloqueo mutuo de manual: 279 canciones ya
+    # descargadas, con su fichero en el disco, invisibles en la aplicación para siempre.
     rows = conn.execute("SELECT id, file_path, rms, gain_db FROM tracks "
-                        "WHERE status='descargada' AND file_path IS NOT NULL "
-                        "AND (rms IS NULL OR gain_db IS NULL)").fetchall()
+                        "WHERE status IN ('descargada', 'incompleta') AND file_path IS NOT NULL "
+                        "AND file_path != '' AND (rms IS NULL OR gain_db IS NULL)").fetchall()
     total = len(rows)
     if limit:
         rows = rows[:limit]
