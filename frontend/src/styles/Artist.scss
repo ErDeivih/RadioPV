@@ -21,6 +21,12 @@ body {
   }
 }
 
+.artist-list-subtitle {
+  margin: 0;
+  color: #b3b3b3;
+  font-size: 0.85rem;
+}
+
 .artist-page-header {
   position: relative;
   -webkit-box-flex: 1;
@@ -28,7 +34,6 @@ body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-
   .background {
     display: block;
     height: 100%;

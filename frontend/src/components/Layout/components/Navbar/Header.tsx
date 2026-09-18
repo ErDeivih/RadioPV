@@ -86,7 +86,7 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
 
           {user ? (
             <div className='avatar-container'>
-              <Link to={`/users/${user!.id}`}>
+              <Link to={`/users/${user!.id}`} className='avatar-link' aria-label='Tu perfil'>
                 {user?.images && user.images[0].url ? (
                   <img
                     className='avatar'

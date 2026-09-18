@@ -18,4 +18,5 @@ export const search = {
   'Recent searches': 'Recent searches',
   'Recent Searches': 'Recent Searches',
   'Clear recent searches': 'Clear recent searches',
+  'See all songs': 'See all songs',
 };

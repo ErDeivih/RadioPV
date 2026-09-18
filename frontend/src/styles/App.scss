@@ -984,3 +984,57 @@ a {
     }
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   OBJETIVOS TÁCTILES EN MÓVIL
+   ══════════════════════════════════════════════════════════════════════════════════════════════
+
+   Medido con `frontend/e2e/manuales/probar-usabilidad.js` contra el servidor de verdad, en un
+   móvil emulado de 390x844: había **470 objetivos por debajo de 44 px**, y el peor de todos era el
+   botón de reproducir de las tarjetas (`.circle-play`, 40x40), que aparece **241 veces** sólo en
+   Inicio, Buscar y Artista. Es el control que más se toca de toda la aplicación: si se falla el
+   toque, no suena la música, y el usuario no sabe por qué.
+
+   44x44 px es el mínimo recomendado (WCAG 2.5.5 y las guías de Android e iOS). Aquí se sube lo que
+   de verdad se toca con el dedo, sin cambiar el aspecto en escritorio, donde el ratón es preciso.
+
+   Se usa `(hover: none)` además del ancho: lo que decide si hay dedo no es el tamaño de la
+   pantalla, sino el tipo de puntero (una tableta en horizontal pasa de 768 px y sigue sin ratón).
+   ────────────────────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: $desktop-breakpoint), (hover: none) {
+  /* El botón de reproducir de las tarjetas: 40 → 48 px. */
+  .circle-play {
+    min-block-size: 48px;
+    inline-size: 48px;
+    block-size: 48px;
+  }
+
+  /* Botones redondos de la barra superior: volver atrás, y el avatar de la cuenta. */
+  .nav-icon-button,
+  .library-icon-button,
+  .add-playlist-button,
+  .search-browse-button,
+  .avatar-link {
+    min-inline-size: 44px;
+    min-block-size: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Enlaces de texto que en el móvil quedaban en 15 px de alto (el nombre del artista dentro de
+     una fila): se les da altura de dedo sin cambiar el tamaño de la letra. */
+  .link-text {
+    min-block-size: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* La barra de reproducción del móvil (`.mobile-player`) y la hoja de «Sonando ahora»: son los
+     controles que más se tocan con el pulgar, así que el hueco mínimo es de 44 px aunque el
+     dibujo siga siendo pequeño. */
+  .mobile-player button,
+  .mobile-now-playing button {
+    min-inline-size: 44px;
+    min-block-size: 44px;
+  }
+}

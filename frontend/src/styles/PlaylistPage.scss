@@ -68,11 +68,26 @@
   &:hover {
     .actions {
       opacity: 1;
+      /* Al aparecer con el ratón, el botón vuelve a recibir clics. Ver la nota de abajo. */
+      pointer-events: auto;
     }
   }
 
+  /* Mientras NO se ve, no debe poder pulsarse.
+     Estaba con `opacity: 0` a secas, y la opacidad no quita el clic: el elemento sigue ahí,
+     encima de la fila, y se traga los toques. Medido con la auditoría de usabilidad, en
+     escritorio había un botón de "me gusta"/menú invisible y pulsable en cada fila. Un clic
+     "en el vacío" al lado del título cambiaba el estado de una canción sin que se viera nada.
+     `pointer-events: none` lo deja inerte hasta que el ratón entra en la fila (o el foco llega
+     por teclado, con `:focus-within`, para no romper la navegación con tabulador). */
   .actions {
     opacity: 0;
+    pointer-events: none;
+  }
+
+  &:focus-within .actions {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .title {

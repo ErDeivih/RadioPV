@@ -22,4 +22,7 @@ export const artist = {
   'Popular Releases': 'Lanzamientos populares',
   'Popular Albums': 'Álbumes populares',
   'Show More': 'Mostrar más',
+  // Las canciones del artista son SU lista: se dice así, para que no parezcan canciones sueltas.
+  'Songs by': 'Canciones de',
+  'A list you can play straight through': 'Una lista que puedes escuchar entera',
 };

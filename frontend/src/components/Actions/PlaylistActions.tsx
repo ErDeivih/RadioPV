@@ -94,7 +94,10 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
                   dispatch(api.util.invalidateTags([{ type: 'Playlist', id: playlist.id }]));
                   dispatch(yourLibraryActions.fetchMyPlaylists());
                   message.open({ type: 'success', content: t('Playlist deleted') });
-                  navigate('/library');
+                  // A Inicio, no a `/library`: esa ruta NO existe en el enrutador, así que al
+                  // borrar una lista te plantabas en la página de «no encontrado». Un callejón
+                  // sin salida justo después de una acción que ya da bastante miedo.
+                  navigate('/');
                 }),
             });
           },

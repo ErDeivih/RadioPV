@@ -20,9 +20,13 @@ export const ArtistContent: FC<{
       <div style={{ margin: 20, paddingTop: 30, paddingBottom: 30 }}>
         <ArtistControls />
 
-        <ArtistTopTracks />
-
+        {/* El orden importa: primero lo que es una LISTA (la discografía: cada álbum es una lista
+            de canciones), y después las canciones del artista, que ya se presentan como su lista.
+            Antes iban al revés, y lo primero que se veía al abrir un artista era un montón de
+            canciones sueltas. */}
         <Discography />
+
+        <ArtistTopTracks />
 
         <OtherArtists />
 

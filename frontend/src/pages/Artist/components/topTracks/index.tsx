@@ -38,22 +38,27 @@ export const ArtistTopTracks = memo(() => {
   return (
     <div style={{ margin: 10 }}>
       <div className='flex items-center justify-between'>
-        <h1 className='playlist-header'>{t('Popular')}</h1>
+        {/* «Popular» a secas parecía una lista de canciones sueltas colgando de la página. Esto
+            es la LISTA del artista —la que reproduce el botón verde, `radiopv:artist:<nombre>`—
+            así que se llama por su nombre y dice cuántas canciones tiene. */}
+        <div>
+          <h1 className='playlist-header'>
+            {artista ? `${t('Songs by')} ${artista}` : t('Popular')}
+          </h1>
+          <p className='artist-list-subtitle'>{t('A list you can play straight through')}</p>
+        </div>
         <button
           aria-label={t('Play')}
           title={t('Play')}
           onClick={reproducirTodo}
+          className='circle-play'
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 40,
-            height: 40,
             border: 'none',
-            borderRadius: '50%',
             cursor: 'pointer',
-            background: '#1ed760',
-            color: '#000',
+            marginRight: 0,
           }}
         >
           <Play />

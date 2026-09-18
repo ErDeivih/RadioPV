@@ -25,4 +25,5 @@ export const search = {
   'Could not send the request': 'No se ha podido enviar la petición',
   'Request this song': 'Pedir esta canción',
   Home: 'Inicio',
+  'See all songs': 'Ver todas las canciones',
 };

@@ -1,3 +1,32 @@
+/* Barra de filtros de la búsqueda (Todo / Artistas / Canciones / Álbumes / Listas).
+   En ESCRITORIO los chips viven en la barra fija superior, así que esta barra propia se oculta.
+   En MÓVIL es al revés: la barra fija no se ve hasta desplazarse, de modo que aquí es el único
+   sitio donde los filtros están siempre a la vista. */
+.search-filters-bar {
+  display: none;
+}
+
+@media (max-width: $desktop-breakpoint) {
+  .search-filters-bar {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding: 8px 16px 4px;
+    background: linear-gradient(180deg, rgba(18, 18, 18, 0.96) 60%, rgba(18, 18, 18, 0));
+    backdrop-filter: blur(6px);
+  }
+
+  .search-filters-header {
+    display: none;
+  }
+
+  /* Los chips dejan sitio a la barra: si no, el primer resultado queda debajo. */
+  .Search-Page {
+    margin-top: 12px;
+  }
+}
+
 .Search-Page {
   padding: 20px;
   margin-top: 80px;

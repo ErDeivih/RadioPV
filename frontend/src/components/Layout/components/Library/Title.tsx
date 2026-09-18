@@ -44,6 +44,7 @@ export const LibraryTitle = memo(() => {
       <Flex vertical align='center' gap={12}>
         <Tooltip placement='right' title={t('Expand your library')}>
           <button
+            className='library-icon-button'
             style={{
               display: 'flex',
               justifyContent: 'center',
@@ -63,7 +64,11 @@ export const LibraryTitle = memo(() => {
     <Flex align='center' justify='space-between'>
       <Space wrap align='center'>
         <Tooltip placement='top' title={t('Collapse your library')}>
-          <button aria-label={t('Collapse your library')} onClick={() => dispatch(uiActions.toggleLibrary())}>
+          <button
+            className='library-icon-button'
+            aria-label={t('Collapse your library')}
+            onClick={() => dispatch(uiActions.toggleLibrary())}
+          >
             <LibraryIcon />
           </button>
         </Tooltip>
