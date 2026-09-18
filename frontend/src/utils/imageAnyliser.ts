@@ -8,7 +8,13 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.addEventListener('load', () => {
       resolve(img);
     });
-    img.addEventListener('error', reject);
+    // `reject` a secas rechazaba con el EVENTO de error, no con un Error: quien no capturase la
+    // promesa se quedaba con un «Uncaught (in promise) Event» sin mensaje ni pista de qué imagen
+    // había fallado. Y falla de verdad: cualquier carátula que no cargue (o una ruta servida mal)
+    // acaba aquí.
+    img.addEventListener('error', () =>
+      reject(new Error(`No se ha podido cargar la imagen para analizar su color: ${src}`))
+    );
     img.src = src;
   });
 }
@@ -67,14 +73,35 @@ function rgbToHex(r: number, g: number, b: number) {
   return '#' + componentToHex(r) + componentToHex(g) + componentToHex(b);
 }
 
-export const getImageAnalysis = async (src: string) => {
-  const img = await loadImage(src);
-  const response = getAverageRGB(img);
-  return rgbToHex(response.r, response.g, response.b);
+const COLOR_POR_DEFECTO = '#000000';
+
+/**
+ * Color medio de una imagen, para pintar el degradado de la cabecera.
+ *
+ * **Nunca lanza.** Antes, si la imagen no cargaba, la promesa se rechazaba y —como los 13 sitios
+ * que la llaman hacen `.then(...)` sin `.catch(...)`— salía un `Uncaught (in promise) Event` en la
+ * consola. Con una carátula rota se llenaba la consola de ruido y, de paso, el color de la página
+ * se quedaba a medias sin que nadie lo supiera. Aquí no hay nada que el que llama pueda hacer al
+ * respecto: si no se puede analizar, se devuelve el color por defecto y se avisa en la consola.
+ */
+export const getImageAnalysis = async (src: string): Promise<string> => {
+  try {
+    const img = await loadImage(src);
+    const response = getAverageRGB(img);
+    return rgbToHex(response.r, response.g, response.b);
+  } catch (e) {
+    console.warn(e);
+    return COLOR_POR_DEFECTO;
+  }
 };
 
-export const getImageAnalysis2 = async (src: string) => {
-  const img = await loadImage(src);
-  const color = await getColor(img);
-  return color?.hex() ?? '#000000';
+export const getImageAnalysis2 = async (src: string): Promise<string> => {
+  try {
+    const img = await loadImage(src);
+    const color = await getColor(img);
+    return color?.hex() ?? COLOR_POR_DEFECTO;
+  } catch (e) {
+    console.warn(e);
+    return COLOR_POR_DEFECTO;
+  }
 };

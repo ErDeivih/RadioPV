@@ -95,7 +95,11 @@ export const toPlaylist = (p: PlaylistOut, cover?: string) => ({
   type: 'playlist' as const,
   uri: `radiopv:playlist:${p.id}`,
   href: '',
-  images: [{ url: p.cover ?? cover ?? PLACEHOLDER, height: 640, width: 640 }],
+  // `img()` es OBLIGATORIO aquí: la API devuelve rutas relativas (`/media/covers/x.jpg`) y quien
+  // las sirve es el contenedor de la API, que en producción está detrás de `/api`. Sin el prefijo
+  // el navegador pide `/media/...` a nginx, que no tiene esa ruta y devuelve el `index.html` de la
+  // aplicación (¡con código 200!), así que la imagen no carga y encima parece que sí existe.
+  images: [{ url: img(p.cover) ?? cover ?? PLACEHOLDER, height: 640, width: 640 }],
   tracks: { href: '', total: p.n_tracks },
   followers: { href: '', total: 0 },
   owner: {

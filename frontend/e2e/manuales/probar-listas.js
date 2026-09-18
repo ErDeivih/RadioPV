@@ -134,10 +134,18 @@ const PNG_2X2 = Buffer.from(
       ok('la pantalla repinta el nombre nuevo', titulo === 'Renombrada desde el móvil', titulo);
       ok('la FOTO de la lista se sube al servidor',
         typeof tras.portada === 'string' && tras.portada.startsWith('/media/covers/'), String(tras.portada));
-      const imagenEnPantalla = await p.evaluate(() =>
-        [...document.querySelectorAll('img')].some((i) => i.src.includes('/media/covers/playlist-'))
-      );
-      ok('la pantalla repinta la foto nueva', imagenEnPantalla);
+      // Y que la imagen se VEA: no basta con que haya un <img> con esa dirección. La API devuelve
+      // rutas `/media/...` y quien las sirve está detrás de `/api`; sin ese prefijo, nginx
+      // devuelve el index.html de la aplicación (¡con un 200!) y la imagen aparece rota.
+      const foto = await p.evaluate(() => {
+        const i = [...document.querySelectorAll('img')].find((x) => x.src.includes('/media/covers/playlist-'));
+        if (!i) return { hay: false };
+        return { hay: true, src: i.src, cargada: i.complete && i.naturalWidth > 0, ancho: i.naturalWidth };
+      });
+      ok('la pantalla pide la foto por la ruta correcta (/api/media)',
+        foto.hay && foto.src.includes('/api/media/covers/playlist-'), foto.src ?? '(no hay imagen)');
+      ok('la foto nueva se CARGA de verdad en la pantalla',
+        Boolean(foto.cargada), `ancho=${foto.ancho ?? 0}`);
     }
   }
 

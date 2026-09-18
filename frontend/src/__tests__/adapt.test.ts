@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { toTrack, toArtist, toPage } from '../api/adapt';
+import { toTrack, toArtist, toPage, toPlaylist } from '../api/adapt';
+import { API_BASE } from '../apiBase';
 
 const pista = {
   id: 42, title: 'Canción', artist: 'Artista', album: 'Álbum', year: 2020,
@@ -46,6 +47,36 @@ describe('adapt · artistas y paginación', () => {
     expect(toPage([1, 2], 10, 2, 0).next).toBeTruthy();
     expect(toPage([1, 2], 2, 2, 0).next).toBeNull();
     expect(toPage([1, 2], 10, 2, 0).previous).toBeNull();
+  });
+});
+
+describe('adapt · listas', () => {
+  const lista = { id: 7, name: 'Mi lista', description: '', type: 'user', n_tracks: 3, user_id: 5 } as any;
+
+  it('el dueño es el de verdad, para poder saber si la lista es tuya', () => {
+    expect(toPlaylist(lista).owner.id).toBe('5');
+    // Las listas que genera la aplicación no tienen dueño: no son de nadie.
+    expect(toPlaylist({ ...lista, user_id: null }).owner.id).toBe('radiopv');
+  });
+
+  it('la portada propia se pide pasando por la API (si no, la imagen sale rota)', () => {
+    // La API devuelve rutas relativas `/media/covers/x`, pero quien las sirve es el contenedor de
+    // la API: en producción, detrás de `/api`. Sin ese prefijo, nginx contesta el index.html de la
+    // aplicación (con un 200), la imagen no carga y el análisis de color se queda sin hacer.
+    // Se compara con API_BASE porque en las pruebas apunta a otro sitio que en producción
+    // (`/api`): lo que importa es que el prefijo se ponga.
+    const conFoto = toPlaylist({ ...lista, cover: '/media/covers/playlist-7-abc.jpg' } as any);
+    expect(conFoto.images[0].url).toBe(`${API_BASE}/media/covers/playlist-7-abc.jpg`);
+    expect(conFoto.images[0].url).not.toBe('/media/covers/playlist-7-abc.jpg');
+  });
+
+  it('sin portada propia siempre hay una imagen de relleno', () => {
+    expect(toPlaylist({ ...lista, cover: null } as any).images[0].url).toBeTruthy();
+  });
+
+  it('la privacidad se refleja tal cual (antes iba a fuego a falso)', () => {
+    expect(toPlaylist({ ...lista, public: true } as any).public).toBe(true);
+    expect(toPlaylist(lista).public).toBe(false);
   });
 });
 
