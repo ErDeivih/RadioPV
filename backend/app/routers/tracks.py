@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
-from ..database import get_db
+from ..database import get_db, normalizar_busqueda, HAY_SIN_ACENTOS
 from ..security import get_current_user
 from .. import models, schemas
 
@@ -29,9 +29,19 @@ def list_tracks(
         db: Session = Depends(get_db)):
     query = db.query(models.Track).filter(models.Track.status == "descargada")
     if q:
-        like = f"%{q}%"
-        query = query.filter(or_(models.Track.title.ilike(like), models.Track.artist.ilike(like),
-                                 models.Track.album.ilike(like)))
+        # Se busca ignorando tildes y mayúsculas: en español la gente escribe «rosalia»,
+        # «cancion» o «corazon», y antes eso no encontraba nada porque «Rosalía» sí lleva tilde.
+        if HAY_SIN_ACENTOS:
+            patron = f"%{normalizar_busqueda(q)}%"
+            query = query.filter(or_(
+                func.sin_acentos(models.Track.title).like(patron),
+                func.sin_acentos(models.Track.artist).like(patron),
+                func.sin_acentos(models.Track.album).like(patron),
+            ))
+        else:
+            like = f"%{q}%"
+            query = query.filter(or_(models.Track.title.ilike(like), models.Track.artist.ilike(like),
+                                     models.Track.album.ilike(like)))
     if genre:
         query = query.filter(models.Track.genre == genre)
     if language:

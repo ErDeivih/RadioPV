@@ -1,4 +1,5 @@
 import os
+import unicodedata
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -11,6 +12,25 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 Base = declarative_base()
 
 _ES_SQLITE = DATABASE_URL.startswith("sqlite")
+
+
+def normalizar_busqueda(texto: str | None) -> str | None:
+    """Pasa a minúsculas y quita los acentos, para buscar como escribe la gente.
+
+    En una aplicación en español la gente escribe «rosalia», «cancion» o «corazon» sin tildes, y
+    la búsqueda era sensible a ellas: `Rosalía` encontraba 1 canción y `Rosalia` encontraba 0.
+    """
+    if texto is None:
+        return None
+    sin_tildes = "".join(c for c in unicodedata.normalize("NFD", str(texto))
+                         if unicodedata.category(c) != "Mn")
+    return sin_tildes.lower()
+
+
+# ¿Se puede usar `sin_acentos(...)` dentro de una consulta SQL? Sólo en SQLite, que es donde se
+# registra la función más abajo. En otro motor (Postgres) se buscaría sin normalizar.
+HAY_SIN_ACENTOS = _ES_SQLITE
+
 
 if _ES_SQLITE:
     @event.listens_for(engine, "connect")
@@ -36,6 +56,8 @@ if _ES_SQLITE:
             cursor.execute("PRAGMA synchronous=NORMAL")    # en WAL es seguro y más rápido
         finally:
             cursor.close()
+        # `sin_acentos(...)` para poder buscar ignorando tildes desde SQL (ver el router /tracks).
+        dbapi_conn.create_function("sin_acentos", 1, normalizar_busqueda)
 
 
 def get_db():
