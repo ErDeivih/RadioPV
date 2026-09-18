@@ -60,7 +60,9 @@ export const UserHeader: FC<{ color: string }> = memo((props) => {
                 {user.followers.total} {t('Followers')}
               </span>
             ) : null}
-            <label style={{ marginLeft: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {/* La casilla es pequeña a propósito (13 px), pero quien recibe el toque es el
+                `<label>` entero: por eso el label lleva clase y en el móvil mide 44 px de alto. */}
+            <label className='label-check'>
               <input
                 type='checkbox'
                 checked={localStorage.getItem('radiopv_hide_explicit') === '1'}

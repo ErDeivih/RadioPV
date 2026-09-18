@@ -1221,8 +1221,19 @@ span.ant-dropdown-trigger,
     justify-content: center;
   }
 
+  /* Casilla con su etiqueta: el `<input>` mide 13 px, pero quien recibe el toque es el `<label>`
+     que lo envuelve (por eso la auditoría mide el label). Se le da altura de dedo. */
+  .label-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 14px;
+    min-block-size: 44px;
+    cursor: pointer;
+  }
+
   /* Interruptor de antd: la pastilla mide 22 px de alto por dentro y estirarla quedaría fea, así
-     que se le agranda la ZONA QUE RECIBE EL TOQUE con un pseudo-elemento invisible (44 px de
+     que se le agranda la ZONA QUE RECIBE EL TOQUE con un pseudo-elemento invisible (48 px de
      alto). El dibujo sigue igual. */
   .ant-switch {
     position: relative;
