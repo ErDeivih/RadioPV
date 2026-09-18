@@ -24,7 +24,7 @@ def system_playlists(db: Session = Depends(get_db)):
                                               models.Playlist.user_id.is_(None)):
         n = db.query(models.PlaylistTrack).filter_by(playlist_id=p.id).count()
         out.append(schemas.PlaylistOut(id=p.id, name=p.name, description=p.description,
-                                       type=p.type, n_tracks=n))
+                                       type=p.type, n_tracks=n, user_id=p.user_id))
     return out
 
 
@@ -35,7 +35,7 @@ def playlist_by_id(playlist_id: int, db: Session = Depends(get_db),
     if not p or (p.user_id is not None and p.user_id != user.id):
         raise HTTPException(404, "Playlist no encontrada")
     n = db.query(models.PlaylistTrack).filter_by(playlist_id=p.id).count()
-    return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=n)
+    return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=n, user_id=p.user_id)
 
 
 @router.get("", response_model=list[schemas.PlaylistOut])
@@ -43,7 +43,7 @@ def my_playlists(db: Session = Depends(get_db), user: models.User = Depends(get_
     out = []
     for p in db.query(models.Playlist).filter(models.Playlist.user_id == user.id):
         n = db.query(models.PlaylistTrack).filter_by(playlist_id=p.id).count()
-        d = schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=n)
+        d = schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=n, user_id=p.user_id)
         out.append(d)
     return out
 
@@ -55,7 +55,7 @@ def create(data: schemas.PlaylistIn, db: Session = Depends(get_db),
     db.add(p)
     db.commit()
     db.refresh(p)
-    return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=0)
+    return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=0, user_id=p.user_id)
 
 
 @router.get("/{playlist_id}/tracks", response_model=list[schemas.TrackOut])
@@ -131,7 +131,7 @@ def update_playlist(playlist_id: int, data: schemas.PlaylistPatch, db: Session =
     p.updated_at = datetime.utcnow()
     db.commit()
     n = db.query(models.PlaylistTrack).filter_by(playlist_id=playlist_id).count()
-    return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=n)
+    return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type, n_tracks=n, user_id=p.user_id)
 
 
 @router.put("/{playlist_id}/order")

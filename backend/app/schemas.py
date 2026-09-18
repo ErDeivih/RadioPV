@@ -83,6 +83,9 @@ class AlbumOut(BaseModel):
 
 
 class PlaylistOut(BaseModel):
+    # Quien es el dueno: la interfaz lo necesita para saber si puede renombrar o borrar la lista.
+    # Sin esto el adaptador ponia un id fijo y NINGUNA lista se reconocia como propia.
+    user_id: Optional[int] = None
     id: int
     name: str
     description: Optional[str] = None

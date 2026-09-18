@@ -35,6 +35,8 @@ export interface PlaylistOut {
   description?: string | null;
   type: string;
   n_tracks: number;
+  /** Dueno de la lista. Nulo en las que genera la aplicacion para todos. */
+  user_id?: number | null;
 }
 
 export interface FacetValue {

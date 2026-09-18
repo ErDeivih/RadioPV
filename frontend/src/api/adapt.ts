@@ -98,7 +98,15 @@ export const toPlaylist = (p: PlaylistOut, cover?: string) => ({
   images: [{ url: cover ?? PLACEHOLDER, height: 640, width: 640 }],
   tracks: { href: '', total: p.n_tracks },
   followers: { href: '', total: 0 },
-  owner: { id: 'me', display_name: 'RadioPV' },
+  owner: {
+    // El DUEÑO de verdad, no un id fijo. Aquí ponía `id: 'me'` a fuego, así que la comparación
+    // que decide si puedes editar una lista (`userId === playlist.owner.id`) NUNCA coincidía:
+    // el menú de una lista propia no ofrecía renombrar, cambiar privacidad ni eliminar.
+    // Las listas del sistema vienen sin dueño (`user_id` nulo): se marcan como de RadioPV, que
+    // no es el id de nadie, así que no se pueden editar (correcto).
+    id: p.user_id != null ? String(p.user_id) : 'radiopv',
+    display_name: 'RadioPV',
+  },
   public: false,
   collaborative: false,
   snapshot_id: '',
