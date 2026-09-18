@@ -49,8 +49,13 @@ const medir = (p, vista) =>
       /**
        * ¿Se puede PULSAR aunque no se vea? Eso es lo peligroso: un control con opacidad 0 sigue
        * recibiendo toques, así que en un móvil se activa sin querer al tocar "encima de nada".
-       * Se comprueba de verdad, con `elementFromPoint` en el centro del elemento: si devuelve el
-       * propio elemento (o algo suyo dentro), el toque llega. Si devuelve otra cosa, está tapado.
+       * Se comprueba de verdad, con `elementFromPoint` en el centro del elemento.
+       *
+       * OJO: sólo cuenta si el toque cae EN el elemento o en algo suyo de dentro. Antes también
+       * daba por bueno el caso contrario (`arriba.contains(el)`, o sea que el que recibe el toque
+       * es un PADRE), y eso es justo lo que NO queremos: con `pointer-events: none` el padre
+       * recibe el clic y el botón está muerto, que es lo correcto. Esa regla de más marcaba como
+       * "invisible y pulsable" todo botón inerte dentro de una fila.
        */
       const sePuedePulsar = (el) => {
         const r = el.getBoundingClientRect();
@@ -58,7 +63,7 @@ const medir = (p, vista) =>
         const cx = Math.min(Math.max(r.left + r.width / 2, 1), window.innerWidth - 1);
         const cy = Math.min(Math.max(r.top + r.height / 2, 1), window.innerHeight - 1);
         const arriba = document.elementFromPoint(cx, cy);
-        return !!arriba && (arriba === el || el.contains(arriba) || arriba.contains(el));
+        return !!arriba && (arriba === el || el.contains(arriba));
       };
 
       const interactivos = [

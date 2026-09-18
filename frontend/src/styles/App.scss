@@ -1067,13 +1067,26 @@ a {
   }
 
   /* Botones de acción de las cabeceras (p. ej. «Seguir» en la página de artista) y el menú
-     «…» de cada fila, que medía 49x12 px: imposible de acertar con el dedo. */
+     «…» de cada fila, que medía 49x12 px: imposible de acertar con el dedo. El disparador del
+     menú suele ser un `span` EN LÍNEA, y a los elementos en línea no les afecta `min-height`:
+     por eso hace falta cambiarle el `display`, si no la regla no hace nada. */
   .transparent-button,
   .ant-dropdown-trigger {
     min-block-size: 44px;
   }
+  span.ant-dropdown-trigger,
+  .ant-dropdown-trigger:not(button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   .image-button {
     min-inline-size: 44px;
+    min-block-size: 44px;
+  }
+
+  /* Títulos-sección que son botones («Discografía» en la página de artista, 93x36). */
+  .artist-page-content button {
     min-block-size: 44px;
   }
 }
