@@ -67,16 +67,10 @@ export const HomeAllMusicSection = memo((_props: HomeAllMusicSectionProps) => {
         </Col>
       ) : null}
 
-      {user ? (
-        <Col span={24}>
-          <Estadisticas />
-        </Col>
-      ) : null}
-
-      {/* «Tendencias» pintaba una lista de CANCIONES sueltas con sus reproducciones
-       * («La Cosa Mas Bella · Nuevo · 722.2M»). Se ha quitado: ese mismo contenido se ofrece
-       * ahora como la lista generada «Viral / Tendencia», que aparece en «Listas de RadioPV».
-       * «Estadisticas» se queda porque son cifras agregadas, no una lista de canciones. */}
+      {/* «Estadisticas» TAMBIÉN eran canciones sueltas, no cifras: pinta «China — Anuel AA 2.4B ·
+       * Thunderstruck — AC/DC 1.8B…», o sea una lista de canciones con sus reproducciones. Se
+       * quita por lo mismo que «Tendencias»: la portada ofrece listas, y esa información (los
+       * éxitos por popularidad) ya está en las listas generadas «Viral / Tendencia» y «Top…». */}
 
       {user && hasMadeForYou ? (
         <Col span={24}>
