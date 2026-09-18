@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import type { Playlist } from '../../interfaces/playlists';
 
 // Redux
+import { api } from '../../store/api';
 import { uiActions } from '../../store/slices/ui';
 import { fetchQueue } from '../../store/slices/queue';
 import { useAppDispatch, useAppSelector } from '../../store/store';
@@ -90,6 +91,8 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
               centered: true,
               onOk: () =>
                 playlistService.deletePlaylist(playlist.id).then(() => {
+                  dispatch(api.util.invalidateTags([{ type: 'Playlist', id: playlist.id }]));
+                  dispatch(yourLibraryActions.fetchMyPlaylists());
                   message.open({ type: 'success', content: t('Playlist deleted') });
                   navigate('/library');
                 }),
@@ -112,6 +115,7 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
               .changePlaylistDetails(playlist.id, { public: false })
               .then(() => {
                 props.onRefresh?.();
+                dispatch(api.util.invalidateTags([{ type: 'Playlist', id: playlist.id }]));
                 message.open({
                   type: 'success',
                   content: t('Playlist is now private'),
@@ -130,6 +134,7 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
               .changePlaylistDetails(playlist.id, { public: true, collaborative: false })
               .then(() => {
                 props.onRefresh?.();
+                dispatch(api.util.invalidateTags([{ type: 'Playlist', id: playlist.id }]));
                 message.open({
                   type: 'success',
                   content: t('Playlist is now public'),

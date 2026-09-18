@@ -39,6 +39,8 @@ export interface PlaylistOut {
   user_id?: number | null;
   /** URL de la portada propia de la lista (/media/covers/...), o nulo si no tiene. */
   cover?: string | null;
+  /** Lista compartida con los demas usuarios. */
+  public?: boolean;
 }
 
 export interface FacetValue {

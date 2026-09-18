@@ -126,14 +126,18 @@ const PNG_2X2 = Buffer.from(
 
       const tras = await enApi();
       ok('el nombre NUEVO queda guardado en el servidor', tras.nombre === 'Renombrada desde el móvil', tras.nombre);
-      const enPantalla = await p.evaluate(() => document.body.innerText.slice(0, 400));
-      ok('la pantalla muestra el nombre nuevo', enPantalla.includes('Renombrada desde el móvil'));
+      // Se mira EL TÍTULO (h1), no un trozo de texto de la página: en el móvil la cabecera no
+      // está en los primeros caracteres y la comprobación daba un falso fallo.
+      const titulo = await p.evaluate(
+        () => document.querySelector('h1.playlist-title')?.textContent?.trim() ?? '(sin título)'
+      );
+      ok('la pantalla repinta el nombre nuevo', titulo === 'Renombrada desde el móvil', titulo);
       ok('la FOTO de la lista se sube al servidor',
         typeof tras.portada === 'string' && tras.portada.startsWith('/media/covers/'), String(tras.portada));
       const imagenEnPantalla = await p.evaluate(() =>
         [...document.querySelectorAll('img')].some((i) => i.src.includes('/media/covers/playlist-'))
       );
-      ok('la pantalla usa la foto nueva', imagenEnPantalla);
+      ok('la pantalla repinta la foto nueva', imagenEnPantalla);
     }
   }
 

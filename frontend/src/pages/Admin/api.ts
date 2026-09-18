@@ -41,6 +41,21 @@ export interface FacetItem {
   n: number;
 }
 
+/** Recuentos de los atajos de limpieza. Cada uno es exactamente lo que selecciona su atajo. */
+export interface Salud {
+  sin_fichero: { n: number };
+  no_descargadas: { n: number };
+  perdidas: { n: number };
+  cuarentena: { n: number };
+  fallidas: { n: number };
+  incompletas: { n: number };
+  pendientes: { n: number };
+  rank_bajo_40: { n: number };
+  rank_bajo_60: { n: number };
+  cortas: { n: number };
+  sin_idioma: { n: number };
+}
+
 export interface Facets {
   languages: FacetItem[];
   genres: FacetItem[];
@@ -55,6 +70,7 @@ export interface Facets {
     huerfanas: { n: number };
     total: { n: number };
   };
+  salud: Salud;
 }
 
 /** Los campos de pista que devuelve la tabla de gestión (incluye los de los filtros nuevos). */

@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import ProForm, { ProFormText, ProFormTextArea } from '@ant-design/pro-form';
 
 // Redux
+import { api } from '../../store/api';
 import { refreshPlaylist } from '../../store/slices/playlist';
 import { useAppDispatch, useAppSelector } from '../../store/store';
 import { yourLibraryActions } from '../../store/slices/yourLibrary';
@@ -72,7 +73,6 @@ export const EditPlaylistModal = memo(() => {
   const dispatch = useAppDispatch();
   const formRef = useRef<FormInstance>(null);
   const { t } = useTranslation(['playlist']);
-  const currentPlaylist = useAppSelector((state) => state.playlist.playlist);
   const playlist = useAppSelector((state) => state.editPlaylistModal.playlist);
 
   const [file, setFile] = useState<File>();
@@ -116,8 +116,14 @@ export const EditPlaylistModal = memo(() => {
 
   const refrescarPantalla = useCallback(() => {
     dispatch(yourLibraryActions.fetchMyPlaylists());
-    if (currentPlaylist) dispatch(refreshPlaylist(currentPlaylist.id));
-  }, [currentPlaylist, dispatch]);
+    if (!playlist) return;
+    // Dos capas de caché que hay que tirar a la vez, o la pantalla sigue con el nombre viejo:
+    //  1) la consulta de RTK Query de la página de la lista (`getPlaylistPage`), que es la que
+    //     pinta el encabezado;
+    //  2) el slice de la lista, que es lo que leen los componentes de dentro.
+    dispatch(api.util.invalidateTags([{ type: 'Playlist', id: playlist.id }]));
+    dispatch(refreshPlaylist(playlist.id));
+  }, [dispatch, playlist]);
 
   const portadaActual = sinFoto
     ? PLAYLIST_DEFAULT_IMAGE

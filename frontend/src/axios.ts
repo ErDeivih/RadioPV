@@ -48,10 +48,17 @@ const releaseSlot = () => {
 // --- IndexedDB response cache ----------------------------------------------------------------
 // Catalog data (artists/albums/tracks) is immutable, so cache GETs of it in IndexedDB and serve
 // from there on repeat views and across reloads. This is the real fix for the rate limiting:
-// navigating back to a page, or hard-refreshing, no longer re-hits the network. Only static
-// catalog GETs are cached — user state (/me/*), search, and all mutations always hit the API.
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // catalog is static; 24h is safe
-const CACHEABLE_PATH = /^\/(tracks|artists|playlists)(\/|$)/;   // ← catálogo nuestro
+// navigating back to a page, or hard-refreshing, no longer re-hits the network.
+//
+// SOLO el catálogo, que no cambia nunca. Las LISTAS se quedan FUERA a propósito: son datos del
+// usuario y cambian cada vez que renombras una, le pones foto, le quitas una canción… Cachearlas
+// 24 h tenía un efecto muy visible: guardabas el nombre nuevo, el servidor lo guardaba bien, y la
+// pantalla seguía enseñando el viejo incluso después de recargar. Peor: el propio refresco
+// (`refreshPlaylist`) volvía a pedir la lista, recibía la copia vieja de la caché y la volvía a
+// poner en pantalla. Ojo, que `/playlists` también son las listas del sistema, y esas las
+// reescribe el worker cada día, así que tampoco valen.
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // el catálogo es estático; 24h es seguro
+const CACHEABLE_PATH = /^\/(tracks|artists)(\/|$)/;   // ← catálogo inmutable, nunca listas
 
 /**
  * ¿Es una BÚSQUEDA? Las búsquedas nunca se cachean.
@@ -69,6 +76,9 @@ const isCacheableGet = (config: any) =>
   (config.method || 'get').toLowerCase() === 'get' &&
   CACHEABLE_PATH.test(config.url || '') &&
   !esBusqueda(config);
+
+/** Se exporta para poder probarlo: que las listas NO se cacheen es una regla fácil de romper. */
+export const esRespuestaCacheable = isCacheableGet;
 
 const cacheKeyFor = (config: any) =>
   `${config.url}?${JSON.stringify(config.params || {})}|hide_explicit=${

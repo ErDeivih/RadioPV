@@ -1,6 +1,7 @@
 import { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Col,
@@ -41,6 +42,101 @@ const { Text, Title } = Typography;
 const PAGINA = 100;
 
 /**
+ * Atajos de limpieza: ponen los filtros de un toque para no tener que ir combinando
+ * desplegables uno a uno. Cada uno lleva el recuento REAL que devuelve el servidor
+ * (`facets.salud`), y ese número es exactamente lo que se borraría.
+ *
+ * `vetar` va aparte por un motivo: vetar impide que la canción vuelva a descargarse nunca.
+ *  · Para lo que está roto (sin fichero, perdida, fallida, en cuarentena) vetar es lo correcto:
+ *    si no, el recolector la vuelve a bajar y vuelve a quedar rota.
+ *  · Para lo que simplemente no te gusta (poco conocida, sin idioma) vetar NO toca: si algún
+ *    día la quieres, tienes que poder recuperarla.
+ */
+interface Atajo {
+  clave: string;
+  etiqueta: string;
+  porque: string;
+  filtros: Partial<TrackFilters>;
+  n: (f: Facets) => number;
+  vetar: boolean;
+}
+
+const ATAJOS: Atajo[] = [
+  {
+    clave: 'sin-idioma',
+    etiqueta: 'Sin idioma detectado',
+    porque: 'No se ha podido saber en qué idioma cantan. La política es español, latino e inglés.',
+    filtros: { language: 'other' },
+    n: (f) => f.salud.sin_idioma.n,
+    vetar: false,
+  },
+  {
+    clave: 'cortas',
+    etiqueta: 'Retales de menos de 1 minuto',
+    porque: 'Recortes, fragmentos y adelantos. Rara vez es una canción entera.',
+    filtros: { duration_max: 59 },
+    n: (f) => f.salud.cortas.n,
+    vetar: false,
+  },
+  {
+    clave: 'sin-fichero',
+    etiqueta: 'Filas sin fichero',
+    porque: 'Están en la base pero no hay ningún fichero suyo en el disco.',
+    filtros: { has_file_path: false },
+    n: (f) => f.salud.sin_fichero.n,
+    vetar: true,
+  },
+  {
+    clave: 'perdidas',
+    etiqueta: 'Perdidas',
+    porque: 'El fichero existía y ha desaparecido. La comprobación diaria las marca así.',
+    filtros: { status: 'perdida' },
+    n: (f) => f.salud.perdidas.n,
+    vetar: true,
+  },
+  {
+    clave: 'cuarentena',
+    etiqueta: 'En cuarentena',
+    porque: 'No han pasado el control de calidad (audio o emparejamiento).',
+    filtros: { status: 'cuarentena' },
+    n: (f) => f.salud.cuarentena.n,
+    vetar: true,
+  },
+  {
+    clave: 'fallidas',
+    etiqueta: 'Descargas fallidas',
+    porque: 'La descarga no terminó bien.',
+    filtros: { status: 'fallida' },
+    n: (f) => f.salud.fallidas.n,
+    vetar: true,
+  },
+  {
+    clave: 'incompletas',
+    etiqueta: 'Incompletas',
+    porque: 'Se bajaron a medias.',
+    filtros: { status: 'incompleta' },
+    n: (f) => f.salud.incompletas.n,
+    vetar: true,
+  },
+  {
+    clave: 'peor-40',
+    etiqueta: 'Peor valoradas (popularidad < 40)',
+    porque: 'De las que menos suenan en el mundo. Solo entran las que TIENEN dato de popularidad.',
+    filtros: { rank_max: 39 },
+    n: (f) => f.salud.rank_bajo_40.n,
+    vetar: false,
+  },
+  {
+    clave: 'peor-60',
+    etiqueta: 'Muy poco conocidas (< 60)',
+    porque: 'Tramo más amplio que el anterior. Bueno para hacer sitio en el disco.',
+    filtros: { rank_max: 59 },
+    n: (f) => f.salud.rank_bajo_60.n,
+    vetar: false,
+  },
+];
+
+/**
  * Gestión de la biblioteca: filtrar y borrar en masa.
  *
  * Dos formas de borrar, pensadas para cosas distintas:
@@ -58,6 +154,8 @@ export const Library: FC = () => {
   const [facets, setFacets] = useState<Facets | null>(null);
   const [seleccion, setSeleccion] = useState<number[]>([]);
   const [vetoPorDefecto, setVetoPorDefecto] = useState(true);
+  /** Último atajo pulsado, para poder marcarlo como activo. */
+  const [atajoActivo, setAtajoActivo] = useState<string | null>(null);
 
   // Filtros
   const [q, setQ] = useState('');
@@ -74,6 +172,7 @@ export const Library: FC = () => {
   const [isRemix, setIsRemix] = useState<boolean | undefined>();
   const [huerfanas, setHuerfanas] = useState(false);
   const [rankMin, setRankMin] = useState<number | undefined>();
+  const [rankMax, setRankMax] = useState<number | undefined>();
   const [durMin, setDurMin] = useState<number | undefined>();
   const [durMax, setDurMax] = useState<number | undefined>();
   const [bpmMin, setBpmMin] = useState<number | undefined>();
@@ -108,6 +207,7 @@ export const Library: FC = () => {
       is_remix: isRemix,
       has_file_path: huerfanas ? false : undefined,
       rank_min: rankMin,
+      rank_max: rankMax,
       duration_min: durMin,
       duration_max: durMax,
       bpm_min: bpmMin,
@@ -118,7 +218,7 @@ export const Library: FC = () => {
     }),
     [
       q, language, genre, artist, status, yearMin, yearMax,
-      era, explicit, isRemix, huerfanas, rankMin,
+      era, explicit, isRemix, huerfanas, rankMin, rankMax,
       durMin, durMax, bpmMin, bpmMax, energyMin, energyMax, matchMin,
     ]
   );
@@ -144,6 +244,7 @@ export const Library: FC = () => {
           isRemix !== undefined ||
           huerfanas ||
           rankMin !== undefined ||
+          rankMax !== undefined ||
           durMin !== undefined ||
           durMax !== undefined ||
           bpmMin !== undefined ||
@@ -154,7 +255,7 @@ export const Library: FC = () => {
       ),
     [
       q, language, genre, artist, status, yearMin, yearMax,
-      era, explicit, isRemix, huerfanas, rankMin,
+      era, explicit, isRemix, huerfanas, rankMin, rankMax,
       durMin, durMax, bpmMin, bpmMax, energyMin, energyMax, matchMin,
     ]
   );
@@ -187,7 +288,7 @@ export const Library: FC = () => {
   useEffect(() => {
     setPagina(1);
     setSeleccion([]);
-  }, [language, genre, artist, status, yearMin, yearMax]);
+  }, [language, genre, artist, status, yearMin, yearMax, rankMax, durMin, durMax]);
 
   const limpiarFiltros = () => {
     setQ('');
@@ -202,6 +303,7 @@ export const Library: FC = () => {
     setIsRemix(undefined);
     setHuerfanas(false);
     setRankMin(undefined);
+    setRankMax(undefined);
     setDurMin(undefined);
     setDurMax(undefined);
     setBpmMin(undefined);
@@ -209,6 +311,31 @@ export const Library: FC = () => {
     setEnergyMin(undefined);
     setEnergyMax(undefined);
     setMatchMin(undefined);
+    setAtajoActivo(null);
+  };
+
+  /** Aplica un atajo: limpia lo anterior y deja puestos SOLO sus filtros. */
+  const aplicarAtajo = (a: Atajo) => {
+    limpiarFiltros();
+    const f = a.filtros;
+    if (f.q !== undefined) setQ(f.q);
+    if (f.language !== undefined) setLanguage(f.language);
+    if (f.genre !== undefined) setGenre(f.genre);
+    if (f.artist !== undefined) setArtist(f.artist);
+    if (f.status !== undefined) setStatus(f.status);
+    if (f.era !== undefined) setEra(f.era);
+    if (f.explicit !== undefined) setExplicit(f.explicit);
+    if (f.is_remix !== undefined) setIsRemix(f.is_remix);
+    if (f.has_file_path !== undefined) setHuerfanas(f.has_file_path === false);
+    if (f.rank_min !== undefined) setRankMin(f.rank_min);
+    if (f.rank_max !== undefined) setRankMax(f.rank_max);
+    if (f.duration_min !== undefined) setDurMin(f.duration_min);
+    if (f.duration_max !== undefined) setDurMax(f.duration_max);
+    // El veto se pone según el tipo de atajo: ver la explicación en ATAJOS.
+    setVetoPorDefecto(a.vetar);
+    setAtajoActivo(a.clave);
+    setPagina(1);
+    setSeleccion([]);
   };
 
   // ------------------------------------------------------------------ acciones
@@ -385,6 +512,63 @@ export const Library: FC = () => {
 
   return (
     <div style={{ padding: 16 }}>
+      {/* ------------------------------------------------------ limpieza rápida */}
+      <Card
+        size='small'
+        style={{ marginBottom: 16 }}
+        title={<Text strong>Limpieza rápida</Text>}
+        extra={
+          <Text type='secondary' style={{ fontSize: 12 }}>
+            Un toque pone los filtros · mira el número · luego «Borrar TODO lo filtrado»
+          </Text>
+        }
+      >
+        {!facets ? (
+          <Text type='secondary'>Cargando recuentos…</Text>
+        ) : (
+          <Space wrap size={[8, 8]}>
+            {ATAJOS.map((a) => {
+              const n = a.n(facets);
+              return (
+                <Tooltip
+                  key={a.clave}
+                  title={
+                    <>
+                      {a.porque}
+                      <br />
+                      <b>
+                        {a.vetar
+                          ? 'Al borrar se vetará (no volverá a descargarse)'
+                          : 'Al borrar NO se vetará: podrás recuperarla más adelante'}
+                      </b>
+                    </>
+                  }
+                >
+                  <Button
+                    size='small'
+                    type={atajoActivo === a.clave ? 'primary' : 'default'}
+                    disabled={n === 0}
+                    onClick={() => aplicarAtajo(a)}
+                  >
+                    {a.etiqueta}{' '}
+                    <Badge
+                      count={n}
+                      showZero
+                      overflowCount={99999}
+                      style={{
+                        backgroundColor: n === 0 ? '#444' : atajoActivo === a.clave ? '#fff' : '#1677ff',
+                        color: atajoActivo === a.clave ? '#1677ff' : '#fff',
+                        fontSize: 11,
+                      }}
+                    />
+                  </Button>
+                </Tooltip>
+              );
+            })}
+          </Space>
+        )}
+      </Card>
+
       {/* ---------------------------------------------------------- filtros */}
       <Card size='small' style={{ marginBottom: 16 }}>
         <Row gutter={[8, 8]} align='middle'>
@@ -515,6 +699,14 @@ export const Library: FC = () => {
                       placeholder='Popularidad mín.'
                       value={rankMin}
                       onChange={(v) => setRankMin(v ?? undefined)}
+                    />
+                  </Col>
+                  <Col xs={12} md={3}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder='Popularidad máx.'
+                      value={rankMax}
+                      onChange={(v) => setRankMax(v ?? undefined)}
                     />
                   </Col>
                   <Col xs={12} md={3}>
@@ -748,6 +940,16 @@ export const Library: FC = () => {
           {status && <li>Estado: <b>{labelStatus(status)}</b></li>}
           {yearMin !== undefined && <li>Año desde: <b>{yearMin}</b></li>}
           {yearMax !== undefined && <li>Año hasta: <b>{yearMax}</b></li>}
+          {/* Los atajos de limpieza se apoyan en estos: si no se listaran, el aviso diría
+              «se van a borrar 4.000 canciones» sin decir POR QUÉ. */}
+          {era && <li>Época: <b>{era}</b></li>}
+          {rankMin !== undefined && <li>Popularidad mínima: <b>{rankMin}</b></li>}
+          {rankMax !== undefined && <li>Popularidad máxima: <b>{rankMax}</b></li>}
+          {durMin !== undefined && <li>Duración mínima: <b>{durMin} s</b></li>}
+          {durMax !== undefined && <li>Duración máxima: <b>{durMax} s</b></li>}
+          {huerfanas && <li>Sin fichero: <b>sí</b></li>}
+          {explicit !== undefined && <li>Explícitas: <b>{explicit ? 'sí' : 'no'}</b></li>}
+          {isRemix !== undefined && <li>Remixes: <b>{isRemix ? 'sí' : 'no'}</b></li>}
         </ul>
         {confirmacion?.accion === 'delete' && (
           <Space>

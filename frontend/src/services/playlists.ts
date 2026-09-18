@@ -67,8 +67,16 @@ const reorderPlaylistItems = async (playlistId: string, uris: string[], _start: 
 };
 
 const changePlaylistDetails = async (playlistId: string, data: { name?: string; description?: string; public?: boolean; collaborative?: boolean; type?: string }) => {
-  await axios.patch(`/playlists/${playlistId}`, { name: data.name, description: data.description });
-  return { data: true };
+  // `public` se mandaba en el objeto pero se descartaba al construir el cuerpo de la petición:
+  // el menú decía «la lista ahora es pública» y en el servidor no cambiaba nada. Ahora el
+  // backend guarda el campo de verdad y decide con él quién puede ver la lista.
+  const cuerpo: { name?: string; description?: string; public?: boolean } = {
+    name: data.name,
+    description: data.description,
+  };
+  if (data.public !== undefined) cuerpo.public = data.public;
+  const { data: actualizada } = await axios.patch<PlaylistOut>(`/playlists/${playlistId}`, cuerpo);
+  return { data: toPlaylist(actualizada) };
 };
 
 /** Borra la playlist (y sus playlist_tracks). Solo el propietario. */

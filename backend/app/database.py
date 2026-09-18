@@ -83,6 +83,7 @@ _MIGRACIONES_COLUMNAS = {
     ],
     "playlists": [
         ("cover_path", "TEXT"),       # portada propia de la lista
+        ("public", "BOOLEAN DEFAULT 0"),
     ],
 }
 

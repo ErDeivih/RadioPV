@@ -8,7 +8,10 @@ const STORE = 'responses';
 // v2: en la v1 se llegaron a guardar RESPUESTAS DE BÚSQUEDA (ver `axios.ts`), incluidas las que
 // devolvían «sin resultados». Servirlas durante 24 h hacía que el buscador pareciera roto aunque
 // el servidor ya estuviera arreglado, así que al subir de versión se tira todo lo viejo.
-const DB_VERSION = 2;
+// v3: en la v2 se guardaban también las LISTAS (`/playlists/...`), que cambian al editarlas. Un
+// móvil que ya tuviera la copia vieja seguiría enseñando el nombre antiguo 24 h más aunque el
+// código nuevo ya no las cachee, así que se sube la versión para vaciar lo que hubiera.
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 

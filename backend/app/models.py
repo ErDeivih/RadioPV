@@ -130,6 +130,10 @@ class Playlist(Base):
     # Nombre del fichero de portada dentro de MEDIA_ROOT/covers (solo el nombre, igual que en
     # Track.cover_path: la raiz la monta el servidor).
     cover_path = Column(Text)
+    # Lista compartida con los demas usuarios. Por defecto NO: una lista es privada hasta que su
+    # dueno dice lo contrario. (La interfaz ofrecia «hacer publica» desde el principio, pero esta
+    # columna no existia: el aviso decia que se habia hecho publica y no cambiaba nada.)
+    public = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
 

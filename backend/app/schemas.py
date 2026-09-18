@@ -94,6 +94,8 @@ class PlaylistOut(BaseModel):
     # Portada propia de la lista (url de /media/covers) o None. Antes TODAS las listas de usuario
     # salian con la misma imagen de relleno: no habia forma de subir una.
     cover: Optional[str] = None
+    # Lista compartida. La interfaz lo necesita para ofrecer «hacer publica» o «hacer privada».
+    public: bool = False
     model_config = ConfigDict(from_attributes = True)
 
 
@@ -116,6 +118,7 @@ class MixOut(BaseModel):
 class PlaylistPatch(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    public: Optional[bool] = None
 
 
 class ReactionOut(BaseModel):

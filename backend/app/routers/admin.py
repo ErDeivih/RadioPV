@@ -212,6 +212,10 @@ def admin_facets(_: models.User = Depends(require_admin)) -> dict:
             (minimo,),
         )
 
+    def _uno(estado: str) -> dict:
+        """Cuántas canciones están en un estado concreto (por `status`)."""
+        return _one("SELECT COUNT(*) n FROM tracks WHERE status = ?", (estado,)) or {"n": 0}
+
     return {
         "languages": facet("language"),
         "genres": facet("genre"),
@@ -228,6 +232,33 @@ def admin_facets(_: models.User = Depends(require_admin)) -> dict:
             "huerfanas": _one("SELECT COUNT(*) n FROM tracks "
                               "WHERE file_path IS NULL OR file_path = ''") or {"n": 0},
             "total": _one("SELECT COUNT(*) n FROM tracks") or {"n": 0},
+        },
+        # Recuentos de los atajos de limpieza. Cada uno es EXACTAMENTE lo que selecciona su
+        # atajo correspondiente en la pantalla (mismo WHERE), así el número que se ve antes de
+        # pulsar es el número de canciones que se van a tocar.
+        #
+        # Ojo con `rank`: los `NULL` NO entran en los tramos de popularidad. `rank <= 39` con
+        # `rank` nulo es NULL, y en SQL eso no es verdadero, así que una canción de la que no
+        # sabemos la popularidad nunca se cuela en el atajo de «peor valoradas».
+        "salud": {
+            "sin_fichero": _one("SELECT COUNT(*) n FROM tracks "
+                                "WHERE file_path IS NULL OR file_path = ''") or {"n": 0},
+            "no_descargadas": _one("SELECT COUNT(*) n FROM tracks "
+                                   "WHERE status IS NULL OR status <> 'descargada'") or {"n": 0},
+            "perdidas": _uno("perdida"),
+            "cuarentena": _uno("cuarentena"),
+            "fallidas": _uno("fallida"),
+            "incompletas": _uno("incompleta"),
+            "pendientes": _uno("pendiente"),
+            "rank_bajo_40": _one("SELECT COUNT(*) n FROM tracks "
+                                 "WHERE rank IS NOT NULL AND rank <= 39") or {"n": 0},
+            "rank_bajo_60": _one("SELECT COUNT(*) n FROM tracks "
+                                 "WHERE rank IS NOT NULL AND rank <= 59") or {"n": 0},
+            "cortas": _one("SELECT COUNT(*) n FROM tracks "
+                           "WHERE duration IS NOT NULL AND duration < 60") or {"n": 0},
+            # Este es EXACTAMENTE el atajo «sin idioma detectado», que filtra `language = 'other'`.
+            # Contar además los NULL daría un número mayor que el de canciones que se tocan.
+            "sin_idioma": _one("SELECT COUNT(*) n FROM tracks WHERE language = 'other'") or {"n": 0},
         },
     }
 

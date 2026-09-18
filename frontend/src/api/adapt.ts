@@ -107,7 +107,9 @@ export const toPlaylist = (p: PlaylistOut, cover?: string) => ({
     id: p.user_id != null ? String(p.user_id) : 'radiopv',
     display_name: 'RadioPV',
   },
-  public: false,
+  // Antes iba a fuego `false`: el menú de una lista SIEMPRE ofrecía «hacer pública» (aunque ya lo
+  // estuviera) y el encabezado ponía «lista privada» siempre.
+  public: p.public ?? false,
   collaborative: false,
   snapshot_id: '',
   external_urls: { spotify: '' },

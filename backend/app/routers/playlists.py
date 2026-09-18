@@ -39,7 +39,17 @@ def _out(p: models.Playlist, n: int | None = None, db: Session | None = None) ->
     if n is None:
         n = db.query(models.PlaylistTrack).filter_by(playlist_id=p.id).count()
     return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type,
-                               n_tracks=n, user_id=p.user_id, cover=p.cover)
+                               n_tracks=n, user_id=p.user_id, cover=p.cover,
+                               public=bool(p.public))
+
+
+def _visible_o_404(db: Session, playlist_id: int, user: models.User) -> models.Playlist:
+    """Una lista se puede LEER si es tuya, si es del sistema (sin dueno) o si su dueno la ha
+    hecho publica. Para editarla hay que ser el dueno (`_own_or_404`)."""
+    p = db.query(models.Playlist).filter_by(id=playlist_id).first()
+    if not p or (p.user_id is not None and p.user_id != user.id and not p.public):
+        raise HTTPException(404, "Playlist no encontrada")
+    return p
 
 
 @router.get("/system", response_model=list[schemas.PlaylistOut])
@@ -61,10 +71,7 @@ def system_playlists(db: Session = Depends(get_db)):
 @router.get("/{playlist_id}", response_model=schemas.PlaylistOut)
 def playlist_by_id(playlist_id: int, db: Session = Depends(get_db),
                    user: models.User = Depends(get_current_user)):
-    p = db.query(models.Playlist).filter_by(id=playlist_id).first()
-    if not p or (p.user_id is not None and p.user_id != user.id):
-        raise HTTPException(404, "Playlist no encontrada")
-    return _out(p, db=db)
+    return _out(_visible_o_404(db, playlist_id, user), db=db)
 
 
 @router.get("", response_model=list[schemas.PlaylistOut])
@@ -87,9 +94,7 @@ def create(data: schemas.PlaylistIn, db: Session = Depends(get_db),
 def tracks_of(playlist_id: int, db: Session = Depends(get_db),
               user: models.User = Depends(get_current_user),
               explicit: Optional[bool] = Query(None)):
-    p = db.query(models.Playlist).filter_by(id=playlist_id).first()
-    if not p or (p.user_id is not None and p.user_id != user.id):
-        raise HTTPException(404, "Playlist no encontrada")
+    p = _visible_o_404(db, playlist_id, user)
     rows = (db.query(models.Track).join(models.PlaylistTrack, models.PlaylistTrack.track_id == models.Track.id)
             .filter(models.PlaylistTrack.playlist_id == playlist_id)
             .order_by(models.PlaylistTrack.position).all())
@@ -154,6 +159,8 @@ def update_playlist(playlist_id: int, data: schemas.PlaylistPatch, db: Session =
         p.name = data.name
     if data.description is not None:
         p.description = data.description
+    if data.public is not None:
+        p.public = bool(data.public)
     p.updated_at = datetime.utcnow()
     db.commit()
     return _out(p, db=db)
