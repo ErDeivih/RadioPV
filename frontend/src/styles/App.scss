@@ -986,6 +986,37 @@ a {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
+   INTERRUPTOR DE ANTD
+   ══════════════════════════════════════════════════════════════════════════════════════════════
+
+   Se veía como un **punto blanco suelto**: la pista salía con fondo transparente (el tema claro
+   por defecto de antd sobre una página oscura), así que no había forma de saber si estaba
+   encendido o apagado. Medido en Ajustes: `background-color: rgba(0, 0, 0, 0)`.
+
+   Se le dan los colores de la aplicación, que además es lo que ya usa todo lo demás: verde
+   cuando está encendido, gris cuando está apagado.
+   ────────────────────────────────────────────────────────────────────────────────────────────── */
+.ant-switch {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.45) !important;
+  }
+
+  &.ant-switch-checked {
+    background-color: #1ed760 !important;
+
+    &:hover {
+      background-color: #1fdf64 !important;
+    }
+  }
+
+  .ant-switch-handle::before {
+    background-color: #fff;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
    TAMBIÉN EN ESCRITORIO (con ratón)
    ══════════════════════════════════════════════════════════════════════════════════════════════
 
@@ -1201,7 +1232,7 @@ span.ant-dropdown-trigger,
     &::after {
       content: '';
       position: absolute;
-      inset: -6px 0;
+      inset: -8px 0;
     }
   }
 }
