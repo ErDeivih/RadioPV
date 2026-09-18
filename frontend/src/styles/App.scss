@@ -1037,4 +1037,43 @@ a {
     min-inline-size: 44px;
     min-block-size: 44px;
   }
+
+  /* Chips (los filtros de búsqueda y de Inicio): son pastillas de 32 px de alto, y con el dedo
+     se falla el toque. A 44 siguen pareciendo pastillas, sólo que se aciertan. */
+  .chip > span {
+    min-block-size: 44px;
+  }
+
+  /* Botones de antd (Ajustes, diálogos): 32 px de alto por defecto. */
+  .ant-btn {
+    min-block-size: 44px;
+  }
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-select-selector {
+    min-block-size: 44px;
+  }
+  /* El interruptor de antd mide 22 px de alto por dentro; se le da algo más de hueco sin
+     deformar la pastilla, que es lo que se ve. */
+  .ant-switch {
+    min-block-size: 32px;
+  }
+
+  /* Las flechas de las filas que se deslizan: en táctil se puede arrastrar, pero si están, que
+     se puedan pulsar. */
+  .horizontal-grid-carousel__nav {
+    min-inline-size: 44px;
+    min-block-size: 44px;
+  }
+
+  /* Botones de acción de las cabeceras (p. ej. «Seguir» en la página de artista) y el menú
+     «…» de cada fila, que medía 49x12 px: imposible de acertar con el dedo. */
+  .transparent-button,
+  .ant-dropdown-trigger {
+    min-block-size: 44px;
+  }
+  .image-button {
+    min-inline-size: 44px;
+    min-block-size: 44px;
+  }
 }

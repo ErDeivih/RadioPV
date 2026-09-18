@@ -127,10 +127,11 @@
      * NO EXISTÍA. Y como sólo se revelaba con `:hover`, en una pantalla táctil no había
      * manera de sacarlo: invisible e inclickeable, así que la música no se podía ni
      * empezar. No era el audio, era que no había botón. */
-    // El botón mide 40px, pero el contenedor sólo reservaba 36px y la tarjeta lleva
-    // `overflow: hidden`: sin ensanchar el contenedor el botón sale recortado por la derecha.
+    // El botón mide 48px (medida mínima para el dedo), así que el contenedor reserva 52 y la
+    // tarjeta lleva `overflow: hidden`: sin ensanchar el contenedor el botón saldría recortado.
+    // Antes eran 40px de botón en un hueco de 44 y se quedaba al borde de recortarse.
     .button-container {
-      flex: 0 0 44px;
+      flex: 0 0 52px;
       padding-inline-end: 2px;
 
       // En táctil el botón de verdad está siempre visible, así que el iconito del
@@ -144,9 +145,9 @@
       display: flex !important;
       opacity: 1 !important;
       visibility: visible !important;
-      inline-size: 40px;
-      block-size: 40px;
-      min-block-size: 40px;
+      inline-size: 48px;
+      block-size: 48px;
+      min-block-size: 48px;
       margin-right: 0 !important;
     }
 
@@ -163,7 +164,7 @@
 @media (hover: none) {
   .horizontal-playlist {
     .button-container {
-      flex: 0 0 44px;
+      flex: 0 0 52px;
       padding-inline-end: 2px;
 
       img {
