@@ -1012,10 +1012,44 @@ span.ant-dropdown-trigger,
 
 /* La barra de reproducción de escritorio: los iconos de aleatorio, repetir, letra, cola,
    dispositivo y silencio tenían un hueco de 16x17 px. Con el ratón se falla menos que con el
-   dedo, pero se falla: el hueco pasa a 32 px sin tocar el tamaño del dibujo. */
-.w-full.bg-black .ant-col button,
+   dedo, pero se falla: el hueco pasa a 32 px sin tocar el tamaño del dibujo. (En táctil son 44,
+   ver el bloque de abajo.) */
+.playing-bar-desktop button,
 .mobile-menu button,
 .volume-control-container button {
+  min-inline-size: 32px;
+  min-block-size: 32px;
+}
+
+/* Botones de la barra superior y de la biblioteca: en escritorio se quedaban en 25-32 px. El
+   suelo es 32 con ratón; 44 con el dedo (más abajo). */
+.nav-icon-button,
+.library-icon-button,
+.add-playlist-button,
+.search-browse-button,
+.avatar-link {
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* El buscador de la barra superior medía 24 px de alto en escritorio. */
+.ant-input-lg {
+  min-block-size: 32px;
+}
+
+/* El botón de reproducir de las tarjetas: 40 px era el valor heredado de Spotify. Se sube a 44
+   (el mínimo de una zona pulsable) también con ratón, porque es el control más usado. */
+.circle-play {
+  min-block-size: 44px;
+  inline-size: 44px;
+  block-size: 44px;
+}
+
+/* Igual: los botones de "me gusta"/menú de cada fila, que tienen 17 px de hueco. */
+.song-details button.tablet-hidden {
   min-inline-size: 32px;
   min-block-size: 32px;
 }

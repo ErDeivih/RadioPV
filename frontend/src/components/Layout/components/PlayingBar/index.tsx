@@ -9,7 +9,7 @@ const NowPlayingBar = () => {
   return (
     <>
       <div>
-        <div className='w-full bg-black p-4 flex items-center justify-between h-full mobile-hidden'>
+        <div className='w-full bg-black p-4 flex items-center justify-between h-full mobile-hidden playing-bar-desktop'>
           <SongDetails />
           <PlayControls />
           <ExtraControlButtons />
