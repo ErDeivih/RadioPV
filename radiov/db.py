@@ -193,9 +193,13 @@ def _now() -> str:
 
 def get_conn() -> sqlite3.Connection:
     ensure_dirs()
-    conn = sqlite3.connect(str(DB_PATH), timeout=30)
+    # `timeout` es el `busy_timeout` de SQLite: cuánto ESPERA si otro proceso tiene la base
+    # cogida, antes de rendirse con «database is locked». Con 30 s iba justo: el análisis de
+    # audio (que lee cada MP3) y el recolector escriben a la vez en esta misma base.
+    conn = sqlite3.connect(str(DB_PATH), timeout=60)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=60000;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
     return conn
@@ -276,12 +280,35 @@ def init_db() -> None:
 
 
 def log_event(message: str, level: str = "info") -> None:
-    conn = get_conn()
+    """Apunta un evento del recolector. **Nunca lanza.**
+
+    POR QUÉ
+    -------
+    Esto se llamaba desde los manejadores de errores (`except Exception: db.log_event(...)`) y
+    desde el bucle del agente. Si la base estaba cogida —otro proceso escribiendo, un análisis
+    largo— el `INSERT` fallaba con «database is locked»… **dentro del propio manejador de
+    errores**. La excepción se escapaba del `except`, mataba el HILO del recolector y el
+    contenedor seguía «arriba» sin hacer absolutamente nada: ni descargaba, ni avisaba.
+    Medido: el recolector llevaba días parado y desde fuera parecía vivo.
+
+    Perder una línea del registro es molesto; perder el recolector entero, no. Si no se puede
+    escribir en la base, se escribe en la salida de error, que al menos queda en `docker logs`.
+    """
+    try:
+        conn = get_conn()
+    except Exception as e:  # noqa: BLE001
+        print(f"[events] no se pudo abrir la base para registrar «{message}»: {e}", flush=True)
+        return
     try:
         conn.execute("INSERT INTO events(ts,level,message) VALUES(?,?,?)", (_now(), level, message))
         conn.commit()
+    except Exception as e:  # noqa: BLE001
+        print(f"[events] no se pudo registrar «{message}» ({level}): {e}", flush=True)
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def add_track(rec: dict, *, youtube_id: Optional[str] = None) -> int:

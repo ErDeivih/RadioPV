@@ -328,6 +328,16 @@ class AgentManager:
             p["n_seeds"] = len(load_settings().get("agent_seeds", []))
         return p
 
+    def sigue_vivo(self) -> bool:
+        """¿El hilo de trabajo sigue en pie?
+
+        Lo necesita `run_collector.py` para poder reiniciarse. Un hilo que muere por una
+        excepción no tumba el proceso: el contenedor sigue «arriba», el interruptor sigue en
+        «activado» y el recolector **no descarga nada**, sin avisar a nadie. Es exactamente lo que
+        pasó durante días: por dentro muerto y por fuera con cara de estar funcionando.
+        """
+        return bool(self._thread and self._thread.is_alive())
+
 
 def pipeline_catalog_pending() -> int:
     from . import catalog as C

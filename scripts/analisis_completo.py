@@ -109,8 +109,14 @@ def main() -> int:
             sets = ", ".join(f"{k}=?" for k in upd)
             conn.execute(f"UPDATE tracks SET {sets} WHERE id=?", list(upd.values()) + [t["id"]])
             done += 1
-        if done % 25 == 0 and done:
-            conn.commit()
+        # CONFIRMAR EN CADA CANCIÓN, no cada 25. Antes se hacía cada 25 filas, y como cada
+        # canción tarda unos 12 s (ffmpeg `loudnorm` lee el fichero entero), la transacción de
+        # escritura se quedaba ABIERTA 5 minutos. Con SQLite eso deja la base bloqueada para
+        # escribir: el recolector, que escribe mientras descarga, se comía «database is locked»
+        # y su hilo moría (ver `log_event`). El recolector y este análisis tienen que poder
+        # convivir: no tiene sentido parar las descargas 2 horas cada 4.
+        conn.commit()
+        if done and done % 25 == 0:
             print(f"  procesadas {done}/{total}")
     conn.commit()
     print(f"[OK] rms/gain_db calculados para {done} canción(es).")
