@@ -71,7 +71,7 @@ const PNG_2X2 = Buffer.from(
       const r = await fetch(`/api/playlists/${pid}`, { headers: { Authorization: 'Bearer ' + t } });
       if (r.status !== 200) return { estado: `HTTP ${r.status}` };
       const d = await r.json();
-      return { estado: 'ok', nombre: d.name, portada: d.cover };
+      return { estado: 'ok', nombre: d.name, portada: d.cover, publica: d.public };
     }, id);
 
   const abrirMenu = async () => {
@@ -146,6 +146,27 @@ const PNG_2X2 = Buffer.from(
         foto.hay && foto.src.includes('/api/media/covers/playlist-'), foto.src ?? '(no hay imagen)');
       ok('la foto nueva se CARGA de verdad en la pantalla',
         Boolean(foto.cargada), `ancho=${foto.ancho ?? 0}`);
+    }
+  }
+
+  // --- PRIVACIDAD: el botón debe hacer algo de verdad ---
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(4500);
+  await abrirMenu();
+  const hacerPublica = p.getByText('Hacer pública', { exact: true }).first();
+  ok('la lista privada ofrece "Hacer pública"', (await hacerPublica.count()) > 0);
+  if (await hacerPublica.count()) {
+    await hacerPublica.click();
+    await p.waitForTimeout(3000);
+    ok('el servidor guarda que ahora es PÚBLICA', (await enApi()).publica === true);
+    await abrirMenu();
+    const hacerPrivada = p.getByText('Hacer privada', { exact: true }).first();
+    ok('el menú cambia a "Hacer privada" (antes ofrecía siempre lo mismo)',
+      (await hacerPrivada.count()) > 0);
+    if (await hacerPrivada.count()) {
+      await hacerPrivada.click();
+      await p.waitForTimeout(3000);
+      ok('y se puede volver a privada', (await enApi()).publica === false);
     }
   }
 

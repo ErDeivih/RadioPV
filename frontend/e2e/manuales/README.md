@@ -44,5 +44,20 @@ URL=http://127.0.0.1:8090 node probar-reproduccion.js
 `probar-escritorio.js` (17 comprobaciones): lo mismo sobre la barra de abajo del escritorio,
 incluido el **arrastre real con el ratón** en la barra de progreso.
 
-> Los guiones crean usuarios y playlists de prueba (`*@radiopv-test.com`) en el servidor. De
-> vez en cuando conviene borrarlos.
+`probar-listas.js` (21 comprobaciones): el **ciclo de vida completo de una lista por la
+interfaz**, en móvil emulado. Crear con canciones → abrir → renombrar → **poner foto** →
+comprobar que la pantalla se repinta → **hacer pública y volver a privada** → reproducir →
+borrar (comprobando que **pregunta** y que cancelar no borra). Cada paso se verifica **contra
+la API**, no contra lo que dice la pantalla, y además se comprueba que los avisos salen y que
+la foto **se carga de verdad** (`naturalWidth > 0`): un `<img>` con la dirección correcta pero
+la imagen rota pasaría una comprobación ingenua, y de hecho pasó.
+
+> Los guiones crean usuarios, playlists y canciones de prueba (`*@radiopv-test.com`) en el
+> servidor. **Bórralos después de cada tanda**, porque sus reproducciones entran en la
+> popularidad, en las tendencias y en los mixes que ve el usuario de verdad:
+>
+> ```bash
+> # Primero informa; con --apply borra (usuarios, sus listas, reproducciones, reacciones…)
+> docker exec radiopv-api python /app/scripts/limpiar_datos_de_prueba.py
+> docker exec radiopv-api python /app/scripts/limpiar_datos_de_prueba.py --apply
+> ```
