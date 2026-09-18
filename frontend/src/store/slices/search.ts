@@ -124,10 +124,21 @@ export const fetchSearch = createAsyncThunk<
     response.data.playlists.items[0],
   ];
 
+  // OJO con los huecos: si la búsqueda no devuelve artistas, `topItems[0]` es `undefined`. El
+  // respaldo era justamente `topItems[0]`, así que buscar un nombre del que SÓLO hay canciones
+  // acababa en «sin resultados» aunque la lista de canciones llegara con datos. Pasaba con
+  // «rosalia»: 3 canciones y 0 artistas → la página decía «No se han encontrado resultados».
+  // Además, para una canción el `name` es el TÍTULO, así que buscar por artista nunca encajaba:
+  // ahora también se mira el nombre del artista de la canción.
+  const nombreDe = (item: any) =>
+    `${item?.name ?? ''} ${item?.artists?.[0]?.name ?? ''}`.trim().toLowerCase();
+
+  const candidatos = topItems.filter(Boolean) as Item[];
+  const buscado = (query ?? '').toLowerCase();
   const topItem =
-    topItems.find((item) => item.name?.toLowerCase() === query?.toLowerCase()) ||
-    topItems.find((item) => item.name?.toLowerCase().includes(query?.toLowerCase())) ||
-    topItems[0];
+    candidatos.find((item) => nombreDe(item) === buscado) ||
+    candidatos.find((item) => nombreDe(item).includes(buscado)) ||
+    candidatos[0];        // el primero que EXISTA, no la primera posición
 
   const tracks = response.data.tracks.items;
   const tracksTotal = response.data.tracks.total;
