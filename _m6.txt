@@ -1,0 +1,19 @@
+La portada ofrece listas generadas, no canciones sueltas
+
+Segunda parte del cambio, despues de ver el resultado en el navegador: ademas de la rejilla
+"Para ti", la portada tenia DOS secciones de canciones sueltas y una fila que estaba siempre
+vacia.
+
+- **Tendencias** pintaba una lista de CANCIONES con sus reproducciones ("La Cosa Mas Bella ·
+  Nuevo · 722.2M"). Quitada: ese contenido se ofrece ahora como la lista generada
+  "Viral / Tendencia", que sale en la fila nueva.
+- **La fila de listas destacadas estaba siempre VACIA**: pedia una categoria de Spotify que en
+  este servidor no existe, asi que no se veia nunca. Ahora pide /playlists/system, o sea LAS
+  LISTAS QUE GENERA LA PROPIA APLICACION (Novedades, Fiesta, Clasicos, En espanol, Top pop,
+  Top 2000s, Viral / Tendencia...), ordenadas por tamano y con tope de 20. Se llama "Listas de
+  RadioPV".
+- Se aprovecha para quitar el `locale: 'es_AR'` que viajaba en esa peticion (idioma de
+  Argentina, no de Espana).
+
+Resultado en una cuenta nueva: la portada muestra "Hecho para ti" (los mixes, que son listas
+generadas) y "Listas de RadioPV", sin canciones sueltas.

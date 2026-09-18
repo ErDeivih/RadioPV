@@ -8,8 +8,8 @@ import { playlistService } from '../../services/playlists';
 
 // Interfaz
 import axios from '../../axios';
-import { toTrack } from '../../api/adapt';
-import type { TrackOut } from '../../api/types';
+import { toTrack, toPlaylist } from '../../api/adapt';
+import type { TrackOut, PlaylistOut } from '../../api/types';
 
 // Interfaces
 import type { RootState } from '../store';
@@ -246,11 +246,16 @@ export const fecthFeaturedPlaylists = createAsyncThunk(
   'home/fecthFeaturedPlaylists',
   async (_, { getState }) => {
     const state = getState() as RootState;
-    const response = await playlistService.getFeaturedPlaylists({
-      limit: 10,
-      locale: state.language.language === 'es' ? 'es_AR' : undefined,
-    });
-    return response.data.playlists.items;
+    // Antes esto pedía "featured playlists" (una categoría), que en este servidor devolvía vacío:
+    // la fila no se veía nunca. Ahora son LAS LISTAS QUE GENERA LA PROPIA APLICACIÓN (Novedades,
+    // Fiesta, Clásicos, En español, Top pop, Top 2000s, Viral / Tendencia…), que es justo lo que
+    // debe ofrecer la portada: listas, no canciones sueltas.
+    if (!state.auth.user) return [];        // /playlists/system exige sesión
+    const { data } = await axios.get<PlaylistOut[]>('/playlists/system');
+    return [...data]
+      .sort((a, b) => (b.n_tracks ?? 0) - (a.n_tracks ?? 0))
+      .slice(0, 20)
+      .map((p) => toPlaylist(p));
   },
 );
 

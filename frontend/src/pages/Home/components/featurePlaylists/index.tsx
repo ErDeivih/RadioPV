@@ -18,7 +18,7 @@ export const FeaturePlaylists: FC<NewReleasesProps> = () => {
     <div className='home'>
       <HomeItemList
         items={featurePlaylists}
-        title={`${t('Featured playlists')}`}
+        title={`${t('House playlists')}`}
         getDescription={getPlaylistDescription}
       />
     </div>

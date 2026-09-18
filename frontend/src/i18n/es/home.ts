@@ -39,6 +39,9 @@ export const home = {
   'Recently played': 'Escuchado hace poco',
   'Featured playlists': '¡En tendencia!',
   'Popular playlists': 'Listas populares',
+  // Esta fila ya no son "featured playlists" de una categoría (salía vacía): son las listas que
+  // genera la propia aplicación.
+  'House playlists': 'Listas de RadioPV',
   'Your favourite artists': 'Tus artistas favoritos',
   'Inicia sesion en RadioNano': 'Inicia sesión en RadioPV',
 };
