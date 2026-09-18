@@ -299,7 +299,16 @@ def derive_era(year) -> Optional[str]:
     return "20s"
 
 
-_REMIX_RE = re.compile(r"\b(remix|rmx|extended mix|original mix|radio mix|bootleg|dj mix)\b", re.I)
+_REMIX_RE = re.compile(
+    r"\b(remix|rmx|extended mix|original mix|radio mix|bootleg|dj mix|"
+    # MASHUPS: canciones que mezclan dos o tres temas, hechas por gente en YouTube. Se marcan
+    # como remix a proposito, para poder buscarlas y sacarlas aparte en la interfaz en vez de
+    # que se pierdan mezcladas entre las canciones normales.
+    r"mashup|mash up|mash-up|megamix|blend|vs\.?|versus|"
+    # "X x Y" tambien suele ser un cruce de dos canciones (por ejemplo "Titanium x Without You").
+    r"\sx\s)\b",
+    re.I,
+)
 
 
 def is_remix(title: str = "", artist: str = "") -> bool:
