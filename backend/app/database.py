@@ -85,6 +85,11 @@ _MIGRACIONES_COLUMNAS = {
         ("cover_path", "TEXT"),       # portada propia de la lista
         ("public", "BOOLEAN DEFAULT 0"),
     ],
+    "requests": [
+        # El vídeo exacto elegido en la página de pedir canciones (ver models.Request).
+        ("youtube_id", "VARCHAR(40)"),
+        ("duration", "FLOAT"),
+    ],
 }
 
 

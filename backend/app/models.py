@@ -208,6 +208,11 @@ class Request(Base):
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     text = Column(Text)                    # "Artista - Título" pedido desde la app
     status = Column(String(20), default="pendiente")   # pendiente | descargada | fallida
+    # El vídeo EXACTO que el usuario eligió en la búsqueda de la página de pedir canciones. Sin
+    # esto, el recolector busca por texto y puede bajar otra versión (otro remix, otro directo) que
+    # no es la que se pidió: la página enseña una lista de resultados y hay que respetar la elegida.
+    youtube_id = Column(String(40))
+    duration = Column(Float)               # duración que tenía el vídeo elegido, si se sabe
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

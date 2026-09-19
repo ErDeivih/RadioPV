@@ -44,6 +44,86 @@ def wrapped(period: str = Query("week", pattern="^(week|year)$"), db: Session = 
     }
 
 
+@router.get("/requests/buscar")
+def buscar_para_pedir(q: str = Query(..., min_length=2), db: Session = Depends(get_db),
+                      user: models.User = Depends(get_current_user)):
+    """Busca una canción para pedirla: primero en casa, y si no está, en YouTube.
+
+    POR QUÉ ASÍ
+    -----------
+    La página de pedir canciones era una caja de texto: escribías «Artista - Título» y a esperar.
+    El problema es que **no sabías si ya la tenías** (y pedir algo que ya está es trabajo perdido
+    para el recolector) ni **cuál de las versiones** se iba a bajar: de un mismo tema hay el
+    original, el remix, el directo y veinte subidas distintas, y el buscador por texto bajaba la
+    que le parecía. Muchas veces no era la que el usuario quería.
+
+    Ahora se devuelven tres cosas:
+      · `en_biblioteca` — lo que YA está en el catálogo (con su id, para poder oírlo ahora mismo);
+      · `en_youtube`   — resultados REALES de YouTube con su duración y su id de vídeo, para elegir
+                         la versión exacta; se marca cuáles están ya en el catálogo;
+      · `en_cola`      — lo que ya se ha pedido y sigue pendiente (para no pedirlo dos veces).
+    """
+    texto = (q or "").strip()
+    if len(texto) < 2:
+        raise HTTPException(400, "Escribe al menos dos letras")
+
+    # --- 1) ¿está ya en casa? Se busca por título y por artista, sin acentos (como escribe la gente).
+    from ..database import HAY_SIN_ACENTOS, normalizar_busqueda
+    consulta = db.query(models.Track).filter(models.Track.status == "descargada")
+    if HAY_SIN_ACENTOS:
+        from sqlalchemy import text as sqltext
+        consulta = consulta.filter(sqltext(
+            "sin_acentos(tracks.title) LIKE :q OR sin_acentos(tracks.artist) LIKE :q"
+        ).bindparams(q=f"%{normalizar_busqueda(texto)}%"))
+    else:
+        consulta = consulta.filter(models.Track.title.ilike(f"%{texto}%")
+                                   | models.Track.artist.ilike(f"%{texto}%"))
+    biblioteca = consulta.order_by(models.Track.rank.desc().nullslast()).limit(15).all()
+
+    # --- 2) lo que ya está pedido y pendiente (para no pedirlo dos veces)
+    like = f"%{texto}%"
+    en_cola = [{"id": r.id, "text": r.text} for r in
+               db.query(models.Request)
+               .filter(models.Request.status == "pendiente")
+               .filter(models.Request.text.ilike(like)).limit(10).all()]
+
+    # --- 3) YouTube: qué versiones hay de verdad, con su duración, para elegir la buena
+    resultados: list[dict] = []
+    aviso = None
+    try:
+        from radiov import youtube as Y
+        ids_dentro = {r[0] for r in db.query(models.Track.youtube_id)
+                      .filter(models.Track.youtube_id.isnot(None)).all()}
+        for cand in Y.search_videos(texto, 12):
+            vid = cand.get("id")
+            if not vid:
+                continue
+            resultados.append({
+                "video_id": vid,
+                "titulo": cand.get("title") or "",
+                "canal": cand.get("uploader") or cand.get("channel") or "",
+                "duracion": cand.get("duration"),
+                "en_catalogo": vid in ids_dentro,
+            })
+    except Exception as e:  # noqa: BLE001
+        # Que YouTube no conteste (o tarde) no puede dejar la página inservible: sin resultados se
+        # sigue pudiendo pedir escribiendo el texto a mano. Se avisa en vez de mentir con una lista
+        # vacía, que parecería «no existe esa canción».
+        aviso = f"No se pudo preguntar a YouTube ({type(e).__name__}). Puedes pedirla escribiéndola."
+        resultados = []
+
+    return {
+        "consulta": texto,
+        "aviso": aviso,
+        "en_biblioteca": [
+            {"id": t.id, "titulo": t.title, "artista": t.artist, "duracion": t.duration}
+            for t in biblioteca
+        ],
+        "en_youtube": resultados,
+        "en_cola": en_cola,
+    }
+
+
 @router.post("/requests")
 def create_request(data: dict, db: Session = Depends(get_db),
                    user: models.User = Depends(get_current_user)):
@@ -60,9 +140,15 @@ def create_request(data: dict, db: Session = Depends(get_db),
           .filter(models.Request.status == "pendiente").first())
     if ya:
         return {"ok": True, "text": text, "repetida": True}
-    db.add(models.Request(user_id=user.id, text=text, status="pendiente"))
+    # El vídeo exacto, si el usuario lo ha elegido en la lista de resultados. Con esto el
+    # recolector baja ESA versión y no la que le parezca al buscador.
+    video = (data.get("youtube_id") or "").strip() or None
+    duracion = data.get("duration")
+    db.add(models.Request(user_id=user.id, text=text, status="pendiente",
+                          youtube_id=video,
+                          duration=float(duracion) if duracion else None))
     db.commit()
-    return {"ok": True, "text": text}
+    return {"ok": True, "text": text, "youtube_id": video}
 
 
 @router.get("/requests")

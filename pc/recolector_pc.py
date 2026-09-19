@@ -307,16 +307,35 @@ def atender_peticiones(cfg: dict, maximo: int = 5) -> int:
     resueltas = 0
     for pet in peticiones:
         texto = (pet.get("text") or "").strip()
-        if not texto:
+        video = (pet.get("youtube_id") or "").strip()
+        if not texto and not video:
             continue
-        print(f"    piden: «{texto}»")
+        print(f"    piden: «{texto}»" + (f" (vídeo {video} elegido a mano)" if video else ""))
         tid = None
-        try:
-            tid = pipeline.process_text(texto, source="peticion")
-        except Exception as e:  # noqa: BLE001
-            print(f"      el camino normal falló: {str(e)[:80]}")
-        if tid is None:
-            # Segundo intento: buscar el texto tal cual en YouTube (mashups, sesiones, cruces).
+        # Si el usuario eligió un vídeo CONCRETO en la lista de resultados de la página de pedir
+        # canciones, se baja ESE y no se busca por texto: de un mismo tema hay el original, el
+        # remix, el directo y veinte subidas, y bajar «la que parezca» es bajar otra cosa.
+        if video:
+            try:
+                from radiov import youtube as Y
+                from radiov import pipeline as P
+                bajado = Y.download_video(video, artist="", title=texto or video)
+                if bajado:
+                    artista, titulo = P._partir_titulo({"title": texto or bajado.get("title") or ""})
+                    bajado["title"] = titulo or bajado.get("title") or texto
+                    bajado["artist"] = artista or bajado.get("artist") or ""
+                    bajado["duration"] = bajado.get("youtube_duration") or pet.get("duration")
+                    genero, idioma = P._resolve_genre_lang(bajado["artist"], bajado["title"], None, None)
+                    tid = P._persist_yt(bajado, genre=genero, language=idioma, source="peticion")
+            except Exception as e:  # noqa: BLE001
+                print(f"      no se pudo bajar el vídeo elegido: {str(e)[:80]}")
+        if tid is None and texto:
+            try:
+                tid = pipeline.process_text(texto, source="peticion")
+            except Exception as e:  # noqa: BLE001
+                print(f"      el camino normal falló: {str(e)[:80]}")
+        if tid is None and texto:
+            # Último intento: buscar el texto tal cual en YouTube (mashups, sesiones, cruces).
             try:
                 nuevos = pipeline.process_youtube_seed(
                     {"mode": "youtube", "query": texto}, max_downloads=1)

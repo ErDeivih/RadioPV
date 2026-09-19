@@ -71,4 +71,14 @@ if args.cuarentena:
 else:
     print("\n[..] sólo información: añade --cuarentena para sacarlas de circulación")
 
+# El idioma se corrige SIEMPRE, aunque no se toque el estado: así el panel de administración puede
+# filtrarlas por idioma (`language = 'pt'`), que es como el usuario hace la limpieza. Sin esto
+# seguían contando como español y no había forma de seleccionarlas todas de una vez.
+ids_idioma = [f["id"] for f in sospechosas if (f["language"] or "") != "pt"]
+if ids_idioma:
+    q = ",".join("?" * len(ids_idioma))
+    con.execute(f"UPDATE tracks SET language='pt' WHERE id IN ({q})", ids_idioma)
+    con.commit()
+    print(f"[OK] {len(ids_idioma)} fichas marcadas con idioma 'pt' (filtrables en el panel)")
+
 con.close()

@@ -158,6 +158,9 @@ def peticiones(limite: int = Query(20, ge=1, le=200)) -> dict:
                  .limit(limite).all())
         return {"total": len(filas),
                 "peticiones": [{"id": r.id, "text": r.text,
+                                # El vídeo elegido a mano, si lo hay: el PC baja ESE y no busca.
+                                "youtube_id": r.youtube_id,
+                                "duration": r.duration,
                                 "pedida": r.created_at.isoformat(timespec="seconds")
                                 if r.created_at else None} for r in filas]}
     finally:

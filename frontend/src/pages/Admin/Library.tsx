@@ -63,6 +63,16 @@ interface Atajo {
 
 const ATAJOS: Atajo[] = [
   {
+    clave: 'portugues',
+    etiqueta: 'En portugués',
+    porque:
+      'El catálogo es en español (España y Latinoamérica) e inglés, con italiano y francés de ' +
+      'siempre. El portugués no entra: estas se colaron por búsquedas de sesiones de DJ en YouTube.',
+    filtros: { language: 'pt' },
+    n: (f) => f.languages.find((l) => l.valor === 'pt')?.n ?? 0,
+    vetar: false,
+  },
+  {
     clave: 'sin-idioma',
     etiqueta: 'Sin idioma detectado',
     porque: 'No se ha podido saber en qué idioma cantan. La política es español, latino e inglés.',

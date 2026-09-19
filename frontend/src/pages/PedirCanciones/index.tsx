@@ -1,12 +1,27 @@
-import { FC, useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Empty, Input, List, Space, Tag, Typography, message } from 'antd';
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Card,
+  Empty,
+  Input,
+  List,
+  Space,
+  Spin,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from 'antd';
 
 // Services
 import {
   borrarPeticion,
+  buscarParaPedir,
   crearPeticion,
+  duracionLegible,
   misPeticiones,
-  yaEstaEnLaBiblioteca,
+  type BusquedaParaPedir,
   type Peticion,
 } from '../../services/peticiones';
 
@@ -40,25 +55,38 @@ const ESTADOS: Record<string, { color: string; texto: string; ayuda: string }> =
 /**
  * Página para pedir una canción que no esté en la biblioteca.
  *
- * POR QUÉ
- * -------
- * La app podía crear peticiones desde que existe la tabla `requests`, pero **nadie las consumía**:
- * se quedaban en «pendiente» para siempre. Ahora el recolector del PC las recoge, las busca y
- * contesta. Y sirve para lo que más se pide: mashups, remixes y sesiones de DJ, que no están en
- * las tiendas de música y se buscan directamente en YouTube.
+ * POR QUÉ ASÍ
+ * -----------
+ * Primero era una caja de texto a ciegas: escribías y a esperar. Tres problemas de eso, y los tres
+ * se resuelven con la búsqueda:
  *
- * La página avisa antes de pedir si la canción ya está: buscar y no encontrarla es normal (el
- * catálogo es lo que es), pero pedir algo que ya tienes sería culpa nuestra.
+ *  1. **No sabías si ya la tenías.** Pedir algo que ya está es trabajo perdido para el recolector
+ *     (y el usuario se queda esperando algo que podía oír en el momento).
+ *  2. **No sabías cuál de las versiones se iba a bajar.** De un tema hay el original, el remix, el
+ *     directo y veinte subidas distintas; el buscador por texto bajaba la que le parecía, y muchas
+ *     veces no era la que se quería. Ahora se ven los resultados REALES de YouTube con su duración
+ *     y se elige uno.
+ *  3. **No sabías si se podía.** Ahora se ve si está en casa, si hay algo en YouTube o si ya está
+ *     pedido, antes de pedir nada.
+ *
+ * Sigue sirviendo para lo que más se pide —mashups, remixes y sesiones de DJ—, que no están en las
+ * tiendas de música y sólo se encuentran en YouTube.
  */
 export const PedirCanciones: FC = () => {
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
 
   const [texto, setTexto] = useState('');
-  const [enviando, setEnviando] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [resultado, setResultado] = useState<BusquedaParaPedir | null>(null);
+  const [enviando, setEnviando] = useState<string | null>(null); // «cualquiera» o el id del vídeo
   const [peticiones, setPeticiones] = useState<Peticion[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [coincidencias, setCoincidencias] = useState<{ id: number; title: string; artist: string }[]>([]);
+
+  // Cada búsqueda lleva un número: si el usuario escribe deprisa, sólo vale la ÚLTIMA respuesta.
+  // Sin esto, una búsqueda lenta («Bad») podía llegar después de una rápida («Bad Bunny») y dejar
+  // en pantalla los resultados de la anterior, que parece que la aplicación se ha vuelto loca.
+  const turno = useRef(0);
 
   const cargar = useCallback(async () => {
     if (!user) return;
@@ -75,36 +103,54 @@ export const PedirCanciones: FC = () => {
     void cargar();
   }, [cargar]);
 
-  // Mientras se escribe: ¿ya está en la biblioteca? Se espera un poco para no preguntar por cada
-  // letra (el catálogo está en el servidor de casa, pero no hace falta machacarlo).
-  useEffect(() => {
-    const t = setTimeout(() => {
-      yaEstaEnLaBiblioteca(texto)
-        .then(setCoincidencias)
-        .catch(() => setCoincidencias([]));
-    }, 450);
-    return () => clearTimeout(t);
-  }, [texto]);
+  const buscar = useCallback(async (q: string) => {
+    const limpio = q.trim();
+    if (limpio.length < 2) {
+      setResultado(null);
+      setBuscando(false);
+      return;
+    }
+    const mio = ++turno.current;
+    setBuscando(true);
+    try {
+      const r = await buscarParaPedir(limpio);
+      if (mio === turno.current) setResultado(r);
+    } catch {
+      if (mio === turno.current) setResultado(null);
+    } finally {
+      if (mio === turno.current) setBuscando(false);
+    }
+  }, []);
 
-  const pedir = async () => {
+  // Se busca solo mientras se escribe, con una pausa: es lo que hace que la página se sienta viva
+  // (y evita preguntarle a YouTube por cada letra).
+  useEffect(() => {
+    const t = setTimeout(() => void buscar(texto), 600);
+    return () => clearTimeout(t);
+  }, [texto, buscar]);
+
+  const pedir = async (youtubeId?: string, duracion?: number | null) => {
     const limpio = texto.trim();
     if (limpio.length < 3) {
       message.warning('Escribe al menos el nombre de la canción');
       return;
     }
-    setEnviando(true);
+    setEnviando(youtubeId ?? 'cualquiera');
     try {
-      const r = await crearPeticion(limpio);
+      const r = await crearPeticion(limpio, youtubeId, duracion);
       message.success(
-        r.repetida ? 'Ya la habías pedido: sigue en cola' : 'Pedida: se descargará en la próxima vuelta'
+        r.repetida
+          ? 'Ya la habías pedido: sigue en cola'
+          : youtubeId
+            ? 'Pedida esa versión: se descargará en la próxima vuelta'
+            : 'Pedida: se descargará en la próxima vuelta'
       );
-      setTexto('');
-      setCoincidencias([]);
       await cargar();
+      await buscar(limpio);
     } catch {
       message.error('No se ha podido pedir (¿sesión caducada?)');
     } finally {
-      setEnviando(false);
+      setEnviando(null);
     }
   };
 
@@ -131,34 +177,36 @@ export const PedirCanciones: FC = () => {
     );
   }
 
+  const hayAlgo =
+    !!resultado &&
+    (resultado.en_biblioteca.length > 0 ||
+      resultado.en_youtube.length > 0 ||
+      resultado.en_cola.length > 0);
+
   return (
-    <div style={{ padding: 16, maxWidth: 760, margin: '0 auto' }}>
+    <div style={{ padding: 16, maxWidth: 820, margin: '0 auto' }}>
       <Title level={2} style={{ marginBottom: 4 }}>
         Pedir una canción
       </Title>
       <Paragraph type='secondary' style={{ marginBottom: 16 }}>
-        Si no está en la biblioteca, pídela y se descargará sola. Vale también para lo que no está
-        en las tiendas de música: <b>mashups</b>, <b>remixes</b> y <b>sesiones de DJ</b>. Escríbelo
-        como quieras —«Artista - Canción», «Canción A x Canción B», «Sesión de reggaetón viejo»— y
-        se busca tal cual.
+        Busca aquí: primero se mira si ya está en la biblioteca y, si no, se enseñan las versiones
+        que hay en YouTube para que elijas la tuya. Vale también para lo que no está en las tiendas
+        de música: <b>mashups</b>, <b>remixes</b> y <b>sesiones de DJ</b>.
       </Paragraph>
 
       <Card size='small' style={{ marginBottom: 16 }}>
-        <Space.Compact style={{ width: '100%' }}>
-          <Input
-            size='large'
-            placeholder='p. ej. «Bad Bunny x Rosalía» o «sesión de reggaetón viejo»'
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onPressEnter={() => void pedir()}
-            allowClear
-          />
-          <Button size='large' type='primary' loading={enviando} onClick={() => void pedir()}>
-            Pedir
-          </Button>
-        </Space.Compact>
+        <Input.Search
+          size='large'
+          placeholder='p. ej. «Bad Bunny x Rosalía» o «sesión de reggaetón viejo»'
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onSearch={(v) => void buscar(v)}
+          enterButton='Buscar'
+          allowClear
+        />
 
-        {coincidencias.length > 0 && (
+        {/* ---------- lo que YA está en casa ---------- */}
+        {resultado && resultado.en_biblioteca.length > 0 && (
           <Alert
             style={{ marginTop: 12 }}
             type='success'
@@ -166,21 +214,120 @@ export const PedirCanciones: FC = () => {
             message='Esto ya está en tu biblioteca'
             description={
               <Space direction='vertical' size={4} style={{ width: '100%' }}>
-                {coincidencias.map((c) => (
+                {resultado.en_biblioteca.slice(0, 5).map((c) => (
                   <Space key={c.id} size={8} wrap>
                     <Text>
-                      <b>{c.artist}</b> — {c.title}
+                      <b>{c.artista}</b> — {c.titulo}
                     </Text>
+                    {duracionLegible(c.duracion) && (
+                      <Text type='secondary' style={{ fontSize: 12 }}>
+                        {duracionLegible(c.duracion)}
+                      </Text>
+                    )}
                     <Button size='small' onClick={() => escuchar(c.id)}>
                       Escuchar
                     </Button>
                   </Space>
                 ))}
-                <Text type='secondary'>Si lo que quieres es otra versión, pídelo igualmente.</Text>
+                <Text type='secondary' style={{ fontSize: 12 }}>
+                  Si lo que quieres es otra versión, búscala abajo y pide la que te interese.
+                </Text>
               </Space>
             }
           />
         )}
+
+        {/* ---------- lo que ya está pedido ---------- */}
+        {resultado && resultado.en_cola.length > 0 && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type='info'
+            showIcon
+            message='Ya está pedida y sigue en cola'
+            description={resultado.en_cola.map((p) => p.text).join(' · ')}
+          />
+        )}
+
+        {/* ---------- versiones de YouTube ---------- */}
+        {buscando && (
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <Spin size='small' />{' '}
+            <Text type='secondary'>Buscando versiones en YouTube…</Text>
+          </div>
+        )}
+
+        {!buscando && resultado?.aviso && (
+          <Alert style={{ marginTop: 12 }} type='warning' showIcon message={resultado.aviso} />
+        )}
+
+        {!buscando && resultado && resultado.en_youtube.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <Text strong>Versiones encontradas en YouTube</Text>
+            <List
+              size='small'
+              dataSource={resultado.en_youtube}
+              renderItem={(r) => (
+                <List.Item
+                  actions={[
+                    r.en_catalogo ? (
+                      <Tag key='ya' color='green'>
+                        Ya la tienes
+                      </Tag>
+                    ) : (
+                      <Button
+                        key='pedir'
+                        size='small'
+                        type='primary'
+                        loading={enviando === r.video_id}
+                        onClick={() => void pedir(r.video_id, r.duracion)}
+                      >
+                        Pedir esta
+                      </Button>
+                    ),
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={<Text strong>{r.titulo}</Text>}
+                    description={
+                      <Space size={8} wrap>
+                        <Text type='secondary' style={{ fontSize: 12 }}>
+                          {r.canal || 'canal desconocido'}
+                        </Text>
+                        {duracionLegible(r.duracion) && (
+                          <Tag>{duracionLegible(r.duracion)}</Tag>
+                        )}
+                      </Space>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          </div>
+        )}
+
+        {!buscando && resultado && !hayAlgo && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type='warning'
+            showIcon
+            message='Ni está en la biblioteca ni se ha encontrado en YouTube'
+            description='Repasa cómo se escribe, o pídela igualmente y el recolector la buscará con más calma en la próxima vuelta.'
+          />
+        )}
+
+        {/* ---------- pedir a mano (sin elegir versión) ---------- */}
+        <div style={{ marginTop: 16 }}>
+          <Space wrap>
+            <Tooltip title='La busca el recolector: primero en las tiendas de música y, si no, en YouTube'>
+              <Button loading={enviando === 'cualquiera'} onClick={() => void pedir()}>
+                {resultado?.en_youtube.length ? 'Que la busque el recolector' : 'Pedir'}
+              </Button>
+            </Tooltip>
+            <Text type='secondary' style={{ fontSize: 12 }}>
+              Se pide tal cual está escrito arriba, sin elegir versión.
+            </Text>
+          </Space>
+        </div>
       </Card>
 
       <Card
@@ -212,17 +359,33 @@ export const PedirCanciones: FC = () => {
                     p.status === 'descargada' ? (
                       <Button
                         size='small'
-                        onClick={() =>
-                          navigate(`/search/${encodeURIComponent(p.text.split(' - ')[0] ?? '')}`)
-                        }
+                        key='buscar'
+                        onClick={() => {
+                          setTexto(p.text);
+                          void buscar(p.text);
+                        }}
                       >
-                        Buscar
+                        Escuchar
+                      </Button>
+                    ) : null,
+                    p.status === 'fallida' ? (
+                      <Button
+                        size='small'
+                        key='reintentar'
+                        loading={enviando === 'cualquiera' && texto === p.text}
+                        onClick={() => {
+                          setTexto(p.text);
+                          void pedir();
+                        }}
+                      >
+                        Reintentar
                       </Button>
                     ) : null,
                     <Button
                       size='small'
                       type='text'
                       danger
+                      key='quitar'
                       onClick={async () => {
                         await borrarPeticion(p.id);
                         await cargar();
@@ -252,6 +415,11 @@ export const PedirCanciones: FC = () => {
           />
         )}
       </Card>
+
+      <Paragraph type='secondary' style={{ fontSize: 12, marginTop: 12 }}>
+        Las peticiones las atiende el recolector que corre en el PC de casa, cada 15 minutos.{' '}
+        <a onClick={() => navigate('/')}>Volver al inicio</a>
+      </Paragraph>
     </div>
   );
 };
