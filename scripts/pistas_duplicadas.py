@@ -34,12 +34,28 @@ con.row_factory = sqlite3.Row
 
 print(f"=== {args.base}: fichas repetidas ===")
 
+# OJO CON EL ESTADO: una ficha 'retirada' es una copia de más que YA está fuera de la aplicación (la
+# marcó `unificar_duplicadas.py`). Sigue en la base a propósito —es reversible— pero no molesta a
+# nadie. Lo que hay que mirar es cuántas copias se pueden VER, que es lo que nota el usuario: si aquí
+# salieran todas, parecería que no se ha arreglado nada.
+ACTIVAS = ("descargada", "incompleta", "cuarentena", "pendiente", "perdida")
+
 # 1) Mismo vídeo de YouTube en varias fichas (es el caso que rompía las comprobaciones)
 print("\n--- por id de YouTube (varias fichas, mismo vídeo) ---")
 grupos = con.execute(
     "SELECT youtube_id, COUNT(*) n FROM tracks WHERE youtube_id IS NOT NULL AND youtube_id <> ''"
     " GROUP BY youtube_id HAVING n > 1 ORDER BY n DESC").fetchall()
+visibles = 0
+for g in grupos:
+    filas = con.execute(
+        "SELECT id, title, artist, status, file_path FROM tracks WHERE youtube_id=?",
+        (g["youtube_id"],)).fetchall()
+    activas = [f for f in filas if (f["status"] or "") in ACTIVAS]
+    if len(activas) > 1:
+        visibles += 1
 print(f"   vídeos con más de una ficha: {len(grupos)}")
+print(f"   de esos, con MÁS DE UNA VISIBLE en la aplicación: {visibles}"
+      f"{'  ← esto es lo que hay que arreglar' if visibles else '  (bien: las de más están retiradas)'}")
 sin_fichero = 0
 for g in grupos[:args.limite]:
     filas = con.execute(
@@ -48,14 +64,14 @@ for g in grupos[:args.limite]:
     estados = []
     for f in filas:
         existe = bool(f["file_path"]) and (RAIZ / f["file_path"]).exists()
-        if not existe:
+        if not existe and (f["status"] or "") in ACTIVAS:
             sin_fichero += 1
         estados.append(f"id={f['id']}{'✓' if existe else '✗'}")
     print(f"   {g['youtube_id']:<14} {g['n']} fichas ({', '.join(estados)})")
     for f in filas:
         print(f"        id={f['id']:<6} [{str(f['status'])[:10]:<10}] {f['artist']} - {f['title']}"[:112])
 if sin_fichero:
-    print(f"   [!] {sin_fichero} de esas fichas apuntan a un fichero que NO existe")
+    print(f"   [!] {sin_fichero} fichas VISIBLES apuntan a un fichero que NO existe")
 
 # 2) Mismo artista y título en varias fichas
 print("\n--- por artista y título ---")
