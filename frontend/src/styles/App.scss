@@ -1151,6 +1151,28 @@ span.ant-dropdown-trigger,
     align-items: center;
   }
 
+  /* El botón blanco (el de «Iniciar sesión» de la barra de arriba): es un `button` propio con
+     `padding: 0` y `min-inline-size: 0`, así que su alto era el del texto (24 px) y en el móvil se
+     fallaba el toque. Se le da altura de dedo sin cambiar la letra. */
+  .white-button {
+    min-block-size: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* La «X» de borrar del campo de búsqueda (antd) mide 12x12 px: el dedo no la acierta. Se le
+     agranda el ÁREA que recibe el toque con un pseudo-elemento, sin agrandar el dibujo (el campo
+     sólo mide 44 px de alto y un icono de 44 se saldría). */
+  .ant-input-clear-icon {
+    position: relative;
+  }
+  .ant-input-clear-icon::after {
+    content: '';
+    position: absolute;
+    inset: -14px -12px;
+  }
+
   /* Enlaces de la barra de arriba que son un botón de texto dentro de un enlace («Pedir», «Admin»).
      El enlace medía 39 px de alto (y el botón pequeño, menos): la auditoría de usabilidad lo
      marcaba en todas las pantallas. Se le da la altura mínima al enlace Y al botón de dentro, y así
