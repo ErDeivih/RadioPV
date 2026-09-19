@@ -47,11 +47,17 @@ export const elegirCarpeta = async (): Promise<ManejadorCarpeta | null> => {
 /** Nombre de fichero seguro para cualquier sistema («Artista - Título.mp3»). */
 export const nombreDeFichero = (artista: string, titulo: string): string => {
   const limpio = `${artista} - ${titulo}`
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')   // caracteres prohibidos en Windows
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 120);
-  return `${limpio || 'cancion'}.mp3`;
+    // Guiones y espacios de los extremos fuera: sin esto, dos campos vacíos dejaban «-.mp3».
+    .replace(/^[\s-]+|[\s-]+$/g, '')
+    .slice(0, 120)
+    .trim();
+  // Y si no queda ni una letra ni un número, un nombre por defecto: un fichero sin nombre no se
+  // puede escribir.
+  const nombre = /[a-z0-9]/i.test(limpio) ? limpio : 'cancion';
+  return `${nombre}.mp3`;
 };
 
 /** Trae el audio de una canción como blob (usa el mismo token de streaming que el reproductor). */
