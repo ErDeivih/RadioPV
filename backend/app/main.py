@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import ALLOWED_ORIGINS, MEDIA_ROOT
 from .database import Base, engine, ensure_schema
 from . import models  # noqa: F401  (registra las tablas)
-from .routers import auth, tracks, artists, library, playlists, recommend, stream, facets, wrapped, follows, stats, admin
+from .routers import auth, tracks, artists, library, playlists, recommend, stream, facets, wrapped, follows, stats, admin, collector
 
 Base.metadata.create_all(bind=engine)
 ensure_schema()          # añade columnas e índices que falten en bases antiguas
@@ -31,7 +31,7 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "same-origin"
     return response
 
-for r in (auth.router, tracks.router, artists.router, library.router, playlists.router, recommend.router, stream.router, facets.router, wrapped.router, follows.router, stats.router, admin.router):
+for r in (auth.router, tracks.router, artists.router, library.router, playlists.router, recommend.router, stream.router, facets.router, wrapped.router, follows.router, stats.router, admin.router, collector.router):
     app.include_router(r)
 
 # Carátulas y fotos de artista: la BD aporta el NOMBRE, la raíz la monta el servidor.

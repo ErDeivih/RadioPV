@@ -82,3 +82,7 @@ desktop.ini
 _deploy/
 _transfer-*.tar
 
+
+# Configuración del recolector del PC: lleva el token, no va a git
+pc/config.json
+_pc_data/

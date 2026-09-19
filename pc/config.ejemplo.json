@@ -1,0 +1,28 @@
+{
+  "nombre_pc": "pc-de-casa",
+
+  "//api": "La API por el mismo sitio que usa el móvil: nginx la publica en /api.",
+  "api": "http://servidor:8090/api",
+
+  "//token": "El token de máquina. Tiene que ser el MISMO que RADIOPV_INGEST_TOKEN en el .env del servidor.",
+  "token": "PON-AQUI-EL-TOKEN",
+
+  "//servidor": "Para copiar los ficheros por ssh (los ficheros NO van por la API: son cientos de megas).",
+  "servidor": "david@servidor.local",
+
+  "//musica_local": "Dónde descarga el PC. Después se copia a la misma ruta relativa en el servidor.",
+  "musica_local": "E:/MusicaRadioPV",
+
+  "//datos_locales": "Base de datos y carátulas del PC. Independiente de la del servidor.",
+  "datos_locales": "F:/EspacioCodigo/RadioPV/_pc_data",
+
+  "//rutas_servidor": "Dónde dejar cada cosa en el servidor (los directorios que ya usa RadioPV).",
+  "musica_servidor": "/srv/data/media/music",
+  "covers_servidor": "/opt/stacks/radiopv/data/covers",
+  "artists_servidor": "/opt/stacks/radiopv/data/artists",
+
+  "//ritmo": "Cuánto recolecta por vuelta y cuánto espera entre vueltas.",
+  "minutos_por_vuelta": 20,
+  "max_por_vuelta": 10,
+  "minutos_entre_vueltas": 5
+}
