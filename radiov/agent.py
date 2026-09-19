@@ -317,11 +317,17 @@ class AgentManager:
         label = seed.get("query") or seed.get("genre") or "artistas"
         with self._lock:
             self.progress["current"] = f"semilla: {label}"
-        client = deezer.DeezerClient()
         max_dl = int(load_settings().get("agent_downloads_per_seed_per_pass", 6))
         try:
-            added = pipeline.process_seed(seed, client=client, progress=self.progress,
-                                          max_downloads=max_dl)
+            # Las semillas de YouTube (mashups, remixes y sesiones de DJ) se buscan ahí, no en
+            # Deezer: es donde se publica ese contenido. Ver `process_youtube_seed`.
+            if seed.get("mode") == "youtube":
+                added = pipeline.process_youtube_seed(seed, progress=self.progress,
+                                                     max_downloads=max_dl)
+            else:
+                client = deezer.DeezerClient()
+                added = pipeline.process_seed(seed, client=client, progress=self.progress,
+                                              max_downloads=max_dl)
         except Exception as e:  # noqa: BLE001
             db.log_event(f"Fallo en semilla {label}: {e}", "error")
             added = 0

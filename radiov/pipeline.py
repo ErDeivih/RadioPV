@@ -405,6 +405,95 @@ def process_priority_item(item: dict) -> int:
     return added
 
 
+def _partir_titulo(cand: dict) -> tuple[str, str]:
+    """Separa «Artista - Tema» del título de un vídeo de YouTube.
+
+    En YouTube los mashups y las sesiones se titulan de mil maneras:
+        «DJ Pino - Mashup Reggaeton 2025»
+        «SET DJ YURI PEDRADA - TRAVA CHIP»
+        «Reggaeton Viejo Mix (1 hora)»          → sin artista: se usa el canal
+    Si no hay guion, el artista es el canal (limpiando el « - Topic» de los canales automáticos).
+    """
+    titulo = (cand.get("clean_title") or cand.get("title") or "").strip()
+    canal = (cand.get("channel") or cand.get("artist") or "").strip()
+    canal = re.sub(r"\s*-\s*topic$", "", canal, flags=re.I)
+
+    if " - " in titulo:
+        izquierda, derecha = titulo.split(" - ", 1)
+        # Sólo se parte si las dos partes tienen contenido razonable: hay títulos con guiones que
+        # son parte del nombre («Reggaeton - Old School - Vol. 1»).
+        if len(izquierda) >= 2 and len(derecha) >= 2:
+            return izquierda.strip(), derecha.strip()
+    return canal, titulo
+
+
+def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
+                         max_downloads: Optional[int] = None) -> int:
+    """Busca una frase EN YOUTUBE y descarga lo que encuentre.
+
+    POR QUÉ EXISTE
+    --------------
+    Las semillas de mashups, remixes y sesiones de DJ pedían candidatos a **Deezer**
+    (`deezer.discover_seed`), y Deezer no tiene ese contenido: los mashups y las sesiones se
+    publican en YouTube, no en las tiendas de música. Resultado medido: con 13 semillas de mashup,
+    el catálogo tenía **40 pistas** de ese tipo. La búsqueda no encontraba nada porque buscaba
+    donde no está.
+
+    Aquí se busca directamente en YouTube (`ytsearch`) y se descarga cada vídeo. Lo que entra pasa
+    por la misma puerta de calidad y el mismo etiquetado que todo lo demás, así que una sesión de
+    dos horas se acepta como sesión y un mashup corto como mashup.
+    """
+    from . import youtube as Y
+
+    cfg = load_settings()
+    query = seed.get("query") or ""
+    if not query:
+        return 0
+    cuantos = int(seed.get("n") or cfg.get("youtube_resultados_por_busqueda", 20))
+
+    candidatos = Y.search_videos(query, cuantos)
+    random.shuffle(candidatos)          # no siempre los mismos primeros resultados
+    added = 0
+
+    for cand in candidatos:
+        if max_downloads is not None and added >= max_downloads:
+            break
+        if progress is not None and progress.get("stop"):
+            break
+        vid = cand.get("id")
+        if not vid or db.track_exists(vid):
+            continue
+
+        artista, titulo = _partir_titulo(cand)
+        if not titulo or len(titulo) < 3:
+            continue
+        if db.track_exists_by_artist_title(artista, titulo):
+            continue
+        if db.is_blacklisted(M.BLACKLIST_ARTIST, artista):
+            continue
+        if db.is_blacklisted(M.BLACKLIST_SONG, f"{titulo}|{artista}"):
+            continue
+
+        genero, idioma = _resolve_genre_lang(artista, titulo, seed.get("genre"), seed.get("language"))
+        bajado = Y.download_video(vid, artist=artista, title=titulo)
+        if not bajado:
+            continue
+
+        # El título que manda es el del vídeo, ya limpio; el artista, el que hayamos deducido.
+        bajado["title"] = titulo
+        bajado["artist"] = artista or bajado.get("artist") or ""
+        bajado["duration"] = bajado.get("youtube_duration") or cand.get("duration")
+        tid = _persist_yt(bajado, genre=genero, language=idioma, source=M.SOURCE_AGENT)
+        if tid is not None:
+            added += 1
+        if progress is not None:
+            progress["last"] = f"{artista} - {titulo}"
+            progress["seen"] += 1
+
+    db.log_event(f"🔎 Búsqueda en YouTube «{query}»: +{added} canciones", "info")
+    return added
+
+
 def process_seed(seed: dict, client: Optional[deezer.DeezerClient] = None,
                  progress: Optional[dict] = None, max_downloads: Optional[int] = None) -> int:
     """Descubre candidatos de una semilla y descarga los que falten. Devuelve el nº añadido."""

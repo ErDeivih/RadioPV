@@ -85,6 +85,33 @@ def _search_candidates(query: str, n: int = 8) -> list[dict]:
     return cands
 
 
+def search_videos(query: str, n: int = 15) -> list[dict]:
+    """Busca vídeos en YouTube y devuelve los candidatos (sin descargar).
+
+    Hace falta para el contenido que **no existe en las tiendas de música**: mashups, remixes
+    caseros y sesiones de DJ. Eso se publica en YouTube y sólo en YouTube, así que buscar en
+    Deezer (que es lo que hacía el recolector) no encontraba nada.
+    """
+    return _search_candidates(query, n)
+
+
+def download_video(video_id: str, artist: str = "", title: str = "") -> Optional[dict]:
+    """Descarga un vídeo concreto de YouTube y devuelve la ficha del fichero.
+
+    Es la mitad que faltaba para las búsquedas de YouTube: `_search_candidates` dice QUÉ hay y
+    `search_and_download` sabe bajar «la mejor coincidencia para esta canción», pero aquí ya se
+    sabe exactamente qué vídeo se quiere.
+    """
+    cfg = load_settings()
+    outdir = Path(cfg["download_dir"])
+    outdir.mkdir(parents=True, exist_ok=True)
+    try:
+        return _download_by_id(video_id, outdir, artist=artist, title=title)
+    except Exception as e:  # noqa: BLE001
+        db.log_event(f"⚠️ No se pudo descargar el vídeo {video_id}: {str(e)[:120]}", "warning")
+        return None
+
+
 def _best_candidate(cands: list[dict], artist: str, title: str,
                     expected_duration: Optional[float]) -> Optional[dict]:
     def score(c):
