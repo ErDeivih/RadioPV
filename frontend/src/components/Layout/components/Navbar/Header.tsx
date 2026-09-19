@@ -61,8 +61,9 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
     (prev, next) => prev?.id === next?.id
   );
 
-  // `is_admin` puede no estar en el tipo del usuario: se lee de forma defensiva.
-  const esAdmin = Boolean((user as unknown as { is_admin?: boolean } | null)?.is_admin);
+  // `is_admin` viene de la API y ahora el adaptador lo conserva (antes se perdía y el enlace del
+  // panel no aparecía nunca).
+  const esAdmin = Boolean(user?.is_admin);
 
   return (
     <div

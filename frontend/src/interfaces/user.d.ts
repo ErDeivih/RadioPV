@@ -30,4 +30,11 @@ export interface User {
     filter_locked: boolean;
   };
   email?: string;
+  /**
+   * ¿Es administrador? La API lo manda en `/auth/me`, pero el adaptador (`toUser`) **no lo
+   * copiaba**, así que la interfaz creía que nadie era administrador: el panel de administración
+   * contestaba 403 «Esta sección es solo para administradores» **aunque la API diera todos los
+   * datos**. O sea: el panel existía, funcionaba por dentro, y era imposible abrirlo.
+   */
+  is_admin?: boolean;
 }

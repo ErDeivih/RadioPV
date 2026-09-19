@@ -18,9 +18,11 @@ const { Title, Paragraph } = Typography;
 export const Admin: FC = () => {
   const user = useAppSelector((state) => state.auth.user);
 
-  // El tipo de usuario del frontend puede no incluir `is_admin` todavía: se lee de forma
-  // defensiva para no romper la compilación.
-  const esAdmin = Boolean((user as unknown as { is_admin?: boolean } | null)?.is_admin);
+  // `is_admin` viaja en `/auth/me` y el adaptador lo copia al usuario de la interfaz. Antes se
+  // perdía por el camino, así que esta comprobación era **siempre falsa**: el panel contestaba 403
+  // a todo el mundo, incluido el administrador de verdad. Toda la gestión de la biblioteca (los
+  // atajos de limpieza, el borrado en masa, la lista negra) era inalcanzable desde la interfaz.
+  const esAdmin = Boolean(user?.is_admin);
 
   if (!user) return null;
 

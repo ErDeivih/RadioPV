@@ -28,6 +28,9 @@ export const toUser = (u: MeOut): User => ({
   followers: { href: null, total: 0 },
   external_urls: { spotify: '' },
   explicit_content: { filter_enabled: false, filter_locked: false },
+  // Sin esto, el panel de administración daba 403 a todo el mundo: la API manda `is_admin`, pero
+  // aquí se perdía por el camino y la interfaz no tenía forma de saber quién es administrador.
+  is_admin: u.is_admin ?? false,
 });
 
 export const toArtist = (a: ArtistOut) => ({
