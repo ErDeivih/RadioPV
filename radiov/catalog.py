@@ -758,14 +758,30 @@ def analizar_gain_missing(limit: int = 20) -> int:
     """Rellena `gain_db` (normalización de volumen a -14 LUFS, ffmpeg loudnorm) de pistas que no lo
     tienen. Con `metadata_strict=True` una pista se marca 'incompleta' si le falta gain_db, y sin
     esto las descargas nuevas se quedarían 'incompleta' para siempre (la app solo publica
-    'descargada'). Idempotente y por lotes (como analyze_energy_missing)."""
+    'descargada'). Idempotente y por lotes (como analyze_energy_missing).
+
+    LAS SESIONES LARGAS NO CABÍAN EN EL TIEMPO
+    ------------------------------------------
+    Medido en el PC: `ffmpeg loudnorm` sobre una sesión de UNA HORA tarda **173 s**, y el límite de
+    este subprocess eran **150 s**. Al pasarse, saltaba `TimeoutExpired`, el `except` lo tragaba y la
+    ganancia no se calculaba nunca: la sesión se quedaba 'incompleta' para siempre y no llegaba a la
+    aplicación. Es decir, justo el contenido más largo —sesiones de DJ, mezclas de una hora, que es
+    lo que el usuario más escucha— era el único que no podía publicarse NUNCA.
+
+    Ahora, para ficheros de más de 15 minutos se mide una **muestra de 5 minutos por el medio** y se
+    usa esa ganancia. Es una decisión consciente: el volumen de una sesión es constante de principio
+    a fin, y lo que se busca es que toda la biblioteca suene al mismo nivel; medir 5 minutos del
+    centro da ese dato en 15 s en vez de en 3 minutos por canción.
+    """
     import json
     import subprocess
+    MUESTRA_MINIMA = 900.0        # a partir de aquí (15 min) se mide una muestra
+    LARGO_MUESTRA = 300.0         # 5 minutos
     conn = db.get_conn()
     try:
         rows = conn.execute(
-            "SELECT id, file_path FROM tracks WHERE gain_db IS NULL AND file_path IS NOT NULL "
-            "AND file_path != '' LIMIT ?", (limit,)).fetchall()
+            "SELECT id, file_path, duration FROM tracks WHERE gain_db IS NULL "
+            "AND file_path IS NOT NULL AND file_path != '' LIMIT ?", (limit,)).fetchall()
     finally:
         conn.close()
     n = 0
@@ -774,14 +790,24 @@ def analizar_gain_missing(limit: int = 20) -> int:
         p = resolve_music(t["file_path"])
         if not p.exists():
             continue
+        dur = float(t.get("duration") or 0)
+        muestra = dur > MUESTRA_MINIMA
+        # `-ss`/`-t` ANTES de `-i`: así ffmpeg salta directo al trozo y no decodifica lo anterior.
+        extra = (["-ss", f"{max(0.0, dur / 2 - LARGO_MUESTRA / 2):.0f}",
+                  "-t", f"{LARGO_MUESTRA:.0f}"] if muestra else [])
         try:
             rr = subprocess.run(
-                ["ffmpeg", "-i", str(p), "-af", "loudnorm=I=-14:print_format=json", "-f", "null", "-"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=150)
+                ["ffmpeg", *extra, "-i", str(p),
+                 "-af", "loudnorm=I=-14:print_format=json", "-f", "null", "-"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=600 if muestra else 300)
             if rr.returncode != 0:
                 continue
             js = json.loads(rr.stderr[rr.stderr.rfind("{"): rr.stderr.rfind("}") + 1])
             i = float(js.get("input_i"))
+        except subprocess.TimeoutExpired:
+            db.log_event(f"⏱️ La ganancia tardó demasiado y se salta: {t['file_path']}", "warning")
+            continue
         except Exception:  # noqa: BLE001
             continue
         if i is not None:

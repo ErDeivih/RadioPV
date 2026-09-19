@@ -25,6 +25,7 @@ import argparse
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
 sys.path.insert(0, "/app" if os.path.isdir("/app") else ".")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,13 +49,21 @@ args = ap.parse_args()
 con = sqlite3.connect(f"{DIR}/{args.base}")
 con.row_factory = sqlite3.Row
 
+# SÓLO las canciones de verdad: las fichas sembradas (las que el PC apunta para no volver a bajar lo
+# que ya está en el servidor) tienen `file_path` vacío y también llevan `youtube_id`, así que sin
+# este filtro salían 5.900 «candidatas» que no son canciones descargadas aquí: el guion se ponía a
+# «completar» marcadores. Se piden las que tienen fichero, y además se comprueba que exista.
+RAIZ = Path(os.environ.get("RADIOPV_BASE_MUSIC") or os.environ.get("MUSIC_ROOT") or "/music")
 filas = con.execute(
-    "SELECT id, title, artist, year, cover_url, youtube_id, status FROM tracks"
+    "SELECT id, title, artist, year, cover_url, youtube_id, status, file_path FROM tracks"
     " WHERE youtube_id IS NOT NULL AND youtube_id <> ''"
+    "   AND file_path IS NOT NULL AND file_path <> ''"
     "   AND (year IS NULL OR cover_url IS NULL)"
     " ORDER BY (year IS NULL) DESC, id DESC").fetchall()
+filas = [f for f in filas if (RAIZ / f["file_path"]).exists()]
 
-print(f"=== {args.base}: con vídeo de YouTube y sin año o sin carátula: {len(filas)} ===")
+print(f"=== {args.base}: con vídeo de YouTube, fichero en el disco y sin año o sin carátula: "
+      f"{len(filas)} ===")
 if not filas:
     print("   nada que hacer")
     raise SystemExit(0)
