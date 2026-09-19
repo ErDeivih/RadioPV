@@ -1151,6 +1151,19 @@ span.ant-dropdown-trigger,
     align-items: center;
   }
 
+  /* Enlaces de la barra de arriba que son un botón de texto dentro de un enlace («Pedir», «Admin»).
+     El enlace medía 39 px de alto (y el botón pequeño, menos): la auditoría de usabilidad lo
+     marcaba en todas las pantallas. Se le da la altura mínima al enlace Y al botón de dentro, y así
+     el dedo acierta tanto si toca el texto como el relleno. */
+  .nav-text-link,
+  .nav-text-link > .ant-btn {
+    min-block-size: 44px;
+  }
+  .nav-text-link {
+    display: inline-flex;
+    align-items: center;
+  }
+
   /* La barra de reproducción del móvil (`.mobile-player`) y la hoja de «Sonando ahora»: son los
      controles que más se tocan con el pulgar, así que el hueco mínimo es de 44 px aunque el
      dibujo siga siendo pequeño. */

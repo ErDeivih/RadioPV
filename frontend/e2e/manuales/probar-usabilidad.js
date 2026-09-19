@@ -289,6 +289,10 @@ const medir = (p, vista) =>
       ['Me gusta', '/collection/tracks'],
       ['Mis listas', '/users/1/playlists'],
       ['Ajustes', '/settings'],
+      // La página de pedir canciones: es nueva y se usa con el dedo (se pide una canción mientras se
+      // escucha algo). Tiene su propia prueba funcional (`probar-pedir-cancion.js`); aquí se mide lo
+      // de siempre: objetivos táctiles, recortes, controles invisibles y textos en inglés.
+      ['Pedir', '/pedir'],
       // El perfil es la biblioteca: ahí también se ofrecen listas.
       ['Perfil', datos.yo ? `/users/${datos.yo}` : '/'],
       ['Género', datos.genero ? `/genre/${encodeURIComponent(datos.genero)}` : '/'],

@@ -25,9 +25,6 @@ import {
   type Peticion,
 } from '../../services/peticiones';
 
-// Utilidades
-import { useNavigate } from 'react-router-dom';
-
 // Redux
 import { useAppSelector } from '../../store/store';
 import { playerService } from '../../services/player';
@@ -73,7 +70,6 @@ const ESTADOS: Record<string, { color: string; texto: string; ayuda: string }> =
  * tiendas de música y sólo se encuentran en YouTube.
  */
 export const PedirCanciones: FC = () => {
-  const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
 
   const [texto, setTexto] = useState('');
@@ -417,8 +413,7 @@ export const PedirCanciones: FC = () => {
       </Card>
 
       <Paragraph type='secondary' style={{ fontSize: 12, marginTop: 12 }}>
-        Las peticiones las atiende el recolector que corre en el PC de casa, cada 15 minutos.{' '}
-        <a onClick={() => navigate('/')}>Volver al inicio</a>
+        Las peticiones las atiende el recolector que corre en el PC de casa, cada 15 minutos.
       </Paragraph>
     </div>
   );

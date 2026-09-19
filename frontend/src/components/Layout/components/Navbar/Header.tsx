@@ -78,9 +78,12 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
           </div> */}
 
           {/* Pedir una canción que no esté en la biblioteca. Va en la barra de arriba porque es
-              una acción que se usa de vez en cuando y hay que poder encontrarla. */}
+              una acción que se usa de vez en cuando y hay que poder encontrarla.
+              `nav-text-link` es lo que le da altura de dedo en el móvil: sin esa clase el enlace
+              medía 39 px de alto y la auditoría de usabilidad lo marcaba en TODAS las pantallas
+              (el mínimo recomendado son 44). */}
           {user && (
-            <Link to='/pedir'>
+            <Link to='/pedir' className='nav-text-link'>
               <Button size='small' type='text' aria-label='Pedir una canción'>
                 Pedir
               </Button>
@@ -88,7 +91,7 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
           )}
 
           {esAdmin && (
-            <Link to='/admin'>
+            <Link to='/admin' className='nav-text-link'>
               <Button size='small' type='text'>
                 Admin
               </Button>
