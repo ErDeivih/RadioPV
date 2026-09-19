@@ -682,7 +682,8 @@ def buscar_version_sin_intro(artist: str, title: str, track_id: int, file_path: 
             conn.close()
         db.log_event(f"🎯 Otra versión sin intro para {artist} - {title}: "
                      f"intro {intro_actual}s → {medida['intro_seg']}s", "info")
-        return (f"cambiada por {vid} ({cand.get('uploader')}): "
+        canal = cand.get("uploader") or cand.get("channel") or "canal desconocido"
+        return (f"cambiada por {vid} ({canal}): "
                 f"intro {intro_actual}s → {medida['intro_seg']}s, cola {cola_actual}s → "
                 f"{medida['cola_seg']}s")
 
