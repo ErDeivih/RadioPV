@@ -24,10 +24,12 @@ mejor que digan que están apagadas a que acepten cualquier cosa.
 """
 import os
 import secrets
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
+
+from .. import models
 
 router = APIRouter(prefix="/collector", tags=["collector"])
 
@@ -124,6 +126,69 @@ class Rec(BaseModel):
 class ImportarIn(BaseModel):
     pistas: list[Rec] = Field(default_factory=list)
     origen: str = "pc"
+
+
+class PeticionEstado(BaseModel):
+    """Lo que el PC contesta sobre una canción pedida desde la app."""
+
+    estado: Literal["descargada", "fallida"]
+    detalle: Optional[str] = None
+
+
+@router.get("/peticiones", summary="Canciones pedidas desde la app y aún sin resolver",
+            dependencies=[Depends(require_ingest_token)])
+def peticiones(limite: int = Query(20, ge=1, le=200)) -> dict:
+    """Las peticiones pendientes, para que el PC las descargue.
+
+    La tabla `requests` existía desde el principio y la app podía crear peticiones… pero **no las
+    consumía nadie**: se quedaban en `pendiente` para siempre (había 21 esperando). El recolector
+    se había mudado al PC, así que es el PC quien tiene que recogerlas, descargarlas y contestar.
+    """
+    import sys
+    if "/app" not in sys.path:
+        sys.path.insert(0, "/app")
+
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        filas = (db.query(models.Request)
+                 .filter(models.Request.status == "pendiente")
+                 .order_by(models.Request.created_at.asc())
+                 .limit(limite).all())
+        return {"total": len(filas),
+                "peticiones": [{"id": r.id, "text": r.text,
+                                "pedida": r.created_at.isoformat(timespec="seconds")
+                                if r.created_at else None} for r in filas]}
+    finally:
+        db.close()
+
+
+@router.post("/peticiones/{peticion_id}", summary="El PC dice qué ha pasado con una petición",
+             dependencies=[Depends(require_ingest_token)])
+def resolver_peticion(peticion_id: int, datos: PeticionEstado) -> dict:
+    """Marca la petición como resuelta (descargada) o como no encontrada (fallida).
+
+    Se contesta siempre, incluso cuando no se encuentra: si se dejara en `pendiente`, el PC volvería
+    a intentarlo en cada vuelta y la página del usuario se quedaría en «en cola» para siempre, que
+    es justo lo que pasaba antes.
+    """
+    import sys
+    if "/app" not in sys.path:
+        sys.path.insert(0, "/app")
+
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        r = db.query(models.Request).filter_by(id=peticion_id).first()
+        if not r:
+            raise HTTPException(404, "Petición no encontrada")
+        r.status = datos.estado
+        db.commit()
+        return {"ok": True, "estado": r.status, "texto": r.text}
+    finally:
+        db.close()
 
 
 @router.post("/importar", summary="Sube las pistas nuevas del PC al catálogo",

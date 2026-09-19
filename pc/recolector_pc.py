@@ -258,6 +258,67 @@ def recolectar(cfg: dict, minutos: float, maximo: int) -> int:
     return max(0, hechas)
 
 
+def atender_peticiones(cfg: dict, maximo: int = 5) -> int:
+    """Descarga las canciones que se han pedido desde la app y contesta qué ha pasado.
+
+    Antes estas peticiones se quedaban en `pendiente` **para siempre**: la app las creaba y nadie
+    las recogía (había 21 esperando). Ahora las atiende el recolector del PC.
+
+    Se intenta primero el camino normal (artista y título, con la ficha de Deezer) y, si no sale,
+    una **búsqueda directa en YouTube**: es lo que hace falta para lo que se pide muchas veces
+    —mashups, remixes, sesiones de DJ—, donde no hay «artista - título» que valga sino un vídeo
+    concreto.
+    """
+    from radiov import db as rdb
+    from radiov import pipeline
+
+    try:
+        respuesta = pedir(cfg, f"collector/peticiones?limite={maximo}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  aviso: no se pudieron leer las peticiones: {e}")
+        return 0
+
+    peticiones = respuesta.get("peticiones") or []
+    if not peticiones:
+        return 0
+
+    print(f"  canciones pedidas desde la app: {len(peticiones)}")
+    resueltas = 0
+    for pet in peticiones:
+        texto = (pet.get("text") or "").strip()
+        if not texto:
+            continue
+        print(f"    piden: «{texto}»")
+        tid = None
+        try:
+            tid = pipeline.process_text(texto, source="peticion")
+        except Exception as e:  # noqa: BLE001
+            print(f"      el camino normal falló: {str(e)[:80]}")
+        if tid is None:
+            # Segundo intento: buscar el texto tal cual en YouTube (mashups, sesiones, cruces).
+            try:
+                nuevos = pipeline.process_youtube_seed(
+                    {"mode": "youtube", "query": texto}, max_downloads=1)
+                if nuevos:
+                    tid = "buscado-en-youtube"
+            except Exception as e:  # noqa: BLE001
+                print(f"      la búsqueda en YouTube falló: {str(e)[:80]}")
+
+        estado = "descargada" if tid else "fallida"
+        detalle = None if tid else "No se encontró ni en las tiendas de música ni en YouTube"
+        try:
+            pedir(cfg, f"collector/peticiones/{pet['id']}",
+                  datos={"estado": estado, "detalle": detalle})
+            resueltas += 1
+            print(f"      → {estado}")
+        except Exception as e:  # noqa: BLE001
+            print(f"      no se pudo contestar la petición: {str(e)[:80]}")
+
+    if resueltas:
+        print(f"  peticiones contestadas: {resueltas}")
+    return resueltas
+
+
 # --------------------------------------------------------------------------------------------
 # Publicar: mandar los ficheros y las fichas
 # --------------------------------------------------------------------------------------------
@@ -509,6 +570,8 @@ def main() -> int:
             print("\n--- vuelta " + time.strftime("%H:%M:%S") + " ---")
             try:
                 sembrar(cfg)                       # refresca lo que el servidor tenga de más
+                # Lo pedido desde la app va PRIMERO: es lo que el usuario está esperando.
+                atender_peticiones(cfg, maximo=int(cfg.get("peticiones_por_vuelta", 5)))
                 recolectar(cfg, minutos, maximo)
                 completar(cfg)
                 publicar(cfg)

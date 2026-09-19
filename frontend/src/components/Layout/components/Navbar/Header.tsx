@@ -76,6 +76,16 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
             <News />
           </div> */}
 
+          {/* Pedir una canción que no esté en la biblioteca. Va en la barra de arriba porque es
+              una acción que se usa de vez en cuando y hay que poder encontrarla. */}
+          {user && (
+            <Link to='/pedir'>
+              <Button size='small' type='text' aria-label='Pedir una canción'>
+                Pedir
+              </Button>
+            </Link>
+          )}
+
           {esAdmin && (
             <Link to='/admin'>
               <Button size='small' type='text'>

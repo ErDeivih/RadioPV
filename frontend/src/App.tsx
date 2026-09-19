@@ -39,6 +39,7 @@ const ArtistDiscographyPage = lazy(() => import('./pages/Discography'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 const WrappedPage = lazy(() => import('./pages/Wrapped'));
 const AdminPage = lazy(() => import('./pages/Admin'));
+const PedirCancionesPage = lazy(() => import('./pages/PedirCanciones'));
 
 const Profile = lazy(() => import('./pages/User/Home'));
 const ProfileTracks = lazy(() => import('./pages/User/Songs'));
@@ -150,6 +151,9 @@ const RoutesComponent = memo(() => {
         { public: true, path: '/settings', element: <SettingsPage /> },
         { path: '/wrapped', element: <WrappedPage /> },
         { path: '/admin', element: <AdminPage /> },
+        // Pedir una canción que no esté en la biblioteca: se descarga sola (el recolector del PC
+        // recoge las peticiones y busca también en YouTube, para mashups y sesiones de DJ).
+        { path: '/pedir', element: <PedirCancionesPage /> },
         { public: true, path: '/genre/:genreId', element: <GenrePage /> },
         { public: true, path: '/search', element: <BrowsePage /> },
         { path: '/recent-searches', element: <RecentlySearched /> },

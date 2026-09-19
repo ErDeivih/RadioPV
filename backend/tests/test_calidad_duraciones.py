@@ -49,12 +49,30 @@ def test_clasificacion(titulo, artista, duracion, esperado):
     ("Yo x Ti, Tu x Mi", "ROSALÍA", "una x en el nombre no es un mashup"),
     # «(Avicii Vs. Nicky Romero)» es un crédito de colaboración entre paréntesis, no un cruce.
     ("I Could Be The One (Avicii Vs. Nicky Romero)", "Avicii", "un vs entre paréntesis es un crédito"),
-    # «(Original Mix)» es una versión de una canción, no una sesión de DJ.
-    ("U Got 2 Know (Entree: Original Mix)", "Cappella", "un «mix» de tres minutos no es una sesión"),
-    ("Cottonmouth (Rock Mix)", "Rvshvd", "un remix no es una sesión"),
 ])
 def test_falsos_positivos_que_salieron_del_catalogo(titulo, artista, motivo):
     assert clasificar(titulo, artista, 180) is None, motivo
+
+
+@pytest.mark.parametrize("titulo,artista", [
+    # «(Original Mix)» y «(Rock Mix)» son versiones de UNA canción: remixes, no sesiones de DJ.
+    # Antes no se clasificaban como nada (y con la palabra «mix» suelta se colaban en la lista de
+    # sesiones de DJ, que es peor).
+    ("U Got 2 Know (Entree: Original Mix)", "Cappella"),
+    ("Cottonmouth (Rock Mix)", "Rvshvd"),
+])
+def test_un_mix_corto_es_un_remix_y_no_una_sesion(titulo, artista):
+    assert clasificar(titulo, artista, 180) == "remix"
+
+
+def test_la_vocabulario_ampliado_que_salio_del_catalogo_real():
+    """Cada uno de estos se contó contra las 6.000 pistas del catálogo antes de añadirlo."""
+    assert clasificar("Medley Los Del Rio", "Los Del Rio", 200) == "mashup"      # 3 pistas
+    assert clasificar("Lento RMX", "Boro", 180) == "remix"                       # 2 pistas
+    assert clasificar("Shut up My Moms Calling (Sped up)", "Hotel Ugly", 150) == "remix"
+    assert clasificar("MORNING DEW (DONK MIX)", "Beyoncé", 230) == "remix"       # 10 pistas
+    # Y una sesión de verdad de YouTube (56 minutos) sigue siendo sesión, no remix.
+    assert clasificar("MIX REGGAETON 2025 | Enganchado", "Ivan Ortiz", 3360) == "sesion"
 
 
 def test_las_sesiones_de_verdad_si_se_reconocen():

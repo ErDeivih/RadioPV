@@ -51,9 +51,47 @@ def create_request(data: dict, db: Session = Depends(get_db),
     text = (data.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "text es obligatorio")
+    if len(text) > 200:
+        raise HTTPException(400, "El texto es demasiado largo")
+    # Si ya se pidió y sigue pendiente, no se duplica: la página se refresca y parece que no ha
+    # hecho nada, y encima el recolector trabajaría dos veces por lo mismo.
+    ya = (db.query(models.Request)
+          .filter_by(user_id=user.id, text=text)
+          .filter(models.Request.status == "pendiente").first())
+    if ya:
+        return {"ok": True, "text": text, "repetida": True}
     db.add(models.Request(user_id=user.id, text=text, status="pendiente"))
     db.commit()
     return {"ok": True, "text": text}
+
+
+@router.get("/requests")
+def my_requests(db: Session = Depends(get_db),
+                user: models.User = Depends(get_current_user)):
+    """Mis peticiones, con su estado, para la página de pedir canciones.
+
+    Estados: `pendiente` (en cola), `descargada` (ya está en el catálogo) y `fallida` (se buscó y
+    no se encontró). Se devuelven las últimas primero.
+    """
+    filas = (db.query(models.Request).filter_by(user_id=user.id)
+             .order_by(models.Request.created_at.desc()).limit(100).all())
+    return [
+        {"id": r.id, "text": r.text, "status": r.status or "pendiente",
+         "created_at": r.created_at.isoformat(timespec="seconds") if r.created_at else None}
+        for r in filas
+    ]
+
+
+@router.delete("/requests/{request_id}")
+def borrar_request(request_id: int, db: Session = Depends(get_db),
+                   user: models.User = Depends(get_current_user)):
+    """Quita una petición de mi lista (sólo si es mía)."""
+    r = db.query(models.Request).filter_by(id=request_id, user_id=user.id).first()
+    if not r:
+        raise HTTPException(404, "Petición no encontrada")
+    db.delete(r)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/mixes", response_model=list[schemas.MixOut])
