@@ -27,6 +27,14 @@ x-comun: &comun
     RADIOPV_DATA_DIR: /app/data
     MEDIA_ROOT: /app/data
     ALLOWED_ORIGINS: "${RADIOPV_ALLOWED_ORIGINS:-http://localhost:8090}"
+    # Token de máquina para que el recolector del PC pueda mandar lo que descarga (`/collector/…`).
+    # Va en el `.env` del servidor y en `pc/config.json` del PC. Si está vacío, esas rutas
+    # contestan 503 («la ingesta desde otro equipo está apagada») y el PC lo dice claramente.
+    #
+    # OJO: estar en el `.env` NO basta. El `.env` de docker compose sirve para SUSTITUIR variables
+    # dentro de este fichero; lo que llega al contenedor es lo que se declara aquí. Sin esta línea,
+    # la variable existía en el `.env` y el contenedor no la veía.
+    RADIOPV_INGEST_TOKEN: "${RADIOPV_INGEST_TOKEN:-}"
     TZ: Europe/Madrid
 
 services:
