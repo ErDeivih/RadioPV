@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tarfile
@@ -187,6 +188,7 @@ def sembrar(cfg: dict) -> int:
     con = rdb.get_conn()
     nuevas = 0
     con_ids = 0
+    conflictos = 0
     try:
         # Las fichas sembradas llevan TAMBIÉN los identificadores (id de YouTube y de Deezer).
         # Al principio sólo se guardaban artista y título, y el PC volvía a descargar canciones que
@@ -199,26 +201,45 @@ def sembrar(cfg: dict) -> int:
                 continue
             yt = yt or None
             dz = dz or None
-            ya = con.execute("SELECT id, youtube_id FROM tracks WHERE (artist=? AND title=?)"
-                             " OR (youtube_id IS NOT NULL AND youtube_id=?)",
-                             (artista, titulo, yt)).fetchone()
-            if ya:
-                # Se completa el id si la ficha estaba sembrada sin él.
-                if yt and not ya["youtube_id"]:
-                    con.execute("UPDATE tracks SET youtube_id=?, deezer_id=COALESCE(deezer_id, ?) "
-                                "WHERE id=?", (yt, dz, ya["id"]))
-                    con_ids += 1
-                continue
-            con.execute(
-                "INSERT OR IGNORE INTO tracks(title, artist, youtube_id, deezer_id, status, source,"
-                " file_path, is_remix) VALUES(?,?,?,?,'descargada','sembrado','',0)",
-                (titulo, artista, yt, dz))
-            nuevas += 1
+            # Cada ficha va en su propio try: la tabla tiene un índice único por `youtube_id` y en
+            # el catálogo hay canciones distintas que apuntan al MISMO vídeo, así que completar el
+            # id de la segunda chocaba con la primera y el error subía hasta arriba. Con eso, la
+            # siembra entera se caía, y como la siembra va ANTES de recolectar, el PC se quedaba
+            # sin descargar NADA: el recolector llevaba desde las 13:00 muriendo en cada vuelta con
+            # «UNIQUE constraint failed: tracks.youtube_id».
+            try:
+                ya = con.execute("SELECT id, youtube_id FROM tracks WHERE (artist=? AND title=?)"
+                                 " OR (youtube_id IS NOT NULL AND youtube_id=?)",
+                                 (artista, titulo, yt)).fetchone()
+                if ya:
+                    # Se completa el id si la ficha estaba sembrada sin él... y sólo si ese vídeo no
+                    # lo tiene ya otra ficha (si no, «UNIQUE constraint failed»).
+                    if yt and not ya["youtube_id"]:
+                        otro = con.execute("SELECT id FROM tracks WHERE youtube_id=? AND id<>?",
+                                           (yt, ya["id"])).fetchone()
+                        if otro:
+                            conflictos += 1
+                            continue
+                        con.execute("UPDATE tracks SET youtube_id=?, deezer_id=COALESCE(deezer_id, ?) "
+                                    "WHERE id=?", (yt, dz, ya["id"]))
+                        con_ids += 1
+                    continue
+                con.execute(
+                    "INSERT OR IGNORE INTO tracks(title, artist, youtube_id, deezer_id, status, source,"
+                    " file_path, is_remix) VALUES(?,?,?,?,'descargada','sembrado','',0)",
+                    (titulo, artista, yt, dz))
+                nuevas += 1
+            except sqlite3.IntegrityError:
+                conflictos += 1
+            except sqlite3.OperationalError as e:
+                # «database is locked» y similares: no se pierde la vuelta entera por una ficha.
+                print(f"  AVISO: no se pudo sembrar «{artista} - {titulo}»: {e}")
         con.commit()
     finally:
         con.close()
     print(f"  índice del servidor: {indice['total']} canciones · {nuevas} fichas nuevas · "
-          f"{con_ids} identificadores completados")
+          f"{con_ids} identificadores completados"
+          + (f" · {conflictos} sin poder completar (el vídeo ya es de otra ficha)" if conflictos else ""))
     return nuevas
 
 
@@ -559,27 +580,41 @@ def main() -> int:
     if candado is None and not args.solo_sembrar:
         return 0
     try:
-        sembrar(cfg)
         if args.solo_sembrar:
+            try:
+                sembrar(cfg)
+            except Exception as e:  # noqa: BLE001
+                print(f"  ERROR al sembrar: {e}")
             return 0
 
         minutos = args.minutos if args.minutos is not None else float(cfg.get("minutos_por_vuelta", 20))
         maximo = args.maximo if args.maximo is not None else int(cfg.get("max_por_vuelta", 10))
 
+        # Cada fase va protegida por separado y A PROPÓSITO: si una falla, las demás siguen. Antes
+        # la primera siembra estaba fuera de todo try, así que un solo dato raro (un vídeo de YouTube
+        # compartido por dos fichas) tumbaba el programa entero y el PC dejaba de descargar sin que
+        # nadie se enterara. Lo que el usuario quiere es que siga bajando música.
+        def fases() -> list:
+            return [
+                ("sembrar", lambda: sembrar(cfg)),
+                # Lo pedido desde la app va PRIMERO: es lo que el usuario está esperando.
+                ("atender peticiones", lambda: atender_peticiones(
+                    cfg, maximo=int(cfg.get("peticiones_por_vuelta", 5)))),
+                ("recolectar", lambda: recolectar(cfg, minutos, maximo)),
+                ("completar", lambda: completar(cfg)),
+                ("publicar", lambda: publicar(cfg)),
+            ]
+
         while True:
             print("\n--- vuelta " + time.strftime("%H:%M:%S") + " ---")
-            try:
-                sembrar(cfg)                       # refresca lo que el servidor tenga de más
-                # Lo pedido desde la app va PRIMERO: es lo que el usuario está esperando.
-                atender_peticiones(cfg, maximo=int(cfg.get("peticiones_por_vuelta", 5)))
-                recolectar(cfg, minutos, maximo)
-                completar(cfg)
-                publicar(cfg)
-            except KeyboardInterrupt:
-                print("\nParado a mano.")
-                return 0
-            except Exception as e:  # noqa: BLE001
-                print(f"  ERROR en la vuelta: {e}")
+            for nombre, fn in fases():
+                try:
+                    fn()
+                except KeyboardInterrupt:
+                    print("\nParado a mano.")
+                    return 0
+                except Exception as e:  # noqa: BLE001
+                    print(f"  ERROR en «{nombre}»: {e} (se sigue con el resto)")
             if args.una_vuelta:
                 return 0
             espera = int(cfg.get("minutos_entre_vueltas", 5) * 60)

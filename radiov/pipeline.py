@@ -454,6 +454,7 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
     candidatos = Y.search_videos(query, cuantos)
     random.shuffle(candidatos)          # no siempre los mismos primeros resultados
     added = 0
+    en_portugues = 0
 
     for cand in candidatos:
         if max_downloads is not None and added >= max_downloads:
@@ -466,6 +467,12 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
 
         artista, titulo = _partir_titulo(cand)
         if not titulo or len(titulo) < 3:
+            continue
+        # Portugués fuera ANTES de descargar: en YouTube las búsquedas de «set dj» devuelven funk
+        # brasileño, y bajarlo para luego ponerlo en cuarentena es gastar ancho de banda y disco
+        # para nada. (La puerta de calidad lo rechaza igualmente: esto es el atajo.)
+        if quality.parece_portugues(titulo, artista):
+            en_portugues += 1
             continue
         if db.track_exists_by_artist_title(artista, titulo):
             continue
@@ -490,7 +497,9 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
             progress["last"] = f"{artista} - {titulo}"
             progress["seen"] += 1
 
-    db.log_event(f"🔎 Búsqueda en YouTube «{query}»: +{added} canciones", "info")
+    db.log_event(f"🔎 Búsqueda en YouTube «{query}»: +{added} canciones"
+                 + (f" · {en_portugues} descartadas por estar en portugués" if en_portugues else ""),
+                 "info")
     return added
 
 

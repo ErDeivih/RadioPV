@@ -25,6 +25,38 @@ DUR_MIN, DUR_MAX = 90.0, 900.0                    # canción normal (1:30 – 15
 DUR_MIN_REMIX, DUR_MAX_REMIX = 45.0, 1200.0       # remix / mashup (0:45 – 20:00)
 DUR_MIN_SESION, DUR_MAX_SESION = 300.0, 10800.0   # sesión de DJ (5:00 – 3:00:00)
 
+# --- portugués: NO entra ---
+# Norma del dueño del catálogo: español (España y Latinoamérica), inglés y, de siempre, italiano y
+# francés. **Portugués no.** Y entraba: por la vía de YouTube las semillas de «set dj»/«dj nene»
+# traían funk brasileño, y como la semilla declaraba `language: "es"`, ni se detectaba. Se veía en
+# el catálogo real: «Mc GP - Ela Vem (SET DJ NENE)», «Henrique & Juliano - Última Saudade (Ao Vivo)»,
+# «JC no beat - Eu Vou Machucar Só um Pouquinho X Catucando Gostosinho».
+#
+# Se reconocen marcas que el español NO usa, para no tirar canciones en español:
+#   · terminaciones en «-ção» y palabras con «ã» (não, então, coração): en español serían «-ción»
+#     (canción, corazón) y «á»;
+#   · «você/vocês», «ao vivo», «muito», «saudade», «obrigado», «beijo», «cê», «tô», «tá», «só»;
+#   · el diminutivo en «-inho/-inha» («gostosinho», «pouquinho», «beijinho»): en español es
+#     «-ito/-iño», así que «nh» delata al portugués y no aparece en castellano;
+#   · géneros que sólo existen en Brasil: sertanejo, piseiro, forró, pagode, axé, arrocha,
+#     vaquejada, sofrência, brega, funk carioca, baile funk.
+# OJO: «música» NO sirve como marca (se escribe igual en los dos idiomas) y por eso no está.
+_PORTUGUES_RE = re.compile(
+    r"\b\w+ç(ão|ões)\b|\bnão\b|\bentão\b|\btambém\b|\bvocês?\b|\bao\s+vivo\b|\bmuito\b|"
+    r"\bsaudade\b|\bobrigad[oa]\b|\bbeijo\b|\bcê\b|\btô\b|\btá\b|\bsó\b|\bpra\s+mim\b|\bcomigo\b|"
+    r"\b\w+inho\b|\b\w+inha\b|"
+    r"\bsertanej\w+|\bpiseiro\b|\bforr[óo]\b|\bpagode\b|\bax[ée]\b|\barrocha\b|\bvaquejada\b|"
+    r"\bsofrência\b|\bbrega\b|\bfunk\s+carioca\b|\bbaile\s+funk\b|\bmc\s+[a-z]|"
+    r"\bdvd\b|\bao\s+vivo\s+em\b",
+    re.I)
+
+
+def parece_portugues(titulo: str = "", artista: str = "") -> bool:
+    """¿Esto es portugués? Se mira el título y el artista (en Brasil el «artista» suele ser el
+    cantante del canal: «Mc GP», «Henrique & Juliano»)."""
+    return bool(_PORTUGUES_RE.search(f"{titulo or ''} {artista or ''}"))
+
+
 ARTISTAS_PROHIBIDOS = {"deezer", "disney", "various artists", "various", "unknown"}
 # Canales automáticos de YouTube: se llaman "Artista - Topic". Es un SUFIJO.
 # Ojo: "topic" a secas NO vale como veto — Topic es un DJ real ("Breaking Me").
@@ -189,6 +221,8 @@ def revisar(rec: dict) -> tuple[bool, str]:
         return False, f"artista genérico: {artista}"
     if NO_MUSICA.search(titulo) or NO_MUSICA.search(artista):
         return False, "no es música (compilación, tono o sintonía)"
+    if parece_portugues(titulo, artista):
+        return False, "portugués (el catálogo es en español/inglés, e italiano y francés de siempre)"
     if len(titulo.strip()) < 2 or len(artista.strip()) < 2:
         return False, "título o artista demasiado cortos"
     d = rec.get("duration") or 0

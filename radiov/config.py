@@ -238,8 +238,11 @@ DEFAULT_SETTINGS: dict = {
     {"mode": "youtube", "query": "Titus Jones mashup", "genre": "pop", "language": "en", "n": 20},
     {"mode": "youtube", "query": "The Hood Internet mashup", "genre": "rap", "language": "en", "n": 20},
     {"mode": "youtube", "query": "Girl Talk mashup", "genre": "rap", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "Djpino mashup", "genre": "reggaeton", "language": "es", "n": 25},
-    {"mode": "youtube", "query": "dj nene set", "genre": "latin", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "djpino mashup", "genre": "reggaeton", "language": "es", "n": 25},
+    # Aquí estaba «dj nene set», que es funk brasileño: el filtro de portugués lo descarta entero y
+    # la búsqueda se gastaba para nada. En su lugar, sesiones en español.
+    {"mode": "youtube", "query": "set dj reggaeton viejo", "genre": "reggaeton", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "sesion dj latin hits", "genre": "latin", "language": "es", "n": 20},
     {"mode": "youtube", "query": "dj ronald hess reggaeton viejo", "genre": "reggaeton", "language": "es", "n": 20},
     {"mode": "youtube", "query": "dj kay slay mix", "genre": "rap", "language": "en", "n": 20},
 
