@@ -98,12 +98,49 @@ def test_no_lo_encuentra_si_es_otra_cosa(biblioteca):
 
 def test_el_indice_de_claves_lo_da_todo_de_una_vez(biblioteca):
     rdb = biblioteca
-    rdb.add_track({"title": "Uno", "artist": "A", "status": "descargada"})
-    rdb.add_track({"title": "Dos", "artist": "B", "status": "descargada"})
+    id_uno = rdb.add_track({"title": "Uno", "artist": "A", "status": "descargada"})
+    id_dos = rdb.add_track({"title": "Dos", "artist": "B", "status": "descargada"})
     claves = indice_de_claves()
-    assert clave_cancion("A", "Uno") in claves and clave_cancion("B", "Dos") in claves
+    assert claves[clave_cancion("A", "Uno")] == id_uno
+    assert claves[clave_cancion("B", "Dos")] == id_dos
     # Y sirve para comprobar sin volver a preguntar a la base.
-    assert pista_existente(artist="a", title="uno", claves=claves) is not None
+    assert pista_existente(artist="a", title="uno", claves=claves) == id_uno
+
+
+def test_el_indice_se_entera_de_lo_que_se_acaba_de_insertar(biblioteca):
+    """Un índice en memoria que no se invalida haría bajar dos veces lo recién metido."""
+    rdb = biblioteca
+    assert pista_existente(artist="C", title="Tres") is None
+    id_tres = rdb.add_track({"title": "Tres", "artist": "C", "status": "descargada"})
+    assert pista_existente(artist="C", title="Tres") == id_tres
+    # Y si cambia el título, también.
+    rdb.update_track(id_tres, title="Tres (Remastered)")
+    assert pista_existente(artist="C", title="Tres") is None
+    assert pista_existente(artist="C", title="Tres (Remastered)") == id_tres
+
+
+def test_comprobar_muchas_canciones_cuesta_una_sola_consulta(biblioteca, monkeypatch):
+    """El coste tiene que ser de UNA consulta, no de una por canción.
+
+    Es lo que pidió el usuario: comprobar antes de bajar, pero sin cargar el servidor. Se cuentan
+    las veces que se abre la base para leer las claves.
+    """
+    rdb = biblioteca
+    for i in range(30):
+        rdb.add_track({"title": f"Cancion {i}", "artist": "Artista", "status": "descargada"})
+
+    claves = indice_de_claves()
+    llamadas = []
+    original = rdb.indice_de_claves
+
+    def contando(*a, **k):
+        llamadas.append(1)
+        return original(*a, **k)
+
+    monkeypatch.setattr(rdb, "indice_de_claves", contando)
+    for i in range(30):
+        rdb.pista_existente(artist="Artista", title=f"Cancion {i}", claves=claves)
+    assert llamadas == [], "no debería consultar la base: el diccionario ya está hecho"
 
 
 # ---------------------------------------------------------------- la carga en el servidor

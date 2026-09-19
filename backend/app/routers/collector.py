@@ -268,15 +268,16 @@ def importar(datos: ImportarIn) -> dict:
                               "rellenos": rellenos})
             continue
         try:
-            rdb.add_track(campos)
+            nuevo_id = rdb.add_track(campos)
         except Exception as e:  # noqa: BLE001
             rdb.log_event(f"⚠️ No se pudo importar {campos.get('artist')} - {campos.get('title')}: {e}",
                           "warning")
             continue
         nuevas += 1
-        # La clave recién insertada se añade al índice en memoria: si el mismo lote trae dos veces la
-        # misma canción (pasa: dos vídeos del mismo tema), la segunda se reconoce en vez de entrar.
-        claves.add(rdb.clave_cancion(campos.get("artist", ""), campos.get("title", "")))
+        # La clave recién insertada entra en el diccionario en memoria: si el mismo lote trae dos
+        # veces la misma canción (pasa: dos vídeos del mismo tema), la segunda se reconoce en vez de
+        # entrar como ficha nueva.
+        claves[rdb.clave_cancion(campos.get("artist", ""), campos.get("title", ""))] = nuevo_id
 
     rdb.log_event(f"💻 Importadas del recolector de {datos.origen}: {nuevas} nuevas, "
                   f"{len(repetidas)} que ya estaban (no se duplican)", "info")

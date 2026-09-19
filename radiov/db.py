@@ -342,6 +342,7 @@ def add_track(rec: dict, *, youtube_id: Optional[str] = None) -> int:
         verq = "?" if "youtube_id" in cols and rec.get("youtube_id") else "NULL"
         conn.execute(f"INSERT INTO tracks({','.join(cols)}) VALUES({q})", [rec.get(c) for c in cols])
         conn.commit()
+        _invalidar_claves()
         return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     finally:
         conn.close()
@@ -398,24 +399,44 @@ def clave_cancion(artist: str, title: str) -> str:
     return f"{limpiar(artist)}|{limpiar(title)}"
 
 
-def indice_de_claves() -> set[str]:
-    """Todas las claves de la biblioteca, en UNA consulta.
+# Índice en memoria de claves → id. Se tira en cuanto se escribe (ver `_invalidar_claves`).
+_CLAVES_CACHE: Optional[dict[str, int]] = None
 
-    Así se pueden comprobar cientos de candidatos sin preguntar a la base por cada uno: el agente
-    baraja 20-25 resultados por búsqueda y comprobar cada uno con una consulta aparte era trabajo
-    repetido a cambio de nada.
+
+def indice_de_claves(*, refrescar: bool = False) -> dict[str, int]:
+    """Todas las claves de la biblioteca con su id: `{clave: id}`, en UNA consulta.
+
+    Se guarda en memoria y se tira en cuanto se escribe algo (ver `_invalidar_claves`), así que
+    comprobar cientos de candidatos cuesta **una** consulta y luego búsquedas en un diccionario.
+
+    POR QUÉ IMPORTA EL COSTO
+    ------------------------
+    El recolector del PC comprueba antes de bajar cada candidato (20-25 por búsqueda) y el servidor
+    comprueba cada lote que le llega. Si cada comprobación recorriera la tabla entera calculando
+    claves en Python, serían ~22 ms por canción: con un catálogo de 6.000 canciones y varias
+    vueltas, eso es trabajo de más en un portátil de 4 GB que además sirve la aplicación. Con el
+    diccionario, cada comprobación es instantánea.
     """
-    conn = get_conn()
-    try:
-        return {clave_cancion(r["artist"] or "", r["title"] or "")
-                for r in conn.execute("SELECT artist, title FROM tracks")}
-    finally:
-        conn.close()
+    global _CLAVES_CACHE
+    if _CLAVES_CACHE is None or refrescar:
+        conn = get_conn()
+        try:
+            _CLAVES_CACHE = {clave_cancion(r["artist"] or "", r["title"] or ""): r["id"]
+                             for r in conn.execute("SELECT id, artist, title FROM tracks")}
+        finally:
+            conn.close()
+    return _CLAVES_CACHE
+
+
+def _invalidar_claves() -> None:
+    """Cualquier escritura deja el índice en memoria desfasado: se tira y se recalcula solo."""
+    global _CLAVES_CACHE
+    _CLAVES_CACHE = None
 
 
 def pista_existente(*, youtube_id: Optional[str] = None, deezer_id: Optional[str] = None,
                     artist: str = "", title: str = "",
-                    claves: Optional[set] = None) -> Optional[int]:
+                    claves: Optional[dict] = None) -> Optional[int]:
     """El id de la ficha que YA representa esta canción, o None. **Sin bajar nada.**
 
     Se mira por orden de fiabilidad:
@@ -436,20 +457,10 @@ def pista_existente(*, youtube_id: Optional[str] = None, deezer_id: Optional[str
             if r:
                 return r["id"]
         if artist or title:
-            clave = clave_cancion(artist, title)
-            if claves is None:
-                claves = {clave_cancion(x["artist"] or "", x["title"] or "")
-                          for x in conn.execute("SELECT artist, title FROM tracks")}
-            if clave in claves:
-                r = conn.execute("SELECT id FROM tracks WHERE lower(artist)=? AND lower(title)=?",
-                                 (_norm(artist), _norm(title))).fetchone()
-                if r:
-                    return r["id"]
-                # La clave coincide pero el texto exacto no: es la misma canción con otro nombre
-                # («(Official Video)», «feat.»…). Se devuelve la primera que case por clave.
-                for x in conn.execute("SELECT id, artist, title FROM tracks"):
-                    if clave_cancion(x["artist"] or "", x["title"] or "") == clave:
-                        return x["id"]
+            # El diccionario se pide (o se recibe ya hecho) ANTES de mirar: así la comprobación por
+            # nombre no necesita ninguna consulta más.
+            tabla = claves if isinstance(claves, dict) else indice_de_claves()
+            return tabla.get(clave_cancion(artist, title))
         return None
     finally:
         conn.close()
@@ -487,6 +498,7 @@ def update_track(track_id: int, **fields) -> None:
         sets = ", ".join(f"{c}=?" for c in fields)
         conn.execute(f"UPDATE tracks SET {sets} WHERE id=?", [fields[c] for c in fields] + [track_id])
         conn.commit()
+        _invalidar_claves()
     finally:
         conn.close()
 
@@ -516,6 +528,7 @@ def rellenar_huecos(track_id: int, campos: dict) -> list[str]:
                 rellenos.append(campo)
         if rellenos:
             conn.commit()
+            _invalidar_claves()
         return rellenos
     finally:
         conn.close()
@@ -526,6 +539,7 @@ def delete_track(track_id: int) -> None:
     try:
         conn.execute("DELETE FROM tracks WHERE id=?", (track_id,))
         conn.commit()
+        _invalidar_claves()
     finally:
         conn.close()
 

@@ -284,11 +284,13 @@ def sembrar(cfg: dict) -> int:
                                        claves=claves):
                     repetidas += 1
                     continue
-                con.execute(
+                cur = con.execute(
                     "INSERT OR IGNORE INTO tracks(title, artist, youtube_id, deezer_id, status, source,"
                     " file_path, is_remix) VALUES(?,?,?,?,'descargada','sembrado','',0)",
                     (titulo, artista, yt, dz))
-                claves.add(rdb.clave_cancion(artista, titulo))
+                if cur.rowcount:
+                    nuevo_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+                    claves[rdb.clave_cancion(artista, titulo)] = nuevo_id
                 nuevas += 1
             except sqlite3.IntegrityError:
                 conflictos += 1
