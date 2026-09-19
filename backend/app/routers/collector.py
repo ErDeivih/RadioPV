@@ -64,10 +64,16 @@ def ajustes() -> dict:
 
     Sin esto, el PC tendría su propia copia de las semillas y de la política de idiomas, y con el
     tiempo las dos listas se separarían: acabaría bajando música que el servidor ya no quiere.
+
+    Lo que NO viaja son las **rutas**: en el servidor la música está en `/music` y en el PC en
+    `E:/MusicaRadioPV`. Si se mandaran, el PC escribiría en `F:\\music\\…` (así se resuelve `/music`
+    en Windows) y los ficheros acabarían fuera de su carpeta sin que nadie se enterara.
     """
     from radiov.config import load_settings
+
+    RUTAS_DE_CADA_MAQUINA = ("base_music_dir", "download_dir", "catalog_dir", "playlist_dir")
     cfg = load_settings()
-    return {k: v for k, v in cfg.items() if k != "base_music_dir"}   # la ruta es de cada máquina
+    return {k: v for k, v in cfg.items() if k not in RUTAS_DE_CADA_MAQUINA}
 
 
 @router.get("/indice", summary="Qué canciones ya están (para no volver a bajarlas)",

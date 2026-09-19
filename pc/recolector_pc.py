@@ -38,6 +38,11 @@ import time
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
+# El paquete `radiov` vive en la raíz del repositorio y este guion está en `pc/`: sin esto, el
+# intérprete busca `radiov` sólo en `pc/` y falla con «No module named 'radiov'».
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
+
 CONFIG_PATH = RAIZ / "pc" / "config.json"
 CONFIG_EJEMPLO = RAIZ / "pc" / "config.ejemplo.json"
 
@@ -104,13 +109,23 @@ def sembrar(cfg: dict) -> int:
     Las fichas van sin `file_path` a propósito: son un «esto ya lo tenemos», no una canción.
     """
     from radiov import db as rdb
-    from radiov.config import SETTINGS_PATH, save_settings
+    from radiov.config import CATALOG_DIR, PLAYLIST_DIR, RAW_DIR, SETTINGS_PATH, save_settings
 
     ajustes = pedir(cfg, "collector/ajustes")
-    save_settings(ajustes)
-    print(f"  ajustes del servidor guardados en {SETTINGS_PATH}")
 
-    indice = pedir(cfg, "collector/index")
+    # Las rutas se reescriben aquí, a las de ESTA máquina. Aunque el servidor ya no las manda, se
+    # deja puesto: un `settings.json` viejo (de antes de este arreglo) traía las del servidor y el
+    # PC acababa guardando la música en `F:\music\…` en vez de en su carpeta.
+    ajustes["base_music_dir"] = cfg["musica_local"]
+    ajustes["download_dir"] = str(RAW_DIR)
+    ajustes["catalog_dir"] = str(CATALOG_DIR)
+    ajustes["playlist_dir"] = str(PLAYLIST_DIR)
+    save_settings(ajustes)
+
+    print(f"  ajustes del servidor guardados en {SETTINGS_PATH}")
+    print(f"  rutas locales: catalogada={CATALOG_DIR} · descargas={RAW_DIR}")
+
+    indice = pedir(cfg, "collector/indice")
     con = rdb.get_conn()
     nuevas = 0
     try:
