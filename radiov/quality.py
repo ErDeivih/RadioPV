@@ -60,18 +60,56 @@ _SESION_CLARA_RE = re.compile(
     r"\bdj\s*set\b|\bset\s*dj\b|\bmixtape\b|\bmegamix\b|\bnon[\s-]?stop\b|"
     r"\bcontinuous\s+mix\b|\blive\s+set\b|\bparty\s+mix\b|"
     # En castellano, que es como se titula aquí la mitad del catálogo.
-    r"\bmezcla\s+continua\b|\bmix\s+continuo\b|"
-    r"(?<!re)\bmix\b",
+    r"\bmezcla\s+continua\b|\bmix\s+continuo\b",
     re.I)
-# «Session», «sesión», «Vol. N», «DJ» y «mezcla» a secas: puede ser una sesión de DJ o una canción
-# que se llama así. Bizarrap titula «Bzrp Music Sessions, Vol. 0/66» y son canciones de dos
-# minutos, así que estas marcas sólo cuentan si además el track dura como una sesión.
+# «Session», «sesión», «Vol. N», «DJ», «mezcla» y «mix» a secas: puede ser una sesión de DJ o una
+# canción que se llama así. Estas marcas sólo cuentan si además el track dura como una sesión.
+#
+# El «mix» suelto está aquí y no arriba a propósito: «(Original Mix)», «(Rock Mix)», «(Donk Mix)»
+# son versiones de UNA canción, no sesiones, y con la palabra suelta se colaban en la lista de
+# sesiones de DJ canciones de tres minutos. («Megamix» sí es una mezcla de verdad, y por eso está
+# arriba.) Bizarrap titula «Bzrp Music Sessions, Vol. 0/66» y son canciones de dos minutos.
 _SESION_DUDA_RE = re.compile(
-    r"\bsesion(es)?\b|\bsession(s)?\b|\bvol\.?\s*\d+\b|\bdj\b|\bmezcla\b|\bremix\s+set\b",
+    r"\bsesion(es)?\b|\bsession(s)?\b|\bvol\.?\s*\d+\b|\bdj\b|\bmezcla\b|(?<!re)\bmix\b",
     re.I)
-# Un MASHUP cruza dos o más canciones: lo típico es «A x B», «A vs B» o decirlo con la palabra.
-_MASHUP_RE = re.compile(
-    r"\bmash[\s-]?up\b|\bmegamix\b|\bblend\b|\bvs\.?\b|(?<=\S)\s[xX]\s(?=\S)", re.I)
+# Un MASHUP cruza dos o más canciones: «A x B», «A vs B», «mashup», «megamix», «blend».
+# El cruce se comprueba aparte (`_es_cruce_de_verdad`) porque hay títulos que llevan una «x» sin
+# ser un mashup: «ROSALÍA - Yo x Ti, Tu x Mi» es una canción, no un cruce de dos.
+_MASHUP_RE = re.compile(r"\bmash[\s-]?up\b|\bmegamix\b|\bblend\b", re.I)
+_SEPARADOR_RE = re.compile(r"\s(?:[xX]|vs\.?|versus)\s", re.I)
+# Trozos en los que NO se busca el cruce: dentro de un paréntesis hay créditos, no cruces, y una
+# coma separa partes de un mismo título.
+_TROCEAR_RE = re.compile(r"[,()\[\]/|]")
+
+
+def _es_cruce_de_verdad(titulo: str) -> bool:
+    """¿El «A x B» / «A vs B» del título es un mashup o sólo una «x» en el nombre?
+
+    Las dos comprobaciones salen de mirar el catálogo real, y las dos hicieron falta:
+
+      · **Se quitan los paréntesis.** Los mashups ponen el cruce en el título; lo que va entre
+        paréntesis suele ser un crédito de colaboración: «Avicii - I Could Be The One (Avicii Vs.
+        Nicky Romero)» es una canción de los dos, no un cruce.
+      · **El cruce se mira en su trozo, no en todo el título.** «ROSALÍA - Yo x Ti, Tu x Mi» tiene
+        una «x» a cada lado de una coma: si se mira el título entero, el lado derecho parece un
+        título de tres palabras y la canción acaba en la lista de mashups. Mirando cada trozo por
+        separado, a cada lado del cruce sólo hay una palabra.
+      · Y hace falta que **al menos un lado parezca un título** (dos palabras o más):
+        «Shape of You x Despacito» sí, «Yo x Ti» no.
+
+    Se pierden algunos mashups titulados sólo con dos nombres de artista («Eminem vs Linkin Park»).
+    Es a propósito: prefiero que falte alguno a llenarle la lista de colaboraciones que no son
+    mashups, que es lo que pasaba antes.
+    """
+    sin_parentesis = re.sub(r"\([^)]*\)", " ", titulo or "")
+    for trozo in _TROCEAR_RE.split(sin_parentesis):
+        partes = _SEPARADOR_RE.split(trozo)
+        if len(partes) != 2:            # sin cruce, o más de uno: no se decide
+            continue
+        palabras = lambda t: len(re.findall(r"[^\s]+", t.strip()))  # noqa: E731
+        if palabras(partes[0]) >= 2 or palabras(partes[1]) >= 2:
+            return True
+    return False
 # Un REMIX parte de UNA canción.
 _REMIX_RE = re.compile(
     r"\bremix\b|\bre-?mix\b|\bbootleg\b|\bedit\b|\bflip\b|\brework\b|\brefix\b", re.I)
@@ -92,10 +130,10 @@ def clasificar(titulo: str = "", artista: str = "", duracion: float | None = Non
         return "sesion"
     if d > DUR_MAX:
         # Con una duración de sesión, cualquiera de estas marcas basta: «DJ …», «session»,
-        # «Vol. 3» (que es como se numeran las sesiones de un DJ).
+        # «Vol. 3» (que es como se numeran las sesiones de un DJ), «… Mix».
         if re.match(r"^\s*dj", a, re.I) or _SESION_DUDA_RE.search(f"{t} {a}"):
             return "sesion"
-    if _MASHUP_RE.search(t):
+    if _MASHUP_RE.search(t) or _es_cruce_de_verdad(t):
         return "mashup"
     if _REMIX_RE.search(t):
         return "remix"

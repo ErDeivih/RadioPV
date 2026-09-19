@@ -35,11 +35,33 @@ from radiov.quality import (DUR_MAX, DUR_MIN, clasificar, margenes, revisar,  # 
     ("REGGAETON VIEJO / OLD SCHOOL", "DJ RONALD HESS", 1320, "sesion"),
     ("Party Mix Session 1.5", "AV8", 72, "sesion"),
     ("Mezcla continua de verano", "Alguien", 3000, "sesion"),
+    ("Summer Mix 2025", "DJ Alguien", 3600, "sesion"),
     # «Bzrp Music Sessions» son CANCIONES de dos minutos, no sesiones de DJ.
     ("Daddy Yankee: Bzrp Music Sessions, Vol. 0/66", "Bizarrap", 120, None),
 ])
 def test_clasificacion(titulo, artista, duracion, esperado):
     assert clasificar(titulo, artista, duracion) == esperado
+
+
+@pytest.mark.parametrize("titulo,artista,motivo", [
+    # Una canción que se llama «Yo x Ti, Tu x Mi» tiene una «x» y NO es un cruce de dos canciones.
+    # Con la comprobación ingenua («¿hay un x?») acababa en la lista de mashups.
+    ("Yo x Ti, Tu x Mi", "ROSALÍA", "una x en el nombre no es un mashup"),
+    # «(Avicii Vs. Nicky Romero)» es un crédito de colaboración entre paréntesis, no un cruce.
+    ("I Could Be The One (Avicii Vs. Nicky Romero)", "Avicii", "un vs entre paréntesis es un crédito"),
+    # «(Original Mix)» es una versión de una canción, no una sesión de DJ.
+    ("U Got 2 Know (Entree: Original Mix)", "Cappella", "un «mix» de tres minutos no es una sesión"),
+    ("Cottonmouth (Rock Mix)", "Rvshvd", "un remix no es una sesión"),
+])
+def test_falsos_positivos_que_salieron_del_catalogo(titulo, artista, motivo):
+    assert clasificar(titulo, artista, 180) is None, motivo
+
+
+def test_las_sesiones_de_verdad_si_se_reconocen():
+    assert clasificar("SET DJ YURI PEDRADA - TRAVA CHIP", "dj yuri pedrada", 480) == "sesion"
+    assert clasificar("Sizzla - Billie Jean Megamix", "Sizzla", 540) == "sesion"
+    assert clasificar("Reggaeton Mix 2025", "Alguien", 3600) == "sesion"
+
 
 
 # --- 2 · duraciones ----------------------------------------------------------------------------
