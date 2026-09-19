@@ -355,14 +355,108 @@ def track_exists(youtube_id: str) -> bool:
         conn.close()
 
 
-def track_exists_by_artist_title(artist: str, title: str) -> bool:
+# ------------------------------------------------------------------ ¿esta canción ya está?
+# EL PROBLEMA
+# -----------
+# La misma canción llega escrita de mil maneras: «Feid - HAXTA EL DÍA FINAL», «FEID - Haxta el dia
+# final (Official Video)», «Feid - Haxta el Día Final (feat. X)». Y de un mismo tema hay el vídeo
+# oficial, el lyric video y el audio: **vídeos distintos para la misma canción**. Comparando por
+# texto exacto (que es lo que se hacía) nada de eso coincide, así que el PC volvía a bajar y a enviar
+# canciones que el servidor ya tenía, y en la biblioteca aparecían dos, tres y hasta cuatro fichas
+# del mismo tema (una de ellas sin fichero, porque el fichero bueno era el de la otra).
+#
+# LA CLAVE
+# --------
+# `clave_cancion` deja «artista|título» en una forma comparable: sin acentos, sin mayúsculas, sin
+# los paréntesis de relleno (feat., official video, lyrics, HD…) y sin signos. Lo que NO se quita es
+# lo que distingue versiones de verdad —«remix», «en vivo», «extended»—: un remix y el original son
+# canciones distintas y tienen que seguir siéndolo.
+_RUIDO_PARENTESIS_RE = re.compile(
+    r"\((?:[^)]*\b(?:official|oficial|video|vídeo|audio|lyric[s]?|letra|hd|4k|visualizer|"
+    r"prod\.?|music\s+video|full\s+album)\b[^)]*)\)|\[[^\]]*\]",
+    re.I)
+_FEAT_RE = re.compile(r"(?:^|[\s(\[])(?:feat\.?|ft\.?|with|con)\s.*$", re.I)
+_NO_ALFANUM_RE = re.compile(r"[^a-z0-9 ]+")
+
+
+def clave_cancion(artist: str, title: str) -> str:
+    """Clave normalizada «artista|título» para reconocer la MISMA canción escrita de otra forma.
+
+    Se usa igual en el PC y en el servidor: si cada uno normalizara a su manera, la comprobación no
+    serviría de nada.
+    """
+    import unicodedata
+
+    def limpiar(texto: str) -> str:
+        t = _RUIDO_PARENTESIS_RE.sub(" ", str(texto or ""))
+        t = _FEAT_RE.sub(" ", t)
+        t = "".join(c for c in unicodedata.normalize("NFD", t.lower())
+                    if unicodedata.category(c) != "Mn")     # fuera tildes
+        t = _NO_ALFANUM_RE.sub(" ", t)
+        return " ".join(t.split())
+
+    return f"{limpiar(artist)}|{limpiar(title)}"
+
+
+def indice_de_claves() -> set[str]:
+    """Todas las claves de la biblioteca, en UNA consulta.
+
+    Así se pueden comprobar cientos de candidatos sin preguntar a la base por cada uno: el agente
+    baraja 20-25 resultados por búsqueda y comprobar cada uno con una consulta aparte era trabajo
+    repetido a cambio de nada.
+    """
     conn = get_conn()
     try:
-        return conn.execute(
-            "SELECT 1 FROM tracks WHERE lower(artist)=? AND lower(title)=?",
-            (_norm(artist), _norm(title))).fetchone() is not None
+        return {clave_cancion(r["artist"] or "", r["title"] or "")
+                for r in conn.execute("SELECT artist, title FROM tracks")}
     finally:
         conn.close()
+
+
+def pista_existente(*, youtube_id: Optional[str] = None, deezer_id: Optional[str] = None,
+                    artist: str = "", title: str = "",
+                    claves: Optional[set] = None) -> Optional[int]:
+    """El id de la ficha que YA representa esta canción, o None. **Sin bajar nada.**
+
+    Se mira por orden de fiabilidad:
+      1. el **vídeo** de YouTube (si es el mismo vídeo, es la misma grabación, se llame como se
+         llame);
+      2. el **id de Deezer** (misma ficha de tienda);
+      3. la **clave normalizada** de artista y título (para los vídeos distintos de la misma
+         canción, que es el caso que se colaba).
+    """
+    conn = get_conn()
+    try:
+        if youtube_id:
+            r = conn.execute("SELECT id FROM tracks WHERE youtube_id=?", (youtube_id,)).fetchone()
+            if r:
+                return r["id"]
+        if deezer_id:
+            r = conn.execute("SELECT id FROM tracks WHERE deezer_id=?", (str(deezer_id),)).fetchone()
+            if r:
+                return r["id"]
+        if artist or title:
+            clave = clave_cancion(artist, title)
+            if claves is None:
+                claves = {clave_cancion(x["artist"] or "", x["title"] or "")
+                          for x in conn.execute("SELECT artist, title FROM tracks")}
+            if clave in claves:
+                r = conn.execute("SELECT id FROM tracks WHERE lower(artist)=? AND lower(title)=?",
+                                 (_norm(artist), _norm(title))).fetchone()
+                if r:
+                    return r["id"]
+                # La clave coincide pero el texto exacto no: es la misma canción con otro nombre
+                # («(Official Video)», «feat.»…). Se devuelve la primera que case por clave.
+                for x in conn.execute("SELECT id, artist, title FROM tracks"):
+                    if clave_cancion(x["artist"] or "", x["title"] or "") == clave:
+                        return x["id"]
+        return None
+    finally:
+        conn.close()
+
+
+def track_exists_by_artist_title(artist: str, title: str) -> bool:
+    return pista_existente(artist=artist, title=title) is not None
 
 
 def track_exists_by_deezer(deezer_id: str) -> bool:
@@ -393,6 +487,36 @@ def update_track(track_id: int, **fields) -> None:
         sets = ", ".join(f"{c}=?" for c in fields)
         conn.execute(f"UPDATE tracks SET {sets} WHERE id=?", [fields[c] for c in fields] + [track_id])
         conn.commit()
+    finally:
+        conn.close()
+
+
+def rellenar_huecos(track_id: int, campos: dict) -> list[str]:
+    """Rellena SÓLO los campos que están vacíos en la ficha. Devuelve qué se rellenó.
+
+    Es la fusión segura para cuando llega una canción que ya existe: lo que hay no se pisa nunca
+    (puede ser mejor: un BPM medido, una carátula ya descargada, un `youtube_id` que ya funciona) y
+    sólo se aprovecha lo nuevo para tapar huecos. Así, tener la misma canción dos veces no estropea
+    la que ya sonaba.
+    """
+    if not campos:
+        return []
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT * FROM tracks WHERE id=?", (track_id,)).fetchone()
+        if not row:
+            return []
+        columnas = set(row.keys())
+        rellenos: list[str] = []
+        for campo, valor in campos.items():
+            if campo in ("id",) or campo not in columnas or valor in (None, ""):
+                continue
+            if row[campo] in (None, ""):
+                conn.execute(f"UPDATE tracks SET {campo}=? WHERE id=?", (valor, track_id))
+                rellenos.append(campo)
+        if rellenos:
+            conn.commit()
+        return rellenos
     finally:
         conn.close()
 

@@ -56,9 +56,20 @@ def test_con_token_devuelve_indice_y_ajustes(client, monkeypatch, radiov_tempora
 
     indice = client.get("/collector/indice", headers=cab).json()
     # El índice lleva los identificadores, no sólo artista y título: sin el id de YouTube el PC
-    # vuelve a descargar lo que ya está (y lo vuelve a enviar).
-    assert ["Ya la tengo", "Alguien", "abc123", "999"] in indice["pistas"]
+    # vuelve a descargar lo que ya está (y lo vuelve a enviar). Y ahora lleva TAMBIÉN el id de la
+    # ficha del servidor, que es lo que permite pedir «sólo lo nuevo» con `desde_id`.
+    pista = [p for p in indice["pistas"] if p[1] == "Ya la tengo"]
+    assert pista, f"no sale en el índice: {indice['pistas']}"
+    assert pista[0][2:] == ["Alguien", "abc123", "999"]
     assert indice["total"] >= 1
+    assert indice["max_id"] == pista[0][0]
+
+    # Sólo lo nuevo: pidiendo a partir del último id que ya tenemos no vuelve nada.
+    vacio = client.get("/collector/indice", headers=cab, params={"desde_id": indice["max_id"]}).json()
+    assert vacio["pistas"] == [] and vacio["nuevas"] == 0
+    # Y desde 0 vuelve todo (es lo que se pide una vez al día, para corregir desajustes).
+    completo = client.get("/collector/indice", headers=cab, params={"desde_id": 0}).json()
+    assert len(completo["pistas"]) >= 1
 
     ajustes = client.get("/collector/ajustes", headers=cab).json()
     # Las semillas viajan al PC: si cada máquina tuviera su copia, con el tiempo se separarían.

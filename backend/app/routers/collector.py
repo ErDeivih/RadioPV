@@ -80,19 +80,29 @@ def ajustes() -> dict:
 
 @router.get("/indice", summary="Qué canciones ya están (para no volver a bajarlas)",
             dependencies=[Depends(require_ingest_token)])
-def indice() -> dict:
+def indice(desde_id: int = Query(0, ge=0, description="devuelve sólo las canciones con id mayor"),
+           limite: Optional[int] = Query(None, ge=1, le=20000,
+                                         description="tope de filas (por seguridad)")) -> dict:
     """Lo que YA hay, con sus identificadores.
 
-    Se manda una lista de listas (`[título, artista, id_youtube, id_deezer]`) en vez de objetos con
-    nombres de campo: con 6.000 canciones eso es la mitad de bytes, y esto se pide cada pocos
+    Se manda una lista de listas (`[id, título, artista, id_youtube, id_deezer]`) en vez de objetos
+    con nombres de campo: con 6.000 canciones eso es la mitad de bytes, y esto se pide cada pocos
     minutos.
 
     **Los identificadores son imprescindibles**, no un extra: el recolector comprueba antes de
-    bajar nada si ese vídeo de YouTube ya está (`track_exists`), y sin el id el PC no puede saberlo.
-    Cuando se mandaban sólo «artista + título», el PC volvía a descargar canciones que ya tenía
-    —con otro nombre de artista, o de otro vídeo— y las volvía a enviar. Se descubrió comparando
+    bajar nada si ese vídeo de YouTube ya está (`pista_existente`), y sin el id el PC no puede
+    saberlo. Cuando se mandaban sólo «artista + título», el PC volvía a descargar canciones que ya
+    tenía —con otro nombre de artista, o de otro vídeo— y las volvía a enviar. Se descubrió comparando
     los ficheros de las dos máquinas: los del servidor eran más antiguos que los del PC, que es
     exactamente «la misma canción bajada dos veces».
+
+    POR QUÉ SE PUEDE PEDIR SÓLO LO NUEVO (`desde_id`)
+    ------------------------------------------------
+    Antes había que traerse las 6.000 filas enteras en cada vuelta para saber si había algo nuevo, y
+    el PC hace una vuelta cada 15 minutos: son ~200 KB y un recorrido completo de la tabla 96 veces al
+    día, para descubrir casi siempre que no ha cambiado nada. Con `desde_id` (el `max_id` que el PC
+    guardó la última vez) la consulta es «lo que se ha añadido desde entonces»: unas pocas filas, con
+    el índice por id, y el servidor no se entera.
     """
     import sqlite3
     from radiov.config import DB_PATH
@@ -100,13 +110,23 @@ def indice() -> dict:
     con = sqlite3.connect(str(DB_PATH))
     try:
         con.row_factory = sqlite3.Row
-        filas = con.execute("SELECT title, artist, youtube_id, deezer_id FROM tracks").fetchall()
+        total = con.execute("SELECT COUNT(*) n FROM tracks").fetchone()["n"]
+        max_id = con.execute("SELECT COALESCE(MAX(id), 0) m FROM tracks").fetchone()["m"]
+        sql = ("SELECT id, title, artist, youtube_id, deezer_id FROM tracks"
+               " WHERE id > ? ORDER BY id")
+        args: tuple = (desde_id,)
+        if limite:
+            sql += " LIMIT ?"
+            args += (limite,)
+        filas = con.execute(sql, args).fetchall()
     finally:
         con.close()
 
-    pistas = [[r["title"] or "", r["artist"] or "", r["youtube_id"] or "", str(r["deezer_id"] or "")]
+    pistas = [[r["id"], r["title"] or "", r["artist"] or "", r["youtube_id"] or "",
+               str(r["deezer_id"] or "")]
               for r in filas if r["title"] and r["artist"]]
-    return {"total": len(filas), "pistas": pistas}
+    return {"total": total, "max_id": max_id, "desde_id": desde_id,
+            "nuevas": len(pistas), "pistas": pistas}
 
 
 class Rec(BaseModel):
@@ -205,6 +225,19 @@ def importar(datos: ImportarIn) -> dict:
 
     Lo que sí viaja aquí es la fila entera: es lo que hace que la canción exista para el catálogo,
     con su carátula, su BPM y su ganancia ya calculados en el PC.
+
+    NO SE DUPLICA LO QUE YA ESTÁ
+    ----------------------------
+    Aquí estaba el agujero: se insertaba mirando sólo «artista + título» **exactos**, así que la
+    misma canción con otro nombre («(Official Video)», «(feat. …)») o **desde otro vídeo** entraba
+    como una ficha nueva. La biblioteca acabó con dos, tres y hasta cuatro fichas del mismo tema; una
+    de ellas apuntando a un fichero que ya no existía, que es lo que hace que una canción aparezca en
+    la aplicación y no suene.
+
+    Ahora cada pista que llega se resuelve con `pista_existente` (vídeo → Deezer → clave
+    normalizada) y, si ya está, **no se inserta**: se rellenan sólo sus huecos y se contesta
+    `repetida`, para que el PC lo sepa y no lo reintente. Y esto no le cuesta ni una petición más al
+    servidor: el PC ya mandaba este lote; sólo se mira antes de escribir.
     """
     import sys
     if "/app" not in sys.path:
@@ -212,20 +245,40 @@ def importar(datos: ImportarIn) -> dict:
     from radiov import db as rdb
 
     if not datos.pistas:
-        return {"nuevas": 0, "actualizadas": 0, "total": 0}
+        return {"nuevas": 0, "repetidas": 0, "total": 0, "repetidas_detalle": []}
+
+    # Las claves de toda la biblioteca, de UNA vez: comprobar cada pista del lote contra la base una
+    # por una serían decenas de consultas por vuelta para nada.
+    claves = rdb.indice_de_claves()
 
     nuevas = 0
+    repetidas: list[dict] = []
     for rec in datos.pistas:
         campos: dict[str, Any] = rec.model_dump(exclude_none=True)
-        antes = rdb.get_track_id_by_artist_title(campos.get("artist", ""), campos.get("title", ""))
+        ya = rdb.pista_existente(youtube_id=campos.get("youtube_id"),
+                                 deezer_id=campos.get("deezer_id"),
+                                 artist=campos.get("artist", ""),
+                                 title=campos.get("title", ""),
+                                 claves=claves)
+        if ya:
+            rellenos = rdb.rellenar_huecos(ya, campos)
+            repetidas.append({"id": ya, "artist": campos.get("artist"),
+                              "title": campos.get("title"),
+                              "youtube_id": campos.get("youtube_id"),
+                              "rellenos": rellenos})
+            continue
         try:
             rdb.add_track(campos)
         except Exception as e:  # noqa: BLE001
             rdb.log_event(f"⚠️ No se pudo importar {campos.get('artist')} - {campos.get('title')}: {e}",
                           "warning")
             continue
-        if not antes:
-            nuevas += 1
+        nuevas += 1
+        # La clave recién insertada se añade al índice en memoria: si el mismo lote trae dos veces la
+        # misma canción (pasa: dos vídeos del mismo tema), la segunda se reconoce en vez de entrar.
+        claves.add(rdb.clave_cancion(campos.get("artist", ""), campos.get("title", "")))
 
-    rdb.log_event(f"💻 {nuevas} pistas nuevas importadas del recolector de {datos.origen}", "info")
-    return {"nuevas": nuevas, "total": len(datos.pistas), "origen": datos.origen}
+    rdb.log_event(f"💻 Importadas del recolector de {datos.origen}: {nuevas} nuevas, "
+                  f"{len(repetidas)} que ya estaban (no se duplican)", "info")
+    return {"nuevas": nuevas, "repetidas": len(repetidas), "total": nuevas + len(repetidas),
+            "repetidas_detalle": repetidas[:20]}

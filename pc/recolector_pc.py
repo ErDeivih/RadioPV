@@ -158,6 +158,35 @@ def estado_servidor(cfg: dict) -> dict:
 
 
 # --------------------------------------------------------------------------------------------
+# Hasta dónde hemos visto: para pedir al servidor SÓLO lo nuevo
+# --------------------------------------------------------------------------------------------
+def _ruta_estado_indice(cfg: dict) -> Path:
+    return Path(cfg["datos_locales"]) / "indice_estado.json"
+
+
+def _leer_estado_indice(cfg: dict) -> dict:
+    """Recuerda el último id del catálogo del servidor que ya nos trajimos.
+
+    Con eso, cada vuelta pregunta «¿qué has añadido desde entonces?» en vez de traerse las 6.000
+    canciones enteras. El servidor lo agradece (es un portátil de 4 GB) y el PC también.
+    """
+    try:
+        return json.loads(_ruta_estado_indice(cfg).read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _guardar_estado_indice(cfg: dict, max_id: int) -> None:
+    try:
+        ruta = _ruta_estado_indice(cfg)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_text(json.dumps({"max_id": int(max_id), "cuando": time.time()}),
+                        encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        print(f"  AVISO: no se pudo guardar hasta dónde se leyó el índice: {e}")
+
+
+# --------------------------------------------------------------------------------------------
 # Sembrar: que el PC sepa lo que YA hay, para no volver a bajarlo
 # --------------------------------------------------------------------------------------------
 def sembrar(cfg: dict) -> int:
@@ -184,11 +213,23 @@ def sembrar(cfg: dict) -> int:
     print(f"  ajustes del servidor guardados en {SETTINGS_PATH}")
     print(f"  rutas locales: catalogada={CATALOG_DIR} · descargas={RAW_DIR}")
 
-    indice = pedir(cfg, "collector/indice")
+    # SÓLO LO NUEVO. El servidor devuelve las canciones con id mayor que el último que vimos, así que
+    # en una vuelta normal son unas pocas filas en vez de 6.000: esto se pide cada 15 minutos y no
+    # tiene sentido traerse el catálogo entero para descubrir que no ha cambiado nada. Cada 24 h (o si
+    # el fichero de estado no está) se pide entero, para corregir cualquier desajuste.
+    estado = _leer_estado_indice(cfg)
+    desde = estado.get("max_id", 0)
+    if time.time() - float(estado.get("cuando", 0)) > 24 * 3600:
+        desde = 0
+    indice = pedir(cfg, f"collector/indice?desde_id={int(desde)}")
     con = rdb.get_conn()
+    # Las claves de la biblioteca local, de UNA vez: comprobar cada canción del índice contra la base
+    # una por una serían miles de consultas por vuelta.
+    claves = rdb.indice_de_claves()
     nuevas = 0
     con_ids = 0
     conflictos = 0
+    repetidas = 0
     try:
         # Las fichas sembradas llevan TAMBIÉN los identificadores (id de YouTube y de Deezer).
         # Al principio sólo se guardaban artista y título, y el PC volvía a descargar canciones que
@@ -196,7 +237,18 @@ def sembrar(cfg: dict) -> int:
         # saberlo (o el mismo vídeo aparecía con otro nombre de artista). Se vio comparando los
         # ficheros de las dos máquinas: los del servidor eran más antiguos que los del PC, o sea la
         # misma canción bajada y enviada dos veces.
-        for titulo, artista, yt, dz in indice["pistas"]:
+        for pista in indice["pistas"]:
+            # El servidor manda `[id, título, artista, id_youtube, id_deezer]`, pero se aceptan
+            # también cuatro campos (sin el id) porque las dos máquinas se actualizan por su cuenta:
+            # el PC lee el código del repositorio en el sitio y el servidor se actualiza solo cada
+            # 5 minutos, así que hay ratos en los que uno va por delante del otro. Reventar por eso
+            # sería dejar de descargar por un detalle de formato.
+            if len(pista) >= 5:
+                _id_servidor, titulo, artista, yt, dz = pista[0], pista[1], pista[2], pista[3], pista[4]
+            elif len(pista) == 4:
+                titulo, artista, yt, dz = pista
+            else:
+                continue
             if not titulo or not artista:
                 continue
             yt = yt or None
@@ -224,10 +276,19 @@ def sembrar(cfg: dict) -> int:
                                     "WHERE id=?", (yt, dz, ya["id"]))
                         con_ids += 1
                     continue
+                # Antes de sembrar se comprueba con la MISMA norma que usa todo lo demás (vídeo →
+                # Deezer → clave normalizada de artista y título): la biblioteca del PC no puede
+                # quedarse con dos fichas de la misma canción porque el nombre venga con
+                # «(Official Video)» o porque sea otro vídeo del mismo tema.
+                if rdb.pista_existente(youtube_id=yt, deezer_id=dz, artist=artista, title=titulo,
+                                       claves=claves):
+                    repetidas += 1
+                    continue
                 con.execute(
                     "INSERT OR IGNORE INTO tracks(title, artist, youtube_id, deezer_id, status, source,"
                     " file_path, is_remix) VALUES(?,?,?,?,'descargada','sembrado','',0)",
                     (titulo, artista, yt, dz))
+                claves.add(rdb.clave_cancion(artista, titulo))
                 nuevas += 1
             except sqlite3.IntegrityError:
                 conflictos += 1
@@ -237,8 +298,10 @@ def sembrar(cfg: dict) -> int:
         con.commit()
     finally:
         con.close()
-    print(f"  índice del servidor: {indice['total']} canciones · {nuevas} fichas nuevas · "
-          f"{con_ids} identificadores completados"
+    _guardar_estado_indice(cfg, indice.get("max_id", desde))
+    print(f"  índice del servidor: {indice['total']} canciones en total · {indice.get('nuevas', '?')} "
+          f"nuevas desde la última vez · {nuevas} fichas sembradas · {con_ids} identificadores completados"
+          + (f" · {repetidas} ya estaban" if repetidas else "")
           + (f" · {conflictos} sin poder completar (el vídeo ya es de otra ficha)" if conflictos else ""))
     return nuevas
 
@@ -535,7 +598,27 @@ def publicar(cfg: dict) -> int:
         pistas.append(rec)
 
     respuesta = pedir(cfg, "collector/importar", datos={"pistas": pistas, "origen": cfg.get("nombre_pc", "pc")})
-    print(f"  fichas enviadas: {respuesta['total']} · nuevas en el servidor: {respuesta['nuevas']}")
+    repetidas = int(respuesta.get("repetidas") or 0)
+    print(f"  fichas enviadas: {respuesta['total']} · nuevas en el servidor: {respuesta['nuevas']}"
+          + (f" · ya estaban allí: {repetidas}" if repetidas else ""))
+
+    # Cuando el servidor dice que una canción «ya estaba», es que la teníamos las dos máquinas: en el
+    # PC por haberse bajado de nuevo y en el servidor desde antes (mismo vídeo con otro nombre, u otro
+    # vídeo del mismo tema). Se apunta en el registro del recolector para poder ver cuántas se repiten
+    # y de dónde salen, en vez de que ocurra en silencio.
+    if repetidas:
+        for detalle in respuesta.get("repetidas_detalle") or []:
+            print(f"      ya estaba: {detalle.get('artist')} - {detalle.get('title')}"
+                  + (f" (rellenado: {', '.join(detalle['rellenos'])})" if detalle.get("rellenos") else ""))
+        try:
+            from radiov import db as _rdb
+
+            ejemplos = ", ".join(f"{d.get('artist')} - {d.get('title')}"
+                                 for d in (respuesta.get("repetidas_detalle") or [])[:5])
+            _rdb.log_event(f"🔁 {repetidas} canciones enviadas ya estaban en el servidor "
+                           f"(no se han duplicado): {ejemplos}", "info")
+        except Exception:  # noqa: BLE001
+            pass
 
     con = rdb.get_conn()
     try:

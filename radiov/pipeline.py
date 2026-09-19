@@ -128,8 +128,10 @@ def fulfill_track(
     title = (title or "").strip()
     if not title:
         return None
-    # Evitar duplicados: si ya está en la biblioteca, no volver a descargar.
-    existing = db.get_track_id_by_artist_title(artist, title)
+    # Evitar duplicados: si ya está en la biblioteca, no volver a descargar. Se comprueba con la
+    # clave normalizada (no con el texto exacto), porque la misma canción aparece como «(Official
+    # Video)», «(feat. …)» o subida en otro vídeo, y eso antes colaba como canción nueva.
+    existing = db.pista_existente(artist=artist, title=title)
     if existing:
         db.log_event(f"⏩ Ya estaba en la biblioteca: {artist} - {title}", "info")
         return existing
@@ -469,6 +471,10 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
     random.shuffle(candidatos)          # no siempre los mismos primeros resultados
     added = 0
     en_portugues = 0
+    ya_estaba = 0
+    # Las claves de toda la biblioteca, de UNA vez. Comprobar cada candidato con su propia consulta
+    # serían 20-25 consultas por búsqueda para nada, y esto corre en un portátil de 4 GB.
+    claves = db.indice_de_claves()
 
     for cand in candidatos:
         if max_downloads is not None and added >= max_downloads:
@@ -488,7 +494,12 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
         if quality.parece_portugues(titulo, artista):
             en_portugues += 1
             continue
-        if db.track_exists_by_artist_title(artista, titulo):
+        # ¿La tenemos ya? Se mira por vídeo, por Deezer y por la clave normalizada de artista y
+        # título: es lo que evita bajar «Feid - HAXTA EL DÍA FINAL» cuando ya está «FEID - Haxta el
+        # dia final (Official Video)», o el mismo tema subido en otro vídeo. Antes sólo se comparaba
+        # el texto EXACTO, así que nada de eso coincidía y la misma canción entraba dos veces.
+        if db.pista_existente(youtube_id=vid, artist=artista, title=titulo, claves=claves):
+            ya_estaba += 1
             continue
         if db.is_blacklisted(M.BLACKLIST_ARTIST, artista):
             continue
@@ -507,11 +518,15 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
         tid = _persist_yt(bajado, genre=genero, language=idioma, source=M.SOURCE_AGENT)
         if tid is not None:
             added += 1
+            # La recién bajada entra en la lista de claves: si más abajo en la misma búsqueda sale
+            # otro vídeo del mismo tema, no se baja dos veces.
+            claves.add(db.clave_cancion(bajado["artist"], bajado["title"]))
         if progress is not None:
             progress["last"] = f"{artista} - {titulo}"
             progress["seen"] += 1
 
     db.log_event(f"🔎 Búsqueda en YouTube «{query}»: +{added} canciones"
+                 + (f" · {ya_estaba} ya estaban en la biblioteca" if ya_estaba else "")
                  + (f" · {en_portugues} descartadas por estar en portugués" if en_portugues else ""),
                  "info")
     return added
