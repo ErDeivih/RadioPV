@@ -230,7 +230,45 @@ def _download_by_id(video_id: str, outdir: Path, artist: str = "", title: str = 
         "youtube_duration": float(duration),
         "title": info.get("title") or "",
         "artist": info.get("artist") or info.get("creator") or info.get("channel") or "",
+        # El AÑO y la CARÁTULA salen del propio vídeo. Sin esto, el contenido que sólo existe en
+        # YouTube (mashups, remixes caseros, sesiones de DJ) se quedaba «incompleto» PARA SIEMPRE y
+        # no llegaba nunca a la aplicación: la puerta de metadatos exige año y carátula, y Deezer no
+        # tiene ficha de esas canciones, así que no había de dónde sacarlos. Se veía así en el
+        # recolector: «aviso: 15 descargadas aún sin completar; se mandarán cuando lo estén», y ahí
+        # se quedaban. El año es la fecha de subida del vídeo y la carátula su miniatura.
+        "year": _ano_de_upload(info),
+        "cover_url": _mejor_miniatura(info),
     }
+
+
+def _ano_de_upload(info: dict) -> Optional[int]:
+    """El año de subida del vídeo (`upload_date` viene como «20250714»)."""
+    fecha = str(info.get("upload_date") or "")
+    if len(fecha) >= 4 and fecha[:4].isdigit():
+        return int(fecha[:4])
+    # Si no hay `upload_date`, se prueba con la fecha de la última subida del canal.
+    for clave in ("release_date", "modified_date"):
+        otra = str(info.get(clave) or "")
+        if len(otra) >= 4 and otra[:4].isdigit():
+            return int(otra[:4])
+    return None
+
+
+def _mejor_miniatura(info: dict) -> Optional[str]:
+    """La miniatura más grande del vídeo, como URL (la descarga luego `fetch_media`)."""
+    miniaturas = info.get("thumbnails") or []
+    if isinstance(miniaturas, list) and miniaturas:
+        # Se ordenan por resolución y se coge la mayor que no sea un GIF ni una imagen rarísima.
+        validas = [m for m in miniaturas
+                   if isinstance(m, dict) and m.get("url")
+                   and "webp" not in str(m.get("url", "")).lower()]
+        if validas:
+            mejor = max(validas, key=lambda m: (m.get("width") or 0) * (m.get("height") or 0))
+            return str(mejor["url"])
+    if info.get("thumbnail"):
+        return str(info["thumbnail"])
+    vid = info.get("id")
+    return f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if vid else None
 
 
 def _locate(outdir: Path, video_id: str, ext: str) -> Optional[Path]:

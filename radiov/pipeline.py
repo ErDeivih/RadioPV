@@ -46,7 +46,12 @@ def _persist_yt(yt: dict, *, genre: str, language: str, source: str, meta: Optio
         "artist": yt.get("artist") or meta.get("artist", ""),
         "album": meta.get("album"),
         "release_date": meta.get("release_date"),
-        "year": meta.get("year"),
+        # El año y la carátula pueden venir del propio vídeo de YouTube (ver `youtube._download_by_id`).
+        # Es lo único que hay para el contenido que no está en las tiendas de música, y sin ello la
+        # ficha se quedaba «incompleta» para siempre (la puerta de metadatos los exige) y la canción
+        # no llegaba nunca a la aplicación.
+        "year": meta.get("year") or yt.get("year"),
+        "cover_url": meta.get("cover_url") or yt.get("cover_url") or yt.get("thumbnail"),
         "genre": genre,
         "language": language,
         "duration": yt.get("duration") or meta.get("duration"),
