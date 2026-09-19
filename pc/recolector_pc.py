@@ -523,6 +523,91 @@ def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, 
         tar_path.unlink(missing_ok=True)
 
 
+def revisar_extremos(cfg: dict, maximo: int = 12, buscar_otra: int = 2) -> int:
+    """Mira si las canciones bajadas de YouTube traen intro, diálogo o cola que no es la canción.
+
+    POR QUÉ AQUÍ Y NO EN EL SERVIDOR
+    --------------------------------
+    El audio está en el PC y analizarlo (librosa) come CPU: el servidor es un portátil de 4 GB que
+    además sirve la aplicación. Así que se mide aquí y el resultado viaja con la ficha.
+
+    QUÉ HACE
+    --------
+    1. Mide los extremos de unas cuantas canciones que aún no se hayan mirado (`radiov/extremos.py`).
+    2. Las que tienen **voz o diálogo** en los extremos (no simple silencio) se apuntan, y para unas
+       pocas por vuelta se **busca otra versión** de la misma canción que no lo traiga
+       (`pipeline.buscar_version_sin_intro`): primero los canales automáticos de discográfica
+       («Artista - Topic», que son la pista del álbum), luego las subidas de audio y letra. La versión
+       vieja no se borra: se aparta en `descargas/_descartadas/`.
+    """
+    from radiov import db as rdb
+    from radiov.extremos import analizar
+    from radiov.config import resolve_music
+
+    con = rdb.get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        filas = con.execute(
+            "SELECT id, title, artist, file_path, duration FROM tracks"
+            " WHERE extremos_revisado IS NULL AND file_path IS NOT NULL AND file_path <> ''"
+            " ORDER BY (youtube_id IS NOT NULL) DESC, id DESC LIMIT ?", (maximo,)).fetchall()
+    finally:
+        con.close()
+    if not filas:
+        return 0
+
+    print("  mirando intros y colas de lo bajado…")
+    revisadas = 0
+    con_algo = 0
+    candidatas: list[dict] = []
+    for f in filas:
+        ruta = resolve_music(f["file_path"])
+        if not Path(ruta).exists():
+            continue
+        try:
+            r = analizar(ruta, duracion=f["duration"])
+        except Exception as e:  # noqa: BLE001
+            print(f"    aviso: no se pudo analizar «{f['title']}»: {str(e)[:60]}")
+            continue
+        revisadas += 1
+        if not r.get("ok"):
+            continue
+        con = rdb.get_conn()
+        try:
+            con.execute("UPDATE tracks SET intro_seg=?, cola_seg=?, extremos_json=?, "
+                        "extremos_revisado=? WHERE id=?",
+                        (r["intro_seg"], r["cola_seg"], json.dumps(r, ensure_ascii=False),
+                         time.strftime("%Y-%m-%dT%H:%M:%S"), f["id"]))
+            con.commit()
+        finally:
+            con.close()
+        if r["intro_seg"] or r["cola_seg"]:
+            con_algo += 1
+            if r["buscar_otra"]:
+                candidatas.append({**dict(f), **r})
+                print(f"    intro={r['intro_seg']}s cola={r['cola_seg']}s (con voz) "
+                      f"→ {f['artist']} - {f['title']}"[:100])
+
+    print(f"  revisadas {revisadas} · con algo en los extremos {con_algo} · "
+          f"candidatas a otra versión {len(candidatas)}")
+
+    cambiadas = 0
+    for cand in candidatas[:buscar_otra]:
+        try:
+            from radiov import pipeline
+
+            res = pipeline.buscar_version_sin_intro(
+                cand["artist"], cand["title"], cand["id"], cand["file_path"],
+                intro_actual=cand["intro_seg"] or 0, cola_actual=cand["cola_seg"] or 0,
+                duracion=cand["duration"])
+            print(f"    {cand['artist']} - {cand['title']}: {res}"[:150])
+            if res.startswith("cambiada"):
+                cambiadas += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"    no se pudo buscar otra versión de «{cand['title']}»: {type(e).__name__}")
+    return cambiadas
+
+
 def completar(cfg: dict, maximo: int = 40) -> int:
     """Termina de analizar lo descargado ANTES de mandarlo.
 
@@ -589,7 +674,9 @@ def publicar(cfg: dict) -> int:
               "valence", "tags", "era", "feat", "duration", "file_path", "file_size", "status",
               "source", "youtube_id", "deezer_id", "cover_url", "cover_path", "artist_id",
               "artist_image_url", "artist_image_path", "is_remix", "analyzed_at", "added_at",
-              "match_score", "rms", "rank", "explicit")
+              "match_score", "rms", "rank", "explicit",
+              # Lo medido en los extremos (intro/cola): viaja para poder revisarlo en el panel.
+              "intro_seg", "cola_seg", "extremos_json", "extremos_revisado", "version_limpia")
     RUTAS = ("file_path", "cover_path", "artist_image_path")
     pistas = []
     for t in pendientes:
@@ -719,6 +806,12 @@ def main() -> int:
                     cfg, maximo=int(cfg.get("peticiones_por_vuelta", 5)))),
                 ("recolectar", lambda: recolectar(cfg, minutos, maximo)),
                 ("completar", lambda: completar(cfg)),
+                # Intros y colas: se revisan unas cuantas por vuelta. Va DESPUÉS de completar (así
+                # ya tienen gain/energía y se pueden publicar) y con tope, para que no le quite tiempo
+                # a lo importante, que es seguir descargando.
+                ("intros y colas", lambda: revisar_extremos(
+                    cfg, maximo=int(cfg.get("extremos_por_vuelta", 12)),
+                    buscar_otra=int(cfg.get("versiones_limpias_por_vuelta", 2)))),
                 ("publicar", lambda: publicar(cfg)),
             ]
 

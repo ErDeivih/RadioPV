@@ -252,10 +252,25 @@ def init_db() -> None:
             conn.execute("ALTER TABLE tracks ADD COLUMN veredicto_detalle TEXT")
         if "audio_huella" not in cols:
             conn.execute("ALTER TABLE tracks ADD COLUMN audio_huella REAL")
+        # --- Extremos (intros, diálogos y colas que no son la canción) ---
+        # Lo que se mide en `radiov/extremos.py` al terminar de bajar: en qué segundo empieza la
+        # música de verdad y en cuál acaba, y cuánto de eso es voz/ambiente en vez de silencio.
+        if "intro_seg" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN intro_seg REAL")
+        if "cola_seg" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN cola_seg REAL")
+        if "extremos_json" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN extremos_json TEXT")
+        if "extremos_revisado" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN extremos_revisado TEXT")
+        # `version_limpia`: se encontró y se puso otra versión de la misma canción sin la intro.
+        if "version_limpia" not in cols:
+            conn.execute("ALTER TABLE tracks ADD COLUMN version_limpia INTEGER DEFAULT 0")
         # índices de columnas recién migradas
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_veredicto ON tracks(veredicto)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_era ON tracks(era)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_energy ON tracks(energy)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_extremos ON tracks(extremos_revisado)")
         acols = [r[1] for r in conn.execute("PRAGMA table_info(artists)").fetchall()]
         if "image_path" not in acols:
             conn.execute("ALTER TABLE artists ADD COLUMN image_path TEXT")

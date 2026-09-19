@@ -157,6 +157,9 @@ def admin_tracks(
     energy_min: Optional[float] = None,
     energy_max: Optional[float] = None,
     match_score_min: Optional[float] = None,
+    intro_min: Optional[float] = None,
+    cola_min: Optional[float] = None,
+    con_extremos: Optional[float] = None,
     added_from: Optional[str] = None,
     added_to: Optional[str] = None,
     sort: Literal["artist", "title", "album", "year", "genre", "language", "added_at", "file_size"] = "artist",
@@ -181,6 +184,7 @@ def admin_tracks(
         bpm_min=bpm_min, bpm_max=bpm_max,
         energy_min=energy_min, energy_max=energy_max,
         match_score_min=match_score_min,
+        intro_min=intro_min, cola_min=cola_min, con_extremos=con_extremos,
         added_from=added_from, added_to=added_to,
     )
     try:
@@ -193,7 +197,7 @@ def admin_tracks(
     filas = _rows(
         f"""SELECT id, title, artist, album, year, genre, language, bpm, energy,
                    duration, file_size, status, source, explicit, is_remix, era,
-                   rank, match_score, added_at, file_path
+                   rank, match_score, added_at, file_path, intro_seg, cola_seg, version_limpia
             FROM tracks {clausula}
             ORDER BY {sort} {order.upper()}, title ASC
             LIMIT ? OFFSET ?""",
@@ -259,6 +263,17 @@ def admin_facets(_: models.User = Depends(require_admin)) -> dict:
             # Este es EXACTAMENTE el atajo «sin idioma detectado», que filtra `language = 'other'`.
             # Contar además los NULL daría un número mayor que el de canciones que se tocan.
             "sin_idioma": _one("SELECT COUNT(*) n FROM tracks WHERE language = 'other'") or {"n": 0},
+            # Canciones con intro o cola que no es la canción (voz, diálogo, silencio). El número es
+            # el mismo que el del atajo «con intro o cola» (mismo WHERE), así lo que se ve es lo que
+            # se tocaría.
+            "con_intro": _one("SELECT COUNT(*) n FROM tracks "
+                              "WHERE COALESCE(intro_seg, 0) >= 8") or {"n": 0},
+            "con_cola": _one("SELECT COUNT(*) n FROM tracks "
+                             "WHERE COALESCE(cola_seg, 0) >= 8") or {"n": 0},
+            "extremos_revisados": _one("SELECT COUNT(*) n FROM tracks "
+                                       "WHERE extremos_revisado IS NOT NULL") or {"n": 0},
+            "version_limpia": _one("SELECT COUNT(*) n FROM tracks "
+                                   "WHERE version_limpia = 1") or {"n": 0},
         },
     }
 
@@ -522,6 +537,14 @@ class BulkFilter(BaseModel):
     energy_max: Optional[float] = None
     match_score_min: Optional[float] = Field(None, description="Calidad del emparejamiento")
 
+    # --- extremos (intros, diálogos y colas que no son la canción) ---
+    intro_min: Optional[float] = Field(
+        None, description="Segundos mínimos de intro detectada (voz/diálogo antes de la música)")
+    cola_min: Optional[float] = Field(
+        None, description="Segundos mínimos de cola detectada (voz/despedida después de la música)")
+    con_extremos: Optional[float] = Field(
+        None, description="Intro + cola como mínimo (para ver «todas las que tienen algo raro»)")
+
     # --- fechas de alta ---
     added_from: Optional[str] = Field(None, description="Alta desde (AAAA-MM-DD)")
     added_to: Optional[str] = Field(None, description="Alta hasta (AAAA-MM-DD)")
@@ -613,6 +636,17 @@ def _where_bulk(f: BulkFilter) -> tuple[str, list]:
 
     if f.match_score_min is not None:
         donde.append("match_score >= ?"); args.append(f.match_score_min)
+
+    # --- extremos: intros/colas que no son la canción ---
+    # `intro_min` filtra por «tiene al menos N segundos de intro», y `con_extremos` por «tiene algo
+    # raro en los extremos» (intro o cola). Sirve para revisarlas y buscarles otra versión.
+    if f.intro_min is not None:
+        donde.append("COALESCE(intro_seg, 0) >= ?"); args.append(f.intro_min)
+    if f.cola_min is not None:
+        donde.append("COALESCE(cola_seg, 0) >= ?"); args.append(f.cola_min)
+    if f.con_extremos:
+        donde.append("(COALESCE(intro_seg, 0) + COALESCE(cola_seg, 0)) >= ?")
+        args.append(f.con_extremos)
 
     # --- fechas de alta ---
     if f.added_from:

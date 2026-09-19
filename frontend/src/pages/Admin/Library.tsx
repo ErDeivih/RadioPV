@@ -63,6 +63,17 @@ interface Atajo {
 
 const ATAJOS: Atajo[] = [
   {
+    clave: 'con-intro',
+    etiqueta: 'Con intro o cola (voz/diálogo)',
+    porque:
+      'Empiezan o acaban con algo que no es la canción: la intro hablada del vídeo, un diálogo, ' +
+      'una despedida. Se mide en el PC mirando el sonido (la música lleva bajo; una voz sola, no) y ' +
+      'el recolector ya busca otra versión sin eso. Estas son las que no ha podido cambiar.',
+    filtros: { con_extremos: 8 },
+    n: (f) => f.salud.con_intro.n + f.salud.con_cola.n,
+    vetar: false,
+  },
+  {
     clave: 'portugues',
     etiqueta: 'En portugués',
     porque:

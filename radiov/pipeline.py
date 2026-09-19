@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import random
 import re
 from pathlib import Path
@@ -530,6 +531,162 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
                  + (f" · {en_portugues} descartadas por estar en portugués" if en_portugues else ""),
                  "info")
     return added
+
+
+def buscar_version_sin_intro(artist: str, title: str, track_id: int, file_path: str, *,
+                             intro_actual: float = 0.0, cola_actual: float = 0.0,
+                             duracion: Optional[float] = None) -> str:
+    """Busca OTRA versión de la misma canción que no traiga intro hablada ni cola, y la pone.
+
+    POR QUÉ
+    -------
+    De un mismo tema hay muchas subidas: el **vídeo oficial** (que suele empezar con el presentador,
+    un diálogo o una escena), el **audio oficial** del disco, el **lyric video**, y los canales
+    automáticos «Artista - Topic» (que son la pista del álbum tal cual). El usuario lo pidió así:
+    *«para buscar otra versión que no lo tenga»*.
+
+    CÓMO
+    ----
+    1. Se buscan candidatos con sesgo hacia lo que NO trae intro: se pregunta por «audio», por
+       «topic» (los canales automáticos de discográfica) y por la canción a secas.
+    2. Se descarta el vídeo que ya tenemos y los que ya están en la biblioteca.
+    3. Se baja el mejor candidato a una carpeta temporal, se le miden los extremos con el MISMO
+       detector y sólo se cambia si **está claramente mejor** (al menos 4 s menos de intro+cola) y la
+       duración se parece (si no, es otra grabación: un directo, un remix…).
+    4. Si se cambia, el fichero viejo se mueve a `descargas/_descartadas/` (no se borra) y la ficha
+       del PC se actualiza para que el recolector lo vuelva a enviar al servidor.
+
+    Devuelve un texto con lo que ha pasado (se imprime en el registro del recolector).
+    """
+    from pathlib import Path
+
+    from . import youtube as Y
+    from .extremos import analizar
+
+    if not title:
+        return "sin título que buscar"
+
+    cfg = load_settings()
+    candidatos: list[dict] = []
+    vistos: set[str] = set()
+    # El orden importa: primero lo que estadísticamente trae menos intro.
+    consultas = [f"{artist} {title} topic", f"{artist} {title} audio",
+                 f"{artist} {title} lyric", f"{artist} {title}"]
+    for consulta in consultas:
+        try:
+            for c in Y.search_videos(consulta, 6):
+                vid = c.get("id")
+                if not vid or vid in vistos:
+                    continue
+                vistos.add(vid)
+                candidatos.append({**c, "_consulta": consulta})
+        except Exception:  # noqa: BLE001
+            continue
+    if not candidatos:
+        return "no se encontraron candidatos"
+
+    def prioridad(c: dict) -> tuple:
+        """Cuánto promete este candidato para NO traer intro."""
+        canal = (c.get("uploader") or c.get("channel") or "").lower()
+        titulo_c = (c.get("title") or "").lower()
+        puntos = 0
+        if canal.endswith("- topic"):
+            puntos += 3          # canal automático de discográfica: es la pista del álbum
+        if "audio" in titulo_c or "audio" in c["_consulta"]:
+            puntos += 2
+        if "lyric" in titulo_c or "letra" in titulo_c:
+            puntos += 1
+        if "official video" in titulo_c or "videoclip" in titulo_c:
+            puntos -= 2          # el vídeo oficial es justo el que suele traer la intro
+        return (-puntos, c.get("duration") or 0)
+
+    candidatos.sort(key=prioridad)
+    mejor_actual = intro_actual + cola_actual
+    # Márgenes para CAMBIAR la canción (no para avisar; avisar es más barato y no rompe nada):
+    #   · la nueva tiene que estar prácticamente limpia (≤ LIMPIO segundos de extremos raros), y
+    #   · tiene que mejorar de verdad (≥ MEJORA segundos menos).
+    # Con un solo criterio se cambiaba una intro de 21 s por otra de 14 s, y eso NO es lo que se
+    # busca: el usuario quiere la canción sin intro, no «menos intro».
+    LIMPIO = 8.0
+    MEJORA = 6.0
+
+    for cand in candidatos[:4]:
+        vid = cand.get("id")
+        if db.pista_existente(youtube_id=vid) or db.track_exists(vid):
+            continue
+        # La duración tiene que parecerse: si es un directo de 8 minutos, es otra cosa.
+        dur_cand = float(cand.get("duration") or 0)
+        if duracion and dur_cand and abs(dur_cand - float(duracion)) / max(float(duracion), 1) > 0.25:
+            continue
+
+        bajado = Y.download_video(vid, artist=artist, title=title)
+        if not bajado or not bajado.get("file_path"):
+            continue
+        try:
+            medida = analizar(bajado["file_path"], duracion=bajado.get("youtube_duration"))
+        except Exception:  # noqa: BLE001
+            medida = {"ok": False}
+        if not medida.get("ok"):
+            Path(bajado["file_path"]).unlink(missing_ok=True)
+            continue
+        nuevo_total = float(medida.get("intro_seg") or 0) + float(medida.get("cola_seg") or 0)
+        if nuevo_total > LIMPIO or nuevo_total > mejor_actual - MEJORA:
+            # O sigue teniendo intro, o no mejora lo suficiente: se descarta lo bajado y se prueba
+            # con el siguiente candidato.
+            Path(bajado["file_path"]).unlink(missing_ok=True)
+            continue
+
+        # --- se cambia ---
+        from . import catalog as C
+        from .config import resolve_music
+
+        # El fichero viejo NO se borra: se aparta en `descargas/_descartadas/`. Si la versión nueva
+        # resultara peor por algo (un corte, un empalme raro), la original sigue ahí.
+        viejo = resolve_music(file_path)
+        descartadas = Path(cfg["download_dir"]) / "_descartadas"
+        descartadas.mkdir(parents=True, exist_ok=True)
+        try:
+            if viejo.exists():
+                viejo.replace(descartadas / viejo.name)
+        except OSError:
+            pass
+
+        rec = {
+            "title": title, "artist": artist, "youtube_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "file_path": bajado["file_path"], "file_size": bajado.get("file_size"),
+            "duration": bajado.get("youtube_duration") or dur_cand,
+            "cover_url": bajado.get("cover_url"), "year": bajado.get("year"),
+        }
+        try:
+            organizado = C.organize_track(rec)
+            if organizado:
+                rec["file_path"] = organizado
+        except Exception:  # noqa: BLE001
+            pass
+
+        # La ruta se guarda RELATIVA a la carpeta de música (cada máquina tiene la suya: en el PC es
+        # `E:/MusicaRadioPV` y en el servidor `/music`), que es como la espera todo lo demás.
+        rel = C._rel_music(str(rec["file_path"]))
+        db.update_track(track_id, file_path=rel, youtube_id=vid,
+                        youtube_url=rec["youtube_url"], file_size=rec["file_size"],
+                        duration=rec["duration"], intro_seg=medida["intro_seg"],
+                        cola_seg=medida["cola_seg"], version_limpia=1,
+                        extremos_json=json.dumps(medida, ensure_ascii=False))
+        # La ficha tiene que volver a enviarse al servidor (el fichero es otro).
+        conn = db.get_conn()
+        try:
+            conn.execute("DELETE FROM pc_enviadas WHERE track_id=?", (track_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        db.log_event(f"🎯 Otra versión sin intro para {artist} - {title}: "
+                     f"intro {intro_actual}s → {medida['intro_seg']}s", "info")
+        return (f"cambiada por {vid} ({cand.get('uploader')}): "
+                f"intro {intro_actual}s → {medida['intro_seg']}s, cola {cola_actual}s → "
+                f"{medida['cola_seg']}s")
+
+    return f"ninguna de las {len(candidatos)} versiones encontradas mejora lo que hay"
 
 
 def process_seed(seed: dict, client: Optional[deezer.DeezerClient] = None,

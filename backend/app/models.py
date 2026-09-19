@@ -41,6 +41,15 @@ class Track(Base):
     cover_path = Column(Text)
     artist_image_url = Column(Text)
     artist_image_path = Column(Text)
+    # Extremos de la canción: segundos de intro y de cola que NO son la canción (una intro hablada,
+    # un diálogo, un silencio). Lo mide el recolector del PC (`radiov/extremos.py`) porque es donde
+    # está el audio; aquí se guarda para poder revisarlo en el panel y buscar otra versión.
+    intro_seg = Column(Float)
+    cola_seg = Column(Float)
+    extremos_json = Column(Text)
+    extremos_revisado = Column(String(30))
+    # Se encontró y se puso otra versión de la misma canción sin esa intro.
+    version_limpia = Column(Integer, default=0)
     deezer_id = Column(String(40), unique=True, index=True)
     album_id = Column(String(40))
     artist_id = Column(String(40))

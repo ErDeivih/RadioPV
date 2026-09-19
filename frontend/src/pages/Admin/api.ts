@@ -54,6 +54,14 @@ export interface Salud {
   rank_bajo_60: { n: number };
   cortas: { n: number };
   sin_idioma: { n: number };
+  /** Canciones con intro detectada (voz/diálogo antes de la música). */
+  con_intro: { n: number };
+  /** Canciones con cola detectada (voz/despedida después de la música). */
+  con_cola: { n: number };
+  /** Cuántas se han mirado ya (el PC las revisa por lotes en cada vuelta). */
+  extremos_revisados: { n: number };
+  /** Cuántas se han cambiado por otra versión sin esa intro. */
+  version_limpia: { n: number };
 }
 
 export interface Facets {
@@ -80,6 +88,12 @@ export interface TrackRowExtra {
   era?: string | null;
   rank?: number | null;
   match_score?: number | null;
+  /** Segundos de intro detectada (voz/diálogo antes de que empiece la música). */
+  intro_seg?: number | null;
+  /** Segundos de cola detectada (voz/despedida después de la música). */
+  cola_seg?: number | null;
+  /** 1 si se encontró y se puso otra versión de la misma canción sin intro. */
+  version_limpia?: number | null;
 }
 
 export interface TrackListResponse {
@@ -114,6 +128,10 @@ export interface TrackFilters {
   energy_min?: number;
   energy_max?: number;
   match_score_min?: number;
+  // --- extremos: intros/colas que no son la canción ---
+  intro_min?: number;
+  cola_min?: number;
+  con_extremos?: number;
   added_from?: string;
   added_to?: string;
   sort?: string;

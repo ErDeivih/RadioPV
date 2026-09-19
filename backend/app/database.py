@@ -80,6 +80,14 @@ _MIGRACIONES_COLUMNAS = {
         ("yt_views", "BIGINT"),
         ("yt_likes", "BIGINT"),
         ("popularidad", "FLOAT"),
+        # Extremos: segundos de intro/cola que NO son la canción (voz, diálogo, silencio). Los mide
+        # `radiov/extremos.py` en el PC (que es donde está el audio) y aquí se ven en el panel de
+        # administración, para revisarlas y buscar otra versión sin esa intro.
+        ("intro_seg", "FLOAT"),
+        ("cola_seg", "FLOAT"),
+        ("extremos_json", "TEXT"),
+        ("extremos_revisado", "VARCHAR(30)"),
+        ("version_limpia", "INTEGER DEFAULT 0"),
     ],
     "playlists": [
         ("cover_path", "TEXT"),       # portada propia de la lista
