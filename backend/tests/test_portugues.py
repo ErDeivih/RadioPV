@@ -36,12 +36,16 @@ def test_detecta_portugues(titulo, artista):
     ("Himno de la Alegría", "Miguel Ríos"),
     ("Ojos Verdes", "Miguel de Molina"),
     ("Sabor a Mí", "Los Panchos"),
-    ("Cê Não Sabe", "X"),          # caso raro: se acepta el falso negativo, no el positivo
+    # Francés e inglés que YA cayeron de verdad en una primera versión del detector (19/09/2026) y
+    # que no pueden volver a caer: son las tres trampas que se encontraron contra el catálogo real.
+    ("Tout en Gucci", "Ninho"),                       # «Ninho» termina en -inho, pero es un nombre
+    ("Lettre à une femme", "Ninho"),
+    ("Balek (feat. Aya Nakamura, MC YOSHI, Mauvais Djo)", "TRIANGLE DES BERMUDES"),  # «MC YOSHI»
+    ("Here I Am / Small Axe (Come And Take Me)", "UB40"),   # «axe» sin tilde no es el género axé
+    ("Tá Bueno", "Un Español Cualquiera"),            # «tá» se escribe igual en español coloquial
 ])
 def test_no_confunde_el_espanol(titulo, artista):
-    if titulo == "Cê Não Sabe":
-        pytest.skip("se prefiere no detectar algunos casos raros antes que rechazar español")
-    assert not parece_portugues(titulo, artista), f"se rechazó español: {artista} - {titulo}"
+    assert not parece_portugues(titulo, artista), f"se rechazó algo que no es portugués: {artista} - {titulo}"
 
 
 def test_la_puerta_rechaza_portugues():

@@ -35,26 +35,37 @@ DUR_MIN_SESION, DUR_MAX_SESION = 300.0, 10800.0   # sesión de DJ (5:00 – 3:00
 # Se reconocen marcas que el español NO usa, para no tirar canciones en español:
 #   · terminaciones en «-ção» y palabras con «ã» (não, então, coração): en español serían «-ción»
 #     (canción, corazón) y «á»;
-#   · «você/vocês», «ao vivo», «muito», «saudade», «obrigado», «beijo», «cê», «tô», «tá», «só»;
-#   · el diminutivo en «-inho/-inha» («gostosinho», «pouquinho», «beijinho»): en español es
-#     «-ito/-iño», así que «nh» delata al portugués y no aparece en castellano;
+#   · «você/vocês», «ao vivo», «muito», «saudade», «obrigado», «beijo», «cê», «só», «comigo»;
+#   · el diminutivo en «-inho/-inha» SÓLO detrás de artículo o posesivo («um pouquinho», «meu
+#     beijinho»): en español el diminutivo es «-ito/-iño», así que «nh» delata al portugués. A
+#     propósito NO vale un «-inho» suelto: «Ninho» es un rapero francés y lo mandaba a cuarentena;
 #   · géneros que sólo existen en Brasil: sertanejo, piseiro, forró, pagode, axé, arrocha,
 #     vaquejada, sofrência, brega, funk carioca, baile funk.
-# OJO: «música» NO sirve como marca (se escribe igual en los dos idiomas) y por eso no está.
+# OJO con tres cosas que se probaron y se quitaron por imprecisas:
+#   · «música» se escribe igual en español y en portugués (media lista española fuera);
+#   · «axé» SIN tilde coincide con «axe» inglés («Small Axe», de UB40): tiene que llevar el tilde;
+#   · «tá» y «tô» se escriben igual en el español coloquial («tá bien»), así que no sirven de marca.
+# Y «mc N…» se mira SÓLO en el artista (ver `parece_portugues`): en una colaboración de rap francés
+# aparecen «MC YOSHI» y compañía, y eso no es funk brasileño.
 _PORTUGUES_RE = re.compile(
     r"\b\w+ç(ão|ões)\b|\bnão\b|\bentão\b|\btambém\b|\bvocês?\b|\bao\s+vivo\b|\bmuito\b|"
-    r"\bsaudade\b|\bobrigad[oa]\b|\bbeijo\b|\bcê\b|\btô\b|\btá\b|\bsó\b|\bpra\s+mim\b|\bcomigo\b|"
-    r"\b\w+inho\b|\b\w+inha\b|"
-    r"\bsertanej\w+|\bpiseiro\b|\bforr[óo]\b|\bpagode\b|\bax[ée]\b|\barrocha\b|\bvaquejada\b|"
-    r"\bsofrência\b|\bbrega\b|\bfunk\s+carioca\b|\bbaile\s+funk\b|\bmc\s+[a-z]|"
-    r"\bdvd\b|\bao\s+vivo\s+em\b",
+    r"\bsaudade\b|\bobrigad[oa]\b|\bbeijo\b|\bcê\b|\bsó\b|\bpra\s+mim\b|\bcomigo\b|"
+    r"\b(?:um|uma|do|da|no|na|meu|minha|seu|sua|esse|essa)\s+\w+inh[ao]\b|"
+    r"\bsertanej\w+|\bpiseiro\b|\bforr[óo]\b|\bpagode\b|\baxé\b|\barrocha\b|\bvaquejada\b|"
+    r"\bsofrência\b|\bbrega\b|\bfunk\s+carioca\b|\bbaile\s+funk\b",
     re.I)
+
+# Artistas brasileños de funk: se llaman «Mc» + nombre («Mc GP», «MC LUUKY»). Se comprueba sólo al
+# PRINCIPIO del nombre del artista.
+_ARTISTA_MC_RE = re.compile(r"^\s*mc[\s.]", re.I)
 
 
 def parece_portugues(titulo: str = "", artista: str = "") -> bool:
     """¿Esto es portugués? Se mira el título y el artista (en Brasil el «artista» suele ser el
     cantante del canal: «Mc GP», «Henrique & Juliano»)."""
-    return bool(_PORTUGUES_RE.search(f"{titulo or ''} {artista or ''}"))
+    if _PORTUGUES_RE.search(f"{titulo or ''} {artista or ''}"):
+        return True
+    return bool(_ARTISTA_MC_RE.match(artista or ""))
 
 
 ARTISTAS_PROHIBIDOS = {"deezer", "disney", "various artists", "various", "unknown"}

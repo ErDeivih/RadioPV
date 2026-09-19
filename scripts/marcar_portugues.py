@@ -25,6 +25,8 @@ DB = os.environ.get("RADIOPV_DATA_DIR", "/app/data") + "/backend.db"
 ap = argparse.ArgumentParser()
 ap.add_argument("--cuarentena", action="store_true",
                 help="saca de circulación las encontradas (estado cuarentena)")
+ap.add_argument("--revertir", action="store_true",
+                help="devuelve a su idioma real las fichas que dicen 'pt' sin serlo (míralas antes)")
 ap.add_argument("--limite", type=int, default=40, help="cuántas enseñar")
 args = ap.parse_args()
 
@@ -80,5 +82,35 @@ if ids_idioma:
     con.execute(f"UPDATE tracks SET language='pt' WHERE id IN ({q})", ids_idioma)
     con.commit()
     print(f"[OK] {len(ids_idioma)} fichas marcadas con idioma 'pt' (filtrables en el panel)")
+
+# Y AL REVÉS: una ficha que dice 'pt' pero que el detector de HOY no reconoce como portugués. Esto no
+# es teórico: la primera versión del detector marcaba como portugués al rapero francés «Ninho»
+# (termina en «-inho») y a colaboraciones de rap francés con «MC YOSHI», así que hay fichas marcadas
+# 'pt' que no lo son. Dejarlas así es peor que no haber hecho nada: el usuario las borraría creyendo
+# que son brasileñas.
+#
+# Va con `--revertir` A PROPÓSITO, no automático. La lista de marcas de la puerta es ESTRECHA (a
+# propósito, para no tirar español), así que hay canciones en portugués que no reconoce: revertirlas
+# «a su idioma real» les pondría `other` y se perderían de la limpieza. Se enseña primero y se
+# decide con la lista delante.
+from radiov.catalog import detect_language  # noqa: E402
+
+sospechosas_ids = {f["id"] for f in sospechosas}
+revertir = [f for f in con.execute(
+    "SELECT id, title, artist, language FROM tracks WHERE language='pt'").fetchall()
+    if f["id"] not in sospechosas_ids]
+if revertir:
+    print(f"\n=== fichas que dicen 'pt' y el detector NO reconoce: {len(revertir)} ===")
+    for f in revertir[:args.limite]:
+        print(f"   id={f['id']:<6} {f['artist']} - {f['title']}"[:100]
+              + f"   (serían {detect_language(f['title'] or '', f['artist'] or '')})")
+    if args.revertir:
+        for f in revertir:
+            nuevo = detect_language(f["title"] or "", f["artist"] or "")
+            con.execute("UPDATE tracks SET language=? WHERE id=?", (nuevo, f["id"]))
+        con.commit()
+        print(f"[OK] {len(revertir)} fichas devueltas a su idioma real")
+    else:
+        print("[..] para cambiarlas de verdad: --revertir (míralas antes: el detector es estrecho)")
 
 con.close()
