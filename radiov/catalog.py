@@ -317,16 +317,28 @@ _REMIX_RE = re.compile(
 
 
 def is_remix(title: str = "", artist: str = "") -> bool:
-    """¿Es un remix, un mashup o una sesion de DJ?
+    """¿Es un remix, un mashup o una sesión de DJ? (marca de dos valores, para la BD)
 
-    Se mira el titulo Y el artista: hay mashups que en el titulo solo llevan el cruce de dos
-    canciones y el DJ aparece unicamente en el nombre del artista (o al reves).
+    El detalle de QUÉ tipo es lo lleva `radiov.quality.clasificar`, que además limpia el `feat.`
+    antes de mirar al artista: así «Basshunter - Now You're Gone (feat. DJ Mental Theo…)» deja de
+    contar como sesión de DJ por el colaborador, que era un falso positivo real del catálogo.
 
-    El «dj» se busca SIN exigir un espacio detras, porque muchos nombres van pegados: `djpino`,
-    `djmarko`... Con `\\bdj\\b` no coincidian y esos mashups se perdian sin marcar.
+    El «dj» se busca SIN exigir un espacio detrás, porque muchos nombres van pegados: `djpino`,
+    `djmarko`… Con `\\bdj\\b` no coincidían y esos mashups se perdían sin marcar.
     """
+    from .quality import clasificar
+
+    if clasificar(title, artist) is not None:
+        return True
     text = f"{title} {artist}"
     return bool(_REMIX_RE.search(text)) or bool(re.search(r"\bdj", text, re.I))
+
+
+def tipo_de_pista(title: str = "", artist: str = "", duration: float | None = None) -> str | None:
+    """'mashup' | 'remix' | 'sesion' | None. Un solo sitio decide qué es cada cosa."""
+    from .quality import clasificar
+
+    return clasificar(title, artist, duration)
 
 
 def derive_tags(bpm=None, energy=None, genre="other", year=None, title="", artist="",

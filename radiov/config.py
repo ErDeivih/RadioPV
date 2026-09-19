@@ -171,11 +171,26 @@ DEFAULT_SETTINGS: dict = {
 
     # MASHUPS Y REMIXES: canciones que mezclan dos o tres temas, hechas por gente en YouTube.
     # Se buscan por texto (es lo que mejor encuentra ese tipo de contenido).
+    #
+    # OJO: la puerta de calidad los tenía prohibidos sin querer. Cortaba todo lo que durase más de
+    # 15 minutos («corta mezclas de DJ»), así que las sesiones largas —que son justo lo que se
+    # busca aquí— se quedaban en cuarentena al entrar. Ver `radiov/quality.py`.
     {"mode": "query", "genre": "dance", "query": "mashup two songs", "language": "en"},
     {"mode": "query", "genre": "dance", "query": "best mashup mix", "language": "en"},
     {"mode": "query", "genre": "pop", "query": "mashup 3 songs", "language": "en"},
     {"mode": "query", "genre": "reggaeton", "query": "mashup reggaeton", "language": "es"},
     {"mode": "query", "genre": "dance", "query": "remix mashup", "language": "en"},
+    # En castellano, que es la mitad del catálogo y donde más se titula «mashup de …».
+    {"mode": "query", "genre": "pop", "query": "mashup en español", "language": "es"},
+    {"mode": "query", "genre": "latin", "query": "mashup de canciones", "language": "es"},
+    {"mode": "query", "genre": "reggaeton", "query": "mashup reggaeton viejo", "language": "es"},
+    {"mode": "query", "genre": "pop", "query": "mashup 2025", "language": "es"},
+    # Los cruces «A x B» y «A vs B»: así se titula la mayoría de los mashups de YouTube, y sin
+    # la palabra «mashup» no aparecían en ninguna búsqueda.
+    {"mode": "query", "genre": "pop", "query": "mashup canciones mezcladas", "language": "es"},
+    {"mode": "query", "genre": "dance", "query": "mashup party mix", "language": "en"},
+    {"mode": "query", "genre": "pop", "query": "best mashups of all time", "language": "en"},
+    {"mode": "query", "genre": "ballad", "query": "mashup baladas", "language": "es"},
     # SESIONES DE DJ: sesiones y mezclas de DJs conocidos (djpino y muchos parecidos). Son
     # canciones largas, con muchas visitas, y van muy bien para escuchar de un tiron con los
     # auriculares. Se buscan por texto y ademas por DJ concreto.
@@ -185,6 +200,20 @@ DEFAULT_SETTINGS: dict = {
     {"mode": "query", "genre": "dance", "query": "dj set live mix", "language": "en"},
     {"mode": "query", "genre": "reggaeton", "query": "dj session reggaeton", "language": "es"},
     {"mode": "query", "genre": "pop", "query": "party mix session", "language": "es"},
+    # Sesiones en castellano: «sesión de DJ», «set DJ», «reggaeton viejo mezclado»… que es como se
+    # titulan las que se escuchan aquí de un tirón.
+    {"mode": "query", "genre": "reggaeton", "query": "sesion de dj reggaeton", "language": "es"},
+    {"mode": "query", "genre": "reggaeton", "query": "reggaeton viejo mix", "language": "es"},
+    {"mode": "query", "genre": "latin", "query": "set dj latin", "language": "es"},
+    {"mode": "query", "genre": "cumbia", "query": "sesion de cumbia mix", "language": "es"},
+    {"mode": "query", "genre": "bachata", "query": "dj set bachata mix", "language": "es"},
+    {"mode": "query", "genre": "electro", "query": "sesion de musica electronica", "language": "es"},
+    {"mode": "query", "genre": "dance", "query": "clasicos del reggaeton mix", "language": "es"},
+    {"mode": "query", "genre": "dance", "query": "old school hip hop mix dj", "language": "en"},
+    {"mode": "query", "genre": "disco", "query": "70s disco mix dj set", "language": "en"},
+    # DJs que hacen sesiones largas y aparecen mucho en YouTube.
+    {"mode": "explore", "genre": "reggaeton", "language": "es",
+     "seeds": ["DJ Ronald Hess", "DJ Kay Slay", "DJ Nelson", "DJ Blass"]},
     ],
     "max_per_artist": 10,
     # Actividades/ritmos: subdivisión de BPM + orientación para el usuario.

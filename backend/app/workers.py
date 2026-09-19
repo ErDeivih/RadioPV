@@ -440,6 +440,44 @@ def _swap_system_playlist(db, nombre: str, track_ids: list, user_id=None) -> int
     return len(track_ids)
 
 
+def rebuild_remixes(db) -> int:
+    """Listas de mashups, remixes y sesiones de DJ.
+
+    POR QUÉ
+    -------
+    El usuario escucha mucho este tipo de música y **en la aplicación no había forma de
+    encontrarla**: el catálogo la marcaba (`is_remix`) y el panel de administración podía
+    filtrarla, pero para el oído no existía. Se generan dos listas:
+
+      · «Mashups y remixes» — cruces de dos o más canciones y remixes sueltos.
+      · «Sesiones de DJ»    — mezclas largas, para escuchar de un tirón.
+
+    El tipo lo decide `radiov.quality.clasificar` (el mismo que usa la puerta de calidad), así que
+    la lista y el catálogo no pueden discrepar. Se ordena por popularidad: primero lo que más
+    suena, que es lo que se quiere escuchar.
+    """
+    from radiov.quality import clasificar
+
+    filas = (db.query(models.Track.id, models.Track.title, models.Track.artist,
+                      models.Track.duration, models.Track.rank)
+             .filter(models.Track.status == "descargada")
+             .all())
+    remixes, sesiones = [], []
+    for tid, title, artist, duration, rank in filas:
+        tipo = clasificar(title or "", artist or "", duration)
+        if tipo == "sesion":
+            sesiones.append((rank or 0, tid))
+        elif tipo in ("mashup", "remix"):
+            remixes.append((rank or 0, tid))
+
+    remixes.sort(reverse=True)
+    sesiones.sort(reverse=True)
+    n = _swap_system_playlist(db, "Mashups y remixes", [tid for _, tid in remixes[:60]])
+    n += _swap_system_playlist(db, "Sesiones de DJ", [tid for _, tid in sesiones[:40]])
+    log.info("[remixes] %s mashups/remixes y %s sesiones", len(remixes), len(sesiones))
+    return n
+
+
 def rebuild_home_tops(db) -> int:
     """TOP2 · tops de la propia casa, hecho con los `plays` reales (testable, sin red)."""
     from collections import Counter
@@ -626,6 +664,7 @@ def _pasada_inicial(descargadora=None) -> None:
         # Antes que nada: publicar las que ya estén completas. Es barato (una consulta) y hace
         # visibles de golpe las canciones que llevaban meses descargadas pero ocultas.
         ("republicar_completas", republicar_completas),
+        ("rebuild_remixes", rebuild_remixes),
         ("rebuild_similar", rebuild_similar_job),
         ("rebuild_static_lists", rebuild_static_lists),
         ("rebuild_home_tops", rebuild_home_tops),
@@ -683,6 +722,9 @@ def main():
     _programar(s, "rebuild_mixes", rebuild_mixes, trigger="cron", hour=5)
     _programar(s, "refresh_trends", refresh_trends, trigger="interval", hours=8)
     _programar(s, "rebuild_static_lists", rebuild_static_lists, trigger="cron", hour=6)
+    # Los mashups y las sesiones de DJ: la música que el usuario escucha de un tirón. Se
+    # recalcula varias veces al día porque el recolector va añadiendo constantemente.
+    _programar(s, "rebuild_remixes", rebuild_remixes, trigger="interval", hours=3)
     _programar(s, "rebuild_home_tops", rebuild_home_tops, trigger="cron", hour=6, minute=30)
     _programar(s, "rebuild_cut_tops", rebuild_cut_tops, trigger="cron", hour=6, minute=45)
     _programar(s, "rebuild_recopilaciones", rebuild_recopilaciones, trigger="cron", hour=7, minute=15)
