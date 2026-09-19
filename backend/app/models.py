@@ -148,7 +148,12 @@ class Playlist(Base):
 class PlaylistTrack(Base):
     __tablename__ = "playlist_tracks"
     id = Column(Integer, primary_key=True)
-    playlist_id = Column(Integer, ForeignKey("playlists.id"), index=True)
+    # ON DELETE CASCADE: al borrar una lista, sus filas se van con ella. ESTO NO ACTÚA en esta
+    # instalación porque `PRAGMA foreign_keys` está a OFF (ver `database.py`), así que el borrado
+    # explícito sigue siendo obligatorio; se declara para que una base NUEVA quede bien hecha y
+    # para dejar escrito qué relación es. Dejar filas sueltas aquí no es sólo basura: como los ids
+    # de `playlists` se reutilizan, la siguiente lista que se creaba HEREDABA estas canciones.
+    playlist_id = Column(Integer, ForeignKey("playlists.id", ondelete="CASCADE"), index=True)
     track_id = Column(Integer, ForeignKey("tracks.id"), index=True)
     position = Column(Integer)
     added_at = Column(DateTime, default=datetime.utcnow)

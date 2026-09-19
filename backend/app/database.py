@@ -105,6 +105,34 @@ _MIGRACIONES_INDICES = {
 }
 
 
+def limpiar_listas_huerfanas(bind=None) -> int:
+    """Borra filas de `playlist_tracks` cuya lista ya no existe. Devuelve cuántas borró.
+
+    POR QUÉ HACE FALTA
+    ------------------
+    `playlists.id` es un `INTEGER PRIMARY KEY` normal, y SQLite reutiliza esos ids: si se borra la
+    lista con el id más alto, la siguiente lista que se cree recibe ESE id. Si al borrar la lista
+    se quedaron sus filas en `playlist_tracks` (y se quedaban: la clave foránea está declarada
+    pero `PRAGMA foreign_keys` está a OFF, así que no borra nada en cascada), la lista nueva
+    **nace con las canciones de la lista borrada**. Se vio de verdad: una lista recién creada
+    aparecía con 3 canciones puestas y 16 en pantalla, y las de más eran de listas de otros
+    usuarios ya borradas.
+
+    Se ejecuta al arrancar (API y worker) para que la base se cure sola: cualquier camino que en
+    el futuro olvide borrar estas filas queda corregido en el siguiente arranque.
+    """
+    if bind is None:
+        bind = engine
+    try:
+        with bind.begin() as con:
+            cur = con.execute(text(
+                "DELETE FROM playlist_tracks WHERE playlist_id IS NULL"
+                " OR playlist_id NOT IN (SELECT id FROM playlists)"))
+            return cur.rowcount or 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def ensure_schema(bind=None) -> None:
     """Añade a las tablas existentes las columnas que el modelo ya declara pero la BD de un
     usuario anterior no tiene. Llámalo después de Base.metadata.create_all(). No destructivo."""
@@ -135,3 +163,7 @@ def ensure_schema(bind=None) -> None:
                     con.execute(text(f"CREATE INDEX IF NOT EXISTS {nombre} ON {tabla} ({columnas})"))
             except Exception:  # noqa: BLE001
                 pass
+
+    # Al final, y después de que existan todas las columnas: quitar la basura que hace que una
+    # lista nueva herede canciones de una lista borrada (ver `limpiar_listas_huerfanas`).
+    limpiar_listas_huerfanas(bind)

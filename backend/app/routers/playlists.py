@@ -87,6 +87,13 @@ def create(data: schemas.PlaylistIn, db: Session = Depends(get_db),
     db.add(p)
     db.commit()
     db.refresh(p)
+    # Red de seguridad: una lista recién creada NO puede tener canciones. Los ids de las listas se
+    # reutilizan (SQLite asigna max+1 y `playlists.id` no es AUTOINCREMENT), así que si una lista
+    # borrada dejó filas sueltas con este id, la nueva las heredaría y nacería con canciones que su
+    # dueño no ha puesto. Aquí se barren antes de devolverla: si alguien vuelve a dejar basura por
+    # otro camino, el daño no llega a la pantalla.
+    db.query(models.PlaylistTrack).filter_by(playlist_id=p.id).delete()
+    db.commit()
     return _out(p, n=0)
 
 

@@ -1,0 +1,6 @@
+{
+  "name": "radiopv-pruebas-manuales",
+  "private": true,
+  "type": "commonjs",
+  "//": "Las pruebas de esta carpeta usan require(), no import. El package.json del frontend dice type=module, así que sin este fichero node las trata como ESM y fallan con 'require is not defined'. Con esto se ejecutan tal cual: node probar-listas.js"
+}

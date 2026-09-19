@@ -10,6 +10,12 @@
 Se borran las filas dependientes buscando por introspección todas las tablas que tengan columna
 `user_id`, para no dejar huérfanas.
 
+OJO CON EL ORDEN (esto fue un fallo de verdad): `playlists` TAMBIÉN tiene `user_id`, así que el
+borrado genérico por `user_id` se llevaba por delante las listas ANTES de borrar sus filas de
+`playlist_tracks`. Y como los ids de las listas se reutilizan, la siguiente lista que creaba
+cualquier usuario nacía con las canciones de las listas borradas. Por eso las listas se borran
+PRIMERO, con sus canciones, y `playlists` queda fuera del barrido genérico.
+
 Uso (dentro del contenedor del API):
     docker exec radiopv-api python3 /tmp/limpiar.py            # sólo informa
     docker exec radiopv-api python3 /tmp/limpiar.py --apply
@@ -53,25 +59,42 @@ print(f"\n   tablas con user_id: {', '.join(sorted(con_user))}")
 ids = [u["id"] for u in usuarios]
 if apply:
     q = ",".join("?" * len(ids)) if ids else "NULL"
+    # 1º las listas: sus canciones y luego la lista. Si se hace después, las listas ya no están y
+    # el borrado de sus canciones no encuentra nada (queda basura con un id que se reutilizará).
+    listas_usuarios = []
+    if ids:
+        listas_usuarios = [r["id"] for r in con.execute(
+            f"SELECT id FROM playlists WHERE user_id IN ({q})", ids)]
+    listas_usuarios += [p["id"] for p in viejas]
+    for pid in listas_usuarios:
+        con.execute("DELETE FROM playlist_tracks WHERE playlist_id=?", (pid,))
+    for pid in listas_usuarios:
+        con.execute("DELETE FROM playlists WHERE id=?", (pid,))
+    print(f"[OK] listas borradas con sus canciones: {len(listas_usuarios)}")
+
+    # 2º el resto de tablas con user_id. `playlists` se salta: ya está hecho arriba y hacerlo aquí
+    # es justo lo que dejaba las canciones huérfanas.
     borradas = 0
     for tabla in con_user:
+        if tabla == "playlists":
+            continue
         if ids:
             cur = con.execute(f"DELETE FROM {tabla} WHERE user_id IN ({q})", ids)
             borradas += cur.rowcount
-    # Las listas de esos usuarios (playlist_tracks primero, ya cubierto si tiene user_id; si no,
-    # se borran por pertenencia a las playlists de esos usuarios).
-    for p in viejas:
-        con.execute("DELETE FROM playlist_tracks WHERE playlist_id=?", (p["id"],))
-        con.execute("DELETE FROM playlists WHERE id=?", (p["id"],))
     if ids:
-        con.execute(f"""DELETE FROM playlist_tracks WHERE playlist_id IN
-                        (SELECT id FROM playlists WHERE user_id IN ({q}))""", ids)
-        con.execute(f"DELETE FROM playlists WHERE user_id IN ({q})", ids)
         con.execute(f"DELETE FROM users WHERE id IN ({q})", ids)
     con.commit()
+
+    # 3º barrido final: cualquier fila de lista que apunte a una lista que ya no existe. Es la
+    # misma red de seguridad que corre al arrancar la API (`database.limpiar_listas_huerfanas`).
+    huerfanas = con.execute(
+        "DELETE FROM playlist_tracks WHERE playlist_id NOT IN (SELECT id FROM playlists)").rowcount
+    con.commit()
+
     print(f"\n[OK] filas dependientes borradas: {borradas}")
     print(f"[OK] listas técnicas borradas: {len(viejas)}")
     print(f"[OK] usuarios de prueba borrados: {len(ids)}")
+    print(f"[OK] filas de lista huérfanas borradas: {huerfanas}")
     print(f"[i] usuarios restantes: {con.execute('SELECT COUNT(*) FROM users').fetchone()[0]}")
 else:
     print("\n[..] sólo información: añade --apply para limpiar")

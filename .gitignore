@@ -86,3 +86,6 @@ _transfer-*.tar
 # Configuración del recolector del PC: lleva el token, no va a git
 pc/config.json
 _pc_data/
+
+# Capturas que dejan las pruebas manuales (e2e/manuales): son evidencia de cada pasada, no codigo
+frontend/e2e/manuales/*.png
