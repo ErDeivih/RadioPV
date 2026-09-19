@@ -27,7 +27,7 @@ class DownloadError(Exception):
 
 def _ydl_opts(outdir: Path) -> dict:
     cfg = load_settings()
-    return {
+    opts = {
         "format": "bestaudio/best",
         "outtmpl": str(outdir / "%(id)s.%(ext)s"),
         "download_archive": None,
@@ -46,6 +46,21 @@ def _ydl_opts(outdir: Path) -> dict:
         "retries": 2,
         "http_headers": {"User-Agent": UA, "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"},
     }
+    # CUANDO YOUTUBE PIDE INICIAR SESIÓN
+    # --------------------------------
+    # Descargando mucho (el recolector del PC lleva miles de canciones) YouTube empieza a contestar
+    # «Sign in to confirm you're not a bot» y las descargas fallan sin más explicación en el
+    # registro. La salida es darle a yt-dlp las cookies de un navegador del PC donde haya sesión
+    # abierta en YouTube. NO está activado por defecto a propósito: leer las cookies del navegador
+    # del usuario es algo que tiene que decidir él, no que venga puesto.
+    #
+    #   pc/config.json  →  "youtube_cookies_navegador": "edge"   (edge | chrome | firefox)
+    #
+    # Con eso, `yt-dlp` reutiliza la sesión y el bloqueo desaparece.
+    navegador = (cfg.get("youtube_cookies_navegador") or "").strip()
+    if navegador:
+        opts["cookiesfrombrowser"] = (navegador,)
+    return opts
 
 
 def _clean_title(t: str) -> str:
