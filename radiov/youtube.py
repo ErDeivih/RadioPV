@@ -85,14 +85,52 @@ def _search_candidates(query: str, n: int = 8) -> list[dict]:
     return cands
 
 
-def search_videos(query: str, n: int = 15) -> list[dict]:
+# Caché de búsquedas: buscar en YouTube lanza `yt-dlp`, que es un proceso de Python entero. La
+# página de pedir canciones busca MIENTRAS se escribe, así que sin esto cada consulta (y cada
+# repetición de la misma, al volver a la pantalla) arrancaba un proceso en un servidor de 4 GB. Y
+# además YouTube limita si se le pregunta demasiado seguido.
+#
+# Se guarda poco tiempo a propósito: los resultados de una búsqueda no cambian de un minuto a otro,
+# pero tampoco queremos enseñar siempre lo mismo.
+_TTL_BUSQUEDA = 600.0        # 10 minutos
+_MAX_BUSQUEDAS = 200         # tope de entradas (memoria: en este servidor va justa)
+_CACHE: dict[tuple[str, int], tuple[float, list[dict]]] = {}
+_CACHE_LOCK = threading.Lock()
+
+
+def _cache_limpia() -> None:
+    """Quita lo caducado y, si sigue habiendo demasiado, lo más viejo."""
+    ahora = time.time()
+    for k in [k for k, (t, _) in _CACHE.items() if ahora - t > _TTL_BUSQUEDA]:
+        _CACHE.pop(k, None)
+    if len(_CACHE) > _MAX_BUSQUEDAS:
+        for k, _ in sorted(_CACHE.items(), key=lambda kv: kv[1][0])[:len(_CACHE) - _MAX_BUSQUEDAS]:
+            _CACHE.pop(k, None)
+
+
+def search_videos(query: str, n: int = 15, usar_cache: bool = True) -> list[dict]:
     """Busca vídeos en YouTube y devuelve los candidatos (sin descargar).
 
     Hace falta para el contenido que **no existe en las tiendas de música**: mashups, remixes
     caseros y sesiones de DJ. Eso se publica en YouTube y sólo en YouTube, así que buscar en
     Deezer (que es lo que hacía el recolector) no encontraba nada.
+
+    Con `usar_cache=False` se pregunta a YouTube aunque haya resultado guardado: el recolector lo
+    usa cuando quiere variedad (baraja los resultados y busca cosas nuevas).
     """
-    return _search_candidates(query, n)
+    clave = (query.strip().lower(), int(n))
+    if usar_cache:
+        with _CACHE_LOCK:
+            guardado = _CACHE.get(clave)
+            if guardado and time.time() - guardado[0] <= _TTL_BUSQUEDA:
+                # Copia: quien llame puede barajar o recortar sin estropear lo guardado.
+                return [dict(c) for c in guardado[1]]
+    resultados = _search_candidates(query, n)
+    if usar_cache and resultados:
+        with _CACHE_LOCK:
+            _CACHE[clave] = (time.time(), [dict(c) for c in resultados])
+            _cache_limpia()
+    return resultados
 
 
 def download_video(video_id: str, artist: str = "", title: str = "") -> Optional[dict]:
