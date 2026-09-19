@@ -312,10 +312,23 @@ def atender_peticiones(cfg: dict, maximo: int = 5) -> int:
             continue
         print(f"    piden: «{texto}»" + (f" (vídeo {video} elegido a mano)" if video else ""))
         tid = None
+        # ¿Ya está ese vídeo en la biblioteca? Entonces no hay nada que bajar. Pasa más de lo que
+        # parece: dos personas piden la misma canción, o alguien la pide después de que el buscador
+        # la traiga por semillas. Se vio en el registro: el mismo vídeo bajado dos veces seguidas
+        # («piden: «Los Huesos» (vídeo …)» dos veces). Se descarga una vez y se contesta que sí a las
+        # dos peticiones.
+        if video:
+            try:
+                from radiov import db as _rdb
+                if _rdb.track_exists(video):
+                    print("      ya estaba en la biblioteca: no se vuelve a bajar")
+                    tid = "ya-estaba"
+            except Exception:  # noqa: BLE001
+                pass
         # Si el usuario eligió un vídeo CONCRETO en la lista de resultados de la página de pedir
         # canciones, se baja ESE y no se busca por texto: de un mismo tema hay el original, el
         # remix, el directo y veinte subidas, y bajar «la que parezca» es bajar otra cosa.
-        if video:
+        if video and tid is None:
             try:
                 from radiov import youtube as Y
                 from radiov import pipeline as P
