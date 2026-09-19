@@ -51,7 +51,7 @@ const ok = (n, bien, detalle = '') => {
       // ¿Está la fila de atajos de limpieza rápida?
       limpiezaRapida: texto.includes('Limpieza rápida'),
       atajos: botones.filter((b) =>
-        /sin idioma|retales|sin fichero|perdidas|cuarentena|fallidas|incompletas|peor valoradas|poco conocidas/i.test(b)
+        /sin idioma|retales|sin fichero|perdidas|cuarentena|fallidas|incompletas|peor valoradas|poco conocidas|portugués/i.test(b)
       ),
       acciones: botones.filter((b) => /borrar|vetar|limpiar|recargar|previsualizar/i.test(b)).slice(0, 14),
       cabeceras,
@@ -73,6 +73,9 @@ const ok = (n, bien, detalle = '') => {
   ok('el panel de administración abre', panel.url === '/admin', panel.url);
   ok('tiene la limpieza rápida con atajos', panel.limpiezaRapida && panel.atajos.length >= 5,
     `${panel.atajos.length} atajos`);
+  // El atajo del portugués tiene que estar: es la limpieza que pidió el usuario (política: no entra).
+  ok('existe el atajo de portugués', panel.atajos.some((a) => /portugués/i.test(a)),
+    panel.atajos.find((a) => /portugués/i.test(a)) || '(no está)');
   ok('enseña la tabla de canciones con columnas', panel.filas > 0 && panel.cabeceras.length >= 5,
     `${panel.filas} filas · ${panel.cabeceras.length} columnas`);
   ok('el borrado en masa está capado sin filtros (no se puede vaciar por accidente)',

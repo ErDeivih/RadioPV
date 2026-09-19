@@ -264,10 +264,115 @@ def admin_facets(_: models.User = Depends(require_admin)) -> dict:
 
 
 # --------------------------------------------------------------------------- borrado
+_UNIR = 500          # cuántos ids caben en un `IN (...)` sin pasarse de largo
+
+
+def _identidad_en_recolector(ids: list[int]) -> list[dict]:
+    """Los datos que hacen falta para reconocer estas canciones en la OTRA base.
+
+    Se leen ANTES de borrar en `radiov.db`, porque después ya no están. Se guardan los dos
+    identificadores (`youtube_id`, `deezer_id`) y, como último recurso, artista y título.
+    """
+    if not ids:
+        return []
+    rdb, *_ = _radiov()
+    salida: list[dict] = []
+    con = rdb.get_conn()
+    try:
+        for i in range(0, len(ids), _UNIR):
+            trozo = ids[i:i + _UNIR]
+            q = ",".join("?" * len(trozo))
+            salida += [dict(r) for r in con.execute(
+                f"SELECT id, youtube_id, deezer_id, artist, title FROM tracks WHERE id IN ({q})",
+                tuple(trozo)).fetchall()]
+    finally:
+        con.close()
+    return salida
+
+
+def _borrar_de_la_app(db: Session, identidades: list[dict]) -> int:
+    """Quita de la base de la APLICACIÓN las canciones que se acaban de borrar del recolector.
+
+    POR QUÉ HACE FALTA (fallo real, 19/09/2026)
+    -------------------------------------------
+    RadioPV guarda la música en **dos bases**: `radiov.db` (la biblioteca del recolector, que es la
+    que gestiona este panel) y `backend.db` (la que sirve la aplicación: listas, portada,
+    reproductor). El borrado tocaba la primera y el disco, y **no la segunda**. Resultado medido, con
+    una canción de prueba en las dos bases:
+
+        docker exec radiopv-api python /app/scripts/prueba_borrado_dos_bases.py --comprobar
+        →  radiov.db: 0 fichas
+           backend.db: 1 ficha   ← la canción SEGUÍA en la aplicación, sin fichero
+
+    O sea: el panel decía «Borradas 1» y la canción seguía en la biblioteca del usuario, ahora rota
+    (no suena, porque su fichero ya no está). Para una herramienta de limpieza es el peor fallo
+    posible: el usuario borra 400 canciones, el contador sube y el disco y la aplicación no se
+    enteran del todo. Ahora se borran las dos fichas.
+    """
+    if not identidades:
+        return 0
+    borradas = 0
+    for ident in identidades:
+        q = db.query(models.Track)
+        if ident.get("youtube_id"):
+            q = q.filter(models.Track.youtube_id == ident["youtube_id"])
+        elif ident.get("deezer_id"):
+            q = q.filter(models.Track.deezer_id == ident["deezer_id"])
+        else:
+            # Sin identificadores: por artista y título, que es como se sembró la ficha.
+            q = q.filter(models.Track.artist == ident.get("artist"),
+                         models.Track.title == ident.get("title"))
+        borradas += q.delete(synchronize_session=False)
+    if borradas:
+        db.commit()
+    return borradas
+
+
+def _borrar_de_la_app_por_artista(db: Session, nombre: str) -> int:
+    """Quita de la base de la aplicación todas las canciones de un artista.
+
+    Mismo motivo que `_borrar_de_la_app`: vetar un artista borraba sus canciones del recolector y
+    del disco, y en la aplicación se quedaban (rotas, sin fichero).
+    """
+    if not nombre:
+        return 0
+    n = (db.query(models.Track)
+         .filter(models.Track.artist == nombre)
+         .delete(synchronize_session=False))
+    if n:
+        db.commit()
+    return n
+
+
+def _borrar_de_la_app_la_lista_negra(db: Session) -> int:
+    """Quita de la base de la aplicación todo lo que esté en la lista negra.
+
+    `purge()` limpia el disco y `radiov.db` de lo vetado; esto limpia la otra mitad. Las entradas de
+    canción se guardan como «titulo|artista» (ver `blacklist.block_song`), así que se separan por la
+    primera barra vertical: el título puede llevarla, el artista no.
+    """
+    _, rbl, *_ = _radiov()
+    borradas = 0
+    for entrada in rbl.list_blacklist():
+        tipo = (entrada.get("kind") or entrada.get("tipo") or "").lower()
+        valor = entrada.get("value") or entrada.get("valor") or ""
+        if tipo == "artist":
+            borradas += _borrar_de_la_app_por_artista(db, valor)
+        elif tipo == "song" and "|" in valor:
+            titulo, artista = valor.split("|", 1)
+            n = (db.query(models.Track)
+                 .filter(models.Track.title == titulo, models.Track.artist == artista)
+                 .delete(synchronize_session=False))
+            borradas += n
+    if borradas:
+        db.commit()
+    return borradas
+
+
 @router.post("/tracks/delete", summary="Borrado masivo de canciones (ficheros + BD)")
-def admin_delete_tracks(payload: DeleteRequest,
+def admin_delete_tracks(payload: DeleteRequest, db: Session = Depends(get_db),
                         admin: models.User = Depends(require_admin)) -> dict:
-    """Borra las pistas indicadas del disco y de la base de datos.
+    """Borra las pistas indicadas del disco y de **las dos bases de datos**.
 
     Con `veto=True` (por defecto) además se añaden a la lista negra, de modo que el
     recolector **no volverá a descargarlas**.
@@ -277,9 +382,14 @@ def admin_delete_tracks(payload: DeleteRequest,
     # el borrado decía «Borradas N» aunque los ficheros siguieran ahí (el contenedor montaba la
     # música en solo lectura y el error se tragaba). Para una herramienta de limpieza, eso es lo
     # peor: crees que has liberado 30 GB y no has liberado ninguno.
+    # Primero se apunta quiénes son (después de borrar ya no hay de dónde sacarlo).
+    identidades = _identidad_en_recolector(payload.ids)
     no_borrados: list = []
     borradas = rbl.delete_tracks(payload.ids, veto=payload.veto, fallos=no_borrados)
+    # Y ahora la otra mitad: la base de la aplicación, que es la que ve el usuario.
+    de_la_app = _borrar_de_la_app(db, identidades)
     return {"borradas": borradas, "solicitadas": len(payload.ids), "vetadas": payload.veto,
+            "borradas_de_la_app": de_la_app,
             "ficheros_no_borrados": len(no_borrados), "detalle_fallos": no_borrados[:5]}
 
 
@@ -292,11 +402,13 @@ def admin_blacklist_tracks(payload: IdsRequest,
 
 
 @router.post("/artists/veto", summary="Vetar un artista (y opcionalmente borrar sus canciones)")
-def admin_veto_artist(payload: ArtistVetoRequest,
+def admin_veto_artist(payload: ArtistVetoRequest, db: Session = Depends(get_db),
                       _: models.User = Depends(require_admin)) -> dict:
     rdb, rbl, *_ = _radiov()
     if payload.delete_tracks:
         borradas = rbl.block_artist(payload.name)
+        # Y de la base de la aplicación, que es la que ve el usuario.
+        de_la_app = _borrar_de_la_app_por_artista(db, payload.name)
     else:
         # OJO con el desempaquetado: `_radiov()` devuelve (db, blacklist, config, ingest, models),
         # así que el primer valor es el módulo de base de datos. Antes esto era
@@ -305,13 +417,17 @@ def admin_veto_artist(payload: ArtistVetoRequest,
         # un 500 seguro.
         rdb.add_blacklist("artist", payload.name, reason="vetado por el usuario")
         borradas = 0
-    return {"artista": payload.name, "borradas": borradas}
+        de_la_app = 0
+    return {"artista": payload.name, "borradas": borradas, "borradas_de_la_app": de_la_app}
 
 
 @router.post("/purge", summary="Borra del disco todo lo que esté en la lista negra")
-def admin_purge(_: models.User = Depends(require_admin)) -> dict:
+def admin_purge(db: Session = Depends(get_db),
+                _: models.User = Depends(require_admin)) -> dict:
     _, rbl, *_ = _radiov()
-    return {"purgadas": rbl.purge()}
+    purgadas = rbl.purge()
+    de_la_app = _borrar_de_la_app_la_lista_negra(db)
+    return {"purgadas": purgadas, "borradas_de_la_app": de_la_app}
 
 
 # --------------------------------------------------------------------------- lista negra

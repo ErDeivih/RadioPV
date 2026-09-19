@@ -1,22 +1,27 @@
 /*
  * Prueba de verdad del BORRADO del panel de administración.
  *
- * Usa dos canciones falsas («PRUEBA BORRAR UNO/DOS») que crea `scripts/prueba_borrado_crear.py`
- * dentro de la carpeta de música. Comprueba que:
+ * Usa fichas FALSAS que crea `scripts/prueba_borrado_dos_bases.py` (en las DOS bases, porque el
+ * panel gestiona `radiov.db` y la aplicación sirve `backend.db`). Comprueba que:
  *   1. se pueden buscar en la tabla del panel,
  *   2. se seleccionan con las casillas,
  *   3. al pulsar «Borrar seleccionadas» PIDE CONFIRMACIÓN,
  *   4. desaparecen de la tabla Y de la base de datos,
  *   5. y que el fichero se borra del disco.
  *
- * No borra NINGUNA canción real: sólo esas dos fichas de prueba.
+ * No borra NINGUNA canción real: sólo las fichas de prueba.
  *
  * Uso: node probar-borrado-admin.js
+ *      TITULO="PRUEBA DOS BASES" node probar-borrado-admin.js
  */
 const { chromium } = require('playwright');
 const URL_BASE = process.env.URL || 'http://servidor:8090';
 const EMAIL = process.env.ADMIN_EMAIL || 'admin-pruebas@radiopv-test.com';
 const CLAVE = process.env.ADMIN_CLAVE || 'clave-de-pruebas-larga-123';
+// El título que hay que buscar. Se puede cambiar sin tocar el fichero: así la misma prueba sirve
+// para las fichas de una base y de las dos.
+const TITULO = process.env.TITULO || 'PRUEBA DOS BASES';
+const CUANTAS = Number(process.env.CUANTAS || 1);
 
 const res = [];
 const ok = (n, bien, detalle = '') => {
@@ -44,7 +49,7 @@ const ok = (n, bien, detalle = '') => {
   await p.waitForTimeout(6000);
 
   // 1. Buscar las de prueba
-  await p.locator('input[placeholder*="Título, artista"]').first().fill('PRUEBA BORRAR');
+  await p.locator('input[placeholder*="Título, artista"]').first().fill(TITULO);
   await p.keyboard.press('Enter');
   await p.waitForTimeout(5000);
 
@@ -52,7 +57,7 @@ const ok = (n, bien, detalle = '') => {
   const textos = await p.evaluate(() =>
     [...document.querySelectorAll('tbody tr')].map((t) => t.innerText.replace(/\n/g, ' ').slice(0, 60))
   );
-  ok('las canciones de prueba salen en la tabla', filas >= 2, `${filas} filas: ${textos.join(' | ')}`);
+  ok('las canciones de prueba salen en la tabla', filas >= CUANTAS + 1, `${filas} filas: ${textos.join(' | ')}`);
 
   // 2. Seleccionarlas
   const casillas = p.locator('tbody tr input[type="checkbox"]');
@@ -63,7 +68,7 @@ const ok = (n, bien, detalle = '') => {
     const m = document.body.innerText.match(/(\d+) seleccionadas/);
     return m ? Number(m[1]) : 0;
   });
-  ok('se pueden seleccionar con las casillas', seleccionadas >= 2, `${seleccionadas} seleccionadas`);
+  ok('se pueden seleccionar con las casillas', seleccionadas >= CUANTAS, `${seleccionadas} seleccionadas`);
 
   // 3. Borrar: tiene que preguntar
   const borrar = p.getByRole('button', { name: /borrar seleccionadas/i }).first();
@@ -88,7 +93,7 @@ const ok = (n, bien, detalle = '') => {
   await p.waitForTimeout(3000);
   const quedan = await p.evaluate(() => {
     const t = document.body.innerText;
-    return (t.match(/PRUEBA BORRAR/g) || []).length;
+    return (t.match(/PRUEBA (BORRAR|DOS BASES)/g) || []).length;
   });
   ok('ya no aparecen en la tabla', quedan === 0, `${quedan} apariciones`);
 
