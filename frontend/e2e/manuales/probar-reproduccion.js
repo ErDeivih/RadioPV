@@ -312,10 +312,27 @@ const comprobar = (nombre, ok, detalle = '') => {
     const listas = await (await fetch('/api/playlists/system', { headers: cab })).json();
     const origen = [...listas].sort((a, b) => (b.n_tracks ?? 0) - (a.n_tracks ?? 0))[0];
     const candidatas = await (await fetch(`/api/playlists/${origen.id}/tracks`, { headers: cab })).json();
+
+    /** Sólo 410 significa «esta canción no tiene fichero».
+     *
+     *  Antes también valía un 404… y un 404 en este montaje lo devuelve nginx mientras se
+     *  reconstruyen los contenedores durante un despliegue. Resultado: la prueba elegía una
+     *  canción perfectamente buena como «sin archivo», y después fallaba al no ver el aviso (que
+     *  no tenía por qué salir). Pasó justo mientras se desplegaba, y costó un rato entender que
+     *  el fallo no era de la aplicación. Los estados que no son 410 se reintentan una vez. */
+    const esSinFichero = async (id) => {
+      for (let intento = 0; intento < 2; intento++) {
+        const r = await fetch(`/api/stream/${id}?t=${encodeURIComponent(tok.token)}`, { headers: { Range: 'bytes=0-0' } });
+        if (r.status === 410) return true;
+        if (r.status === 200 || r.status === 206) return false;
+        await new Promise((listo) => setTimeout(listo, 800));   // ¿un parpadeo del despliegue?
+      }
+      return false;
+    };
+
     const malas = [];
     for (const c of candidatas) {
-      const r = await fetch(`/api/stream/${c.id}?t=${encodeURIComponent(tok.token)}`, { headers: { Range: 'bytes=0-0' } });
-      if (r.status === 410 || r.status === 404) malas.push({ id: c.id, title: c.title });
+      if (await esSinFichero(c.id)) malas.push({ id: c.id, title: c.title });
       if (malas.length >= 1) break;
     }
     if (!malas.length) return null;
