@@ -92,87 +92,50 @@ def _banda_grave(y, sr: int) -> "object":
     return graves / total
 
 
-def _ritmo_por_segundo(y, sr: int) -> "object":
-    """Envolvente de ataques por segundo (para la parte rítmica que ya existía)."""
-    import librosa
-    import numpy as np
-
-    env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=512)
-    fps = sr / 512
-    por_seg = int(round(fps))
-    if por_seg < 1 or len(env) < por_seg:
-        return np.zeros(1)
-    n = len(env) // por_seg
-    return env[:n * por_seg].reshape(n, por_seg).mean(axis=1)
-
-
 def _es_musica_por_segundo(y, sr: int, *, umbral_pulso: float = 0.18) -> "object":
     """Devuelve un booleano por segundo: ¿aquí ya está sonando la canción?
 
-    Se dice que sí si **cualquiera** de las dos señales lo ve:
-      · hay graves como en el cuerpo de la canción (música con bajo), o
-      · hay pulso rítmico (música sin bajo, o con el bajo muy suave).
-    Decidir por «cualquiera» es a propósito: así no se marca como intro una canción que empieza
-    suave (falso aviso) aunque se pierda alguna intro muy sutil. Cambiar una canción por otra versión
-    es una decisión gorda como para tomarla con indicios flojos.
+    DECIDE EL BAJO, Y SÓLO EL BAJO
+    ------------------------------
+    Se probaron dos señales y **una se descartó**, con números:
+
+      · **El ritmo** (envolvente de ataques y su autocorrelación): se midió con audio sintético
+        controlado y sale al revés de lo que hace falta — una música con golpes a 120 BPM daba 0,18 de
+        «pulso» y una voz sintética modulada como el habla daba 0,79. Es decir: la voz puntuaba MÁS
+        que la música. Como señal para decir «aquí hay canción» no sirve, y en el catálogo real fue la
+        causa de marcar canciones que estaban bien (Junior H - PIÉNSALO).
+      · **El bajo** (energía por debajo de 120 Hz comparada con el cuerpo de la canción): funciona.
+        Comprobado con ficheros reales: la intro de «Bad Bunny - LA NOCHE DE ANOCHE» tiene 3,7 % de
+        graves y su canción 63,5 %; «PIÉNSALO» tiene 33,8 % en la parte «sospechosa» y 33,5 % en el
+        resto, o sea que ahí ya sonaba la música.
+
+    Y si la canción **no tiene bajo** (una guitarra sola, algo acústico), no se acusa a nadie: sin una
+    señal fiable en la que apoyarse, lo honesto es no decir nada. Lo único que se seguirá viendo en
+    esos casos es el silencio, que se mide de forma exacta.
     """
     import numpy as np
 
     graves = _banda_grave(y, sr)
-    pulsos, _fps = _pulso_por_ventana(y, sr)
-    fps_graves = sr / 512
-    segundos = int(len(graves) / fps_graves)
+    fps = sr / 512
+    segundos = int(len(graves) / fps)
 
-    # El «cuerpo» de la canción: se mide a partir del segundo 20 (o del 40 % del trozo, si es corto),
-    # que es donde con seguridad ya está la música.
+    # El «cuerpo» de la canción: a partir del segundo 20 (o de un tercio del trozo, si es corto), que
+    # es donde con seguridad ya está la música.
     inicio_cuerpo = min(20, max(3, segundos // 3))
-    cuerpo = graves[int(inicio_cuerpo * fps_graves):]
+    cuerpo = graves[int(inicio_cuerpo * fps):]
     grave_tipico = float(np.median(cuerpo)) if len(cuerpo) else float(np.median(graves) if len(graves) else 0.0)
-    hay_bajo = grave_tipico > 0.04        # la canción tiene bajo: se puede usar esta señal
+    hay_bajo = grave_tipico > 0.04
+
+    if not hay_bajo:
+        # Sin bajo no hay señal: se da por bueno todo (no se acusa) y el silencio se mira aparte.
+        return np.ones(max(segundos, 1), dtype=bool), grave_tipico
 
     musica = []
     for seg in range(segundos):
-        trozo = graves[int(seg * fps_graves):int((seg + 1) * fps_graves)]
+        trozo = graves[int(seg * fps):int((seg + 1) * fps)]
         grave_seg = float(np.mean(trozo)) if len(trozo) else 0.0
-        por_banda = hay_bajo and grave_seg >= 0.4 * grave_tipico
-        i_ventana = min(len(pulsos) - 1, int(seg / SALTO)) if pulsos else -1
-        por_pulso = bool(pulsos) and pulsos[i_ventana] >= umbral_pulso
-        musica.append(bool(por_banda or por_pulso))
+        musica.append(bool(grave_seg >= 0.4 * grave_tipico))
     return np.array(musica, dtype=bool), grave_tipico
-
-
-def _pulso_por_ventana(y, sr: int) -> tuple[list[float], float]:
-    """Pulso (0-1) en cada ventana de `VENTANA` segundos, y el paso temporal entre ventanas.
-
-    El pulso es cuánto se repite el patrón rítmico: se coge la envolvente de ataques de la ventana y
-    se mira su autocorrelación en los retardos que corresponden a 50-200 golpes por minuto. Una
-    canción da un pico claro; una voz hablando, no.
-    """
-    import librosa
-    import numpy as np
-
-    hop = 512
-    env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop)
-    fps = sr / hop
-    largo = int(VENTANA * fps)
-    paso = int(SALTO * fps)
-    if largo < 8 or len(env) < largo:
-        return [], fps
-
-    retardos = np.arange(int(60.0 / 200 * fps), int(60.0 / 50 * fps) + 1)   # 200..50 BPM
-    pulsos: list[float] = []
-    for i in range(0, len(env) - largo + 1, paso):
-        trozo = env[i:i + largo]
-        trozo = trozo - trozo.mean()
-        if np.allclose(trozo, 0):
-            pulsos.append(0.0)
-            continue
-        ac = np.correlate(trozo, trozo, mode="full")[len(trozo) - 1:]
-        pico = float(ac[retardos].max()) / float(ac[0] + 1e-9)
-        # La energía de la ventana también cuenta: sin sonido no hay música.
-        fuerza = float(np.sqrt(np.mean(trozo ** 2)))
-        pulsos.append(max(0.0, min(1.0, pico)) * min(1.0, fuerza / 1.5))
-    return pulsos, fps
 
 
 def _silencio_inicial(y, sr: int) -> float:

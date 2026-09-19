@@ -55,6 +55,7 @@ args = ap.parse_args()
 os.environ.setdefault("RADIOPV_DATA_DIR", str(RAIZ_PROYECTO / "_pc_data"))
 DIR_DATOS = Path(os.environ["RADIOPV_DATA_DIR"])
 
+from radiov import catalog as C  # noqa: E402
 from radiov import db as rdb  # noqa: E402
 from radiov.extremos import analizar  # noqa: E402
 from radiov.config import resolve_music  # noqa: E402
@@ -80,69 +81,11 @@ if args.listar:
     con.close()
     raise SystemExit(0)
 
-condicion = "extremos_revisado IS NULL AND file_path IS NOT NULL AND file_path <> ''"
-if args.solo_youtube:
-    condicion += " AND youtube_id IS NOT NULL AND youtube_id <> ''"
-filas = con.execute(
-    f"SELECT id, title, artist, file_path, duration, youtube_id FROM tracks WHERE {condicion}"
-    f" ORDER BY (youtube_id IS NOT NULL) DESC, id DESC LIMIT ?", (args.limite,)).fetchall()
-print(f"por revisar: {len(filas)}")
-
+print(f"por revisar: hasta {args.limite}")
 t0 = time.time()
-revisadas = 0
-con_algo = 0
-a_cambiar: list[dict] = []
-for f in filas:
-    if args.minutos and (time.time() - t0) / 60.0 > args.minutos:
-        print("   (se acabó el tiempo de esta pasada)")
-        break
-    ruta = Path(resolve_music(f["file_path"]))
-    if not ruta.exists():
-        con.execute("UPDATE tracks SET extremos_revisado='sin-fichero' WHERE id=?", (f["id"],))
-        continue
-    r = analizar(ruta, duracion=f["duration"])
-    revisadas += 1
-    if not r["ok"]:
-        con.execute("UPDATE tracks SET extremos_revisado=? WHERE id=?",
-                    (f"error:{r['motivo'][:60]}", f["id"]))
-        continue
-    con.execute(
-        "UPDATE tracks SET intro_seg=?, cola_seg=?, extremos_json=?, extremos_revisado=? WHERE id=?",
-        (r["intro_seg"], r["cola_seg"], json.dumps(r, ensure_ascii=False),
-         time.strftime("%Y-%m-%dT%H:%M:%S"), f["id"]))
-    if r["intro_seg"] or r["cola_seg"]:
-        con_algo += 1
-        if r["buscar_otra"]:
-            nota = "   ← BUSCAR OTRA VERSIÓN (voz/diálogo)"
-        elif r["recortable"]:
-            nota = "   (silencio: se puede recortar)"
-        else:
-            nota = "   (principio suave; el detector no ve voz)"
-        print(f"   intro={r['intro_seg']:>5}s (voz {r['intro_hablada']:>4}s) "
-              f"cola={r['cola_seg']:>5}s (voz {r['cola_hablada']:>4}s)  "
-              f"{f['artist']} - {f['title']}"[:95] + nota)
-    if r["buscar_otra"]:
-        a_cambiar.append({**dict(f), **r})
-con.commit()
+revisadas, con_algo, cambiadas = C.revisar_extremos_lote(
+    limit=args.limite, buscar_otra=(5 if args.buscar_otra else 0), log=print)
 print(f"\nrevisadas: {revisadas} · con algo en los extremos: {con_algo} · "
-      f"candidatas a otra versión: {len(a_cambiar)} · en {(time.time()-t0)/60:.1f} min")
-
-if args.buscar_otra and a_cambiar:
-    from radiov import pipeline
-
-    print(f"\n=== buscando otra versión para {min(len(a_cambiar), 5)} ===")
-    for cand in a_cambiar[:5]:
-        print(f"\n   {cand['artist']} - {cand['title']} (intro {cand['intro_seg']}s)")
-        try:
-            res = pipeline.buscar_version_sin_intro(
-                cand["artist"], cand["title"], cand["id"], cand["file_path"],
-                intro_actual=cand["intro_seg"], cola_actual=cand["cola_seg"],
-                duracion=cand["duration"])
-        except Exception as e:  # noqa: BLE001
-            print(f"      no se pudo buscar: {type(e).__name__}: {str(e)[:70]}")
-            continue
-        print(f"      {res}")
-elif a_cambiar and not args.buscar_otra:
+      f"cambiadas por otra versión: {cambiadas} · en {(time.time()-t0)/60:.1f} min")
+if not args.buscar_otra and con_algo:
     print("\n[i] para intentar cambiarlas por otra versión: añade --buscar-otra")
-
-con.close()

@@ -645,6 +645,27 @@ def rebuild_recopilaciones(db, n: int = 20) -> int:
     return total
 
 
+def revisar_extremos_lote_job(db, limit: int = 40) -> int:
+    """Repasa en un lote pequeño las intros y colas de las canciones que ya estaban en el catálogo.
+
+    POR QUÉ EN LOTES Y POR QUÉ EN EL SERVIDOR
+    -----------------------------------------
+    Las canciones nuevas las mide el PC (que es donde se bajan y donde sobra máquina). Pero las
+    ~6.000 que ya estaban tienen su audio aquí, en `/music`, y el servidor es un portátil de 4 GB que
+    además sirve la aplicación: analizarlas todas de golpe son ~1,7 horas de CPU. Así que se hacen 40
+    cada dos horas (menos de un minuto de trabajo cada vez) y el catálogo se va repasando solo.
+
+    Devuelve cuántas se revisaron (para el registro).
+    """
+    from radiov import catalog as CAT
+
+    revisadas, con_algo, cambiadas = CAT.revisar_extremos_lote(limit=limit, buscar_otra=0, log=log.info)
+    if revisadas:
+        log.info("[extremos] %s revisadas · %s con intro/cola · %s cambiadas por otra versión",
+                 revisadas, con_algo, cambiadas)
+    return revisadas
+
+
 def _pasada_inicial(descargadora=None) -> None:
     """Al arrancar, corre una vez lo que regenera el catálogo y la personalización (para que
     'python -m app.workers' haga algo ya, no espere a las horas del cron).
@@ -747,6 +768,9 @@ def main():
     # A diario, no semanal: mientras falte música en el disco, la aplicación ofrece canciones que
     # no pueden sonar. Antes era los domingos a las 3:00, y encima esa ejecución se perdía.
     _programar(s, "verificar_ficheros", verificar_ficheros, trigger="cron", hour=3)
+    # Intros y colas del catálogo que ya estaba: 40 cada dos horas, en el servidor (aquí está el
+    # audio de esas canciones). Las nuevas las mide el PC al bajarlas.
+    _programar(s, "revisar_extremos", revisar_extremos_lote_job, trigger="interval", hours=2)
     _programar(s, "prune", prune, trigger="cron", hour=7)
 
     log.info("Worker RadioPV en marcha (%s tareas programadas)", len(s.get_jobs()))

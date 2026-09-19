@@ -529,82 +529,20 @@ def revisar_extremos(cfg: dict, maximo: int = 12, buscar_otra: int = 2) -> int:
     POR QUÉ AQUÍ Y NO EN EL SERVIDOR
     --------------------------------
     El audio está en el PC y analizarlo (librosa) come CPU: el servidor es un portátil de 4 GB que
-    además sirve la aplicación. Así que se mide aquí y el resultado viaja con la ficha.
+    además sirve la aplicación. Así que lo que se baja aquí se mide aquí, y el resultado viaja con la
+    ficha (el servidor repasa en lotes pequeños lo que ya tenía, desde su worker).
 
-    QUÉ HACE
-    --------
-    1. Mide los extremos de unas cuantas canciones que aún no se hayan mirado (`radiov/extremos.py`).
-    2. Las que tienen **voz o diálogo** en los extremos (no simple silencio) se apuntan, y para unas
-       pocas por vuelta se **busca otra versión** de la misma canción que no lo traiga
-       (`pipeline.buscar_version_sin_intro`): primero los canales automáticos de discográfica
-       («Artista - Topic», que son la pista del álbum), luego las subidas de audio y letra. La versión
-       vieja no se borra: se aparta en `descargas/_descartadas/`.
+    El trabajo de verdad está en `radiov.catalog.revisar_extremos_lote`, que es el mismo que usa el
+    servidor: así el PC y el servidor no pueden medir cosas distintas.
     """
-    from radiov import db as rdb
-    from radiov.extremos import analizar
-    from radiov.config import resolve_music
-
-    con = rdb.get_conn()
-    con.row_factory = sqlite3.Row
-    try:
-        filas = con.execute(
-            "SELECT id, title, artist, file_path, duration FROM tracks"
-            " WHERE extremos_revisado IS NULL AND file_path IS NOT NULL AND file_path <> ''"
-            " ORDER BY (youtube_id IS NOT NULL) DESC, id DESC LIMIT ?", (maximo,)).fetchall()
-    finally:
-        con.close()
-    if not filas:
-        return 0
+    from radiov import catalog as C
 
     print("  mirando intros y colas de lo bajado…")
-    revisadas = 0
-    con_algo = 0
-    candidatas: list[dict] = []
-    for f in filas:
-        ruta = resolve_music(f["file_path"])
-        if not Path(ruta).exists():
-            continue
-        try:
-            r = analizar(ruta, duracion=f["duration"])
-        except Exception as e:  # noqa: BLE001
-            print(f"    aviso: no se pudo analizar «{f['title']}»: {str(e)[:60]}")
-            continue
-        revisadas += 1
-        if not r.get("ok"):
-            continue
-        con = rdb.get_conn()
-        try:
-            con.execute("UPDATE tracks SET intro_seg=?, cola_seg=?, extremos_json=?, "
-                        "extremos_revisado=? WHERE id=?",
-                        (r["intro_seg"], r["cola_seg"], json.dumps(r, ensure_ascii=False),
-                         time.strftime("%Y-%m-%dT%H:%M:%S"), f["id"]))
-            con.commit()
-        finally:
-            con.close()
-        if r["intro_seg"] or r["cola_seg"]:
-            con_algo += 1
-            if r["buscar_otra"]:
-                candidatas.append({**dict(f), **r})
-                print(f"    intro={r['intro_seg']}s cola={r['cola_seg']}s (con voz) "
-                      f"→ {f['artist']} - {f['title']}"[:100])
-
-    print(f"  revisadas {revisadas} · con algo en los extremos {con_algo} · "
-          f"candidatas a otra versión {len(candidatas)}")
-
-    cambiadas = 0
-    for cand in candidatas[:buscar_otra]:
-        try:
-            from radiov import pipeline
-
-            res = pipeline.buscar_version_sin_intro(
-                cand["artist"], cand["title"], cand["id"], cand["file_path"],
-                intro_actual=cand["intro_seg"] or 0, cola_actual=cand["cola_seg"] or 0,
-                duracion=cand["duration"])
-            print(f"    {cand['artist']} - {cand['title']}: {res}"[:150])
-            if res.startswith("cambiada"):
-                cambiadas += 1
-        except Exception as e:  # noqa: BLE001
-            print(f"    no se pudo buscar otra versión de «{cand['title']}»: {type(e).__name__}")
+    revisadas, con_algo, cambiadas = C.revisar_extremos_lote(
+        limit=maximo, buscar_otra=buscar_otra, log=lambda m: print(m))
+    if revisadas or con_algo:
+        print(f"  revisadas {revisadas} · con algo en los extremos {con_algo} · "
+              f"cambiadas por otra versión {cambiadas}")
     return cambiadas
 
 

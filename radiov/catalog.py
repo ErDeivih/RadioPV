@@ -1033,6 +1033,89 @@ def catalog_pending() -> int:
     return count
 
 
+def revisar_extremos_lote(limit: int = 40, buscar_otra: int = 0, *, log=print) -> tuple[int, int, int]:
+    """Mira intros y colas de un lote de canciones y devuelve (revisadas, con_algo, cambiadas).
+
+    Se ejecuta DONDE ESTÁ EL AUDIO:
+      · en el PC, para lo que va bajando (lo llama su vuelta del recolector);
+      · en el servidor, en lotes pequeños desde el worker, para repasar el catálogo que ya estaba
+        (su audio está en `/music`).
+
+    Es un trabajo por lotes a propósito: analizar 6.000 canciones de golpe son ~1,7 horas de CPU, y
+    el servidor es un portátil de 4 GB que además sirve la aplicación.
+
+    `buscar_otra` = cuántas de las que tienen voz/diálogo se intentan cambiar por otra versión en
+    esta pasada (bajar de YouTube tarda, así que va con tope).
+    """
+    import json
+    import time as _t
+
+    from .extremos import analizar
+    from .config import resolve_music
+
+    conn = db.get_conn()
+    try:
+        filas = conn.execute(
+            "SELECT id, title, artist, file_path, duration, youtube_id FROM tracks"
+            " WHERE extremos_revisado IS NULL AND file_path IS NOT NULL AND file_path <> ''"
+            " ORDER BY (youtube_id IS NOT NULL) DESC, id DESC LIMIT ?", (limit,)).fetchall()
+    finally:
+        conn.close()
+    if not filas:
+        return (0, 0, 0)
+
+    revisadas = con_algo = 0
+    candidatas: list[dict] = []
+    for f in filas:
+        ruta = resolve_music(f["file_path"])
+        if not Path(ruta).exists():
+            # La ficha dice que hay fichero pero no está: se apunta y no se vuelve a intentar.
+            conn = db.get_conn()
+            try:
+                conn.execute("UPDATE tracks SET extremos_revisado='sin-fichero' WHERE id=?", (f["id"],))
+                conn.commit()
+            finally:
+                conn.close()
+            continue
+        try:
+            r = analizar(ruta, duracion=f["duration"])
+        except Exception as e:  # noqa: BLE001
+            log(f"   aviso: no se pudo analizar «{f['title']}»: {str(e)[:60]}")
+            continue
+        revisadas += 1
+        conn = db.get_conn()
+        try:
+            conn.execute(
+                "UPDATE tracks SET intro_seg=?, cola_seg=?, extremos_json=?, extremos_revisado=?"
+                " WHERE id=?",
+                (r.get("intro_seg"), r.get("cola_seg"), json.dumps(r, ensure_ascii=False),
+                 _t.strftime("%Y-%m-%dT%H:%M:%S"), f["id"]))
+            conn.commit()
+        finally:
+            conn.close()
+        if r.get("intro_seg") or r.get("cola_seg"):
+            con_algo += 1
+            if r.get("buscar_otra"):
+                candidatas.append({**dict(f), **r})
+
+    cambiadas = 0
+    if buscar_otra and candidatas:
+        from .pipeline import buscar_version_sin_intro
+
+        for cand in candidatas[:buscar_otra]:
+            try:
+                res = buscar_version_sin_intro(
+                    cand["artist"], cand["title"], cand["id"], cand["file_path"],
+                    intro_actual=cand["intro_seg"] or 0, cola_actual=cand["cola_seg"] or 0,
+                    duracion=cand["duration"])
+                log(f"   {cand['artist']} - {cand['title']}: {res}"[:150])
+                if str(res).startswith("cambiada"):
+                    cambiadas += 1
+            except Exception as e:  # noqa: BLE001
+                log(f"   no se pudo buscar otra versión de «{cand['title']}»: {type(e).__name__}")
+    return (revisadas, con_algo, cambiadas)
+
+
 def republicar_completas(limit: int = 2000) -> int:
     """Pasa a 'descargada' las pistas 'incompleta' que ya completan todos los metadatos
     obligatorios (C4 · metadata_strict).
