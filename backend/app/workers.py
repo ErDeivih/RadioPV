@@ -456,14 +456,20 @@ def rebuild_remixes(db) -> int:
     la lista y el catálogo no pueden discrepar. Se ordena por popularidad: primero lo que más
     suena, que es lo que se quiere escuchar.
     """
-    from radiov.quality import clasificar
+    from radiov.quality import clasificar, parece_portugues
 
     filas = (db.query(models.Track.id, models.Track.title, models.Track.artist,
-                      models.Track.duration, models.Track.rank)
+                      models.Track.duration, models.Track.rank, models.Track.language)
              .filter(models.Track.status == "descargada")
              .all())
     remixes, sesiones = [], []
-    for tid, title, artist, duration, rank in filas:
+    for tid, title, artist, duration, rank, language in filas:
+        # Portugués fuera de las listas: la política del catálogo es español (España y Latinoamérica)
+        # e inglés, con italiano y francés de siempre. Estas dos listas son las que el usuario pone a
+        # sonar de un tirón, así que son justo donde no puede aparecer algo que no quiere oír.
+        # (Las que ya están dentro y no se detecten aquí se limpian con el atajo «En portugués».)
+        if language == "pt" or parece_portugues(title or "", artist or ""):
+            continue
         tipo = clasificar(title or "", artist or "", duration)
         if tipo == "sesion":
             sesiones.append((rank or 0, tid))
