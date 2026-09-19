@@ -26,21 +26,35 @@ RAIZ = Path(__file__).resolve().parent.parent
 
 
 def leer(ruta: Path) -> dict:
-    """Devuelve {clave: (tam, sha1, nombre)}. La clave es el id de YouTube si lo hay."""
+    """Devuelve {clave: (tam, sha1, nombre)}. La clave es el id de YouTube si lo hay.
+
+    OJO CON EL NÚMERO DE CAMPOS: `verificar_transferencias.linea_de` escribe SEIS
+    (`titulo|artista|id|bytes|sha1|fecha`) y aquí sólo se aceptaban cuatro o cinco, así que las
+    líneas se descartaban en silencio: el comparador decía «en el PC: 0 pistas enviadas» con un
+    manifiesto de 68 y daba el resultado por bueno (0 distintos). Un comparador que no compara nada
+    y no avisa es peor que no tenerlo: parece que todo está bien. Los campos de más (la fecha) se
+    ignoran, y si el formato no cuadra se avisa en vez de callarse.
+    """
     datos = {}
+    descartadas = 0
     for linea in ruta.read_text(encoding="utf-8", errors="replace").splitlines():
         if linea.startswith("#") or "|" not in linea:
             continue
-        partes = linea.split("|")
-        if len(partes) == 5:                       # con id de YouTube
+        partes = [p.strip() for p in linea.split("|")]
+        if len(partes) >= 6:                       # formato actual: …|bytes|sha1|fecha
+            titulo, artista, yt, tam, sha = partes[0], partes[1], partes[2], partes[3], partes[4]
+        elif len(partes) == 5:                     # con id de YouTube, sin fecha
             titulo, artista, yt, tam, sha = partes
-            clave = yt.strip() or f"{titulo.strip().lower()}|{artista.strip().lower()}"
         elif len(partes) == 4:                     # formato antiguo, sin id
             titulo, artista, tam, sha = partes
-            clave = f"{titulo.strip().lower()}|{artista.strip().lower()}"
+            yt = ""
         else:
+            descartadas += 1
             continue
-        datos[clave] = (tam.strip(), sha.strip(), f"{artista.strip()} - {titulo.strip()}")
+        clave = yt or f"{titulo.lower()}|{artista.lower()}"
+        datos[clave] = (tam, sha, f"{artista} - {titulo}")
+    if descartadas:
+        print(f"[!] {descartadas} líneas del manifiesto no se pudieron leer (formato inesperado)")
     return datos
 
 
