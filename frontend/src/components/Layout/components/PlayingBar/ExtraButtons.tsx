@@ -1,9 +1,13 @@
 // Components
-import { Col, Row } from 'antd';
+import { Col, Modal, Row } from 'antd';
+import { useCallback, useState } from 'react';
 import VolumeControls from './Volume';
 import { Tooltip } from '../../../Tooltip';
 import { FullScreenPlayer } from '../../../FullScreen';
 import { FullScreen, useFullScreenHandle } from 'react-full-screen';
+
+// Services
+import { getLyrics, type Letra } from '../../../../api/lyrics';
 
 // Icons
 import {
@@ -20,23 +24,80 @@ import { useTranslation } from 'react-i18next';
 
 // Redux
 import { uiActions } from '../../../../store/slices/ui';
-import { languageActions } from '../../../../store/slices/language';
 import { useAppDispatch, useAppSelector } from '../../../../store/store';
 
+/**
+ * Botón de «Letra».
+ *
+ * Antes este botón abría… el **selector de idioma** (`openLanguageModal`). Prometía la letra y
+ * hacía otra cosa: el mismo tipo de fallo que el «elegir foto» de las listas. Ahora pide la letra
+ * al servidor y la enseña; si no la hay, lo dice, que es lo que pasa con buena parte del catálogo
+ * (remixes, sesiones, música poco conocida).
+ */
 const LyricsButton = () => {
-  const dispatch = useAppDispatch();
   const { t } = useTranslation(['playingBar']);
+  const [abierto, setAbierto] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [letra, setLetra] = useState<Letra | null>(null);
+
+  const track = useAppSelector((state) => state.spotify.state?.track_window.current_track);
+  const trackId = track?.id;
+
+  const abrir = useCallback(() => {
+    if (!trackId) return;
+    setAbierto(true);
+    setLetra(null);
+    setCargando(true);
+    getLyrics(String(trackId))
+      .then(setLetra)
+      .catch(() => setLetra({ letra: null, encontrada: false }))
+      .finally(() => setCargando(false));
+  }, [trackId]);
 
   return (
-    <Tooltip title={t('Lyrics')}>
-      <button
-        style={{ marginLeft: 5, marginRight: 5 }}
-        aria-label='Letra'
-        onClick={() => dispatch(languageActions.openLanguageModal())}
+    <>
+      <Tooltip title={trackId ? t('Lyrics') : ''}>
+        <button
+          style={{ marginLeft: 5, marginRight: 5 }}
+          aria-label='Letra'
+          disabled={!trackId}
+          onClick={abrir}
+        >
+          <MicrophoneIcon />
+        </button>
+      </Tooltip>
+
+      <Modal
+        open={abierto}
+        onCancel={() => setAbierto(false)}
+        footer={null}
+        centered
+        width={520}
+        title={
+          <div style={{ lineHeight: 1.3 }}>
+            <div style={{ fontWeight: 700 }}>{track?.name}</div>
+            <div style={{ fontSize: '0.8rem', color: '#b3b3b3' }}>
+              {track?.artists?.map((a) => a.name).join(', ')}
+            </div>
+          </div>
+        }
       >
-        <MicrophoneIcon />
-      </button>
-    </Tooltip>
+        {cargando ? (
+          <div className='lyrics-cargando'>Buscando la letra…</div>
+        ) : letra?.encontrada ? (
+          // `white-space: pre-line` respeta los saltos de línea que trae la letra.
+          <div className='lyrics-texto'>{letra.letra}</div>
+        ) : (
+          <div className='lyrics-vacio'>
+            No hay letra para esta canción.
+            <br />
+            <small style={{ color: '#b3b3b3' }}>
+              Es normal en remixes, sesiones de DJ y música poco conocida.
+            </small>
+          </div>
+        )}
+      </Modal>
+    </>
   );
 };
 

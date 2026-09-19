@@ -986,6 +986,26 @@ a {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
+   LETRA DE LA CANCIÓN
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+.lyrics-texto {
+  /* `pre-line` respeta los saltos de línea que trae la letra, y `overflow` la deja desplazable
+     cuando es larga (que es lo normal). */
+  white-space: pre-line;
+  line-height: 1.6;
+  max-height: 60vh;
+  overflow-y: auto;
+  color: #f0f0f0;
+}
+
+.lyrics-cargando,
+.lyrics-vacio {
+  padding: 24px 0;
+  text-align: center;
+  color: #b3b3b3;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
    INTERRUPTOR DE ANTD
    ══════════════════════════════════════════════════════════════════════════════════════════════
 
