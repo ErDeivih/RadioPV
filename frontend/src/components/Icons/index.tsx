@@ -806,6 +806,23 @@ export const ArrowDownIcon = () => (
   </svg>
 );
 
+/** Descargar (flecha hacia abajo dentro de una bandeja), como la de Spotify. */
+export const DownloadIcon = () => (
+  <svg
+    data-encore-id='icon'
+    role='img'
+    aria-hidden='true'
+    viewBox='0 0 16 16'
+    width={16}
+    height={16}
+    fill='#b3b3b3'
+    style={SongExtraControlStyle}
+  >
+    <path d='M8 1.5a.75.75 0 0 1 .75.75v6.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V2.25A.75.75 0 0 1 8 1.5z'></path>
+    <path d='M2.5 10.75a.75.75 0 0 1 1.5 0v1.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 11.75 14h-7.5A1.75 1.75 0 0 1 2.5 12.25v-1.5z'></path>
+  </svg>
+);
+
 export const ArrowUpIcon = () => (
   <svg
     data-encore-id='icon'

@@ -1,8 +1,9 @@
-import { FC, memo, useCallback, useMemo } from 'react';
+import { FC, memo, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaLock, FaUnlock } from 'react-icons/fa6';
 import { Dropdown, MenuProps, message, Modal } from 'antd';
-import { DeleteIcon, AddToQueueIcon, EditIcon, AddedToLibrary, AddToLibrary } from '../Icons';
+import { DeleteIcon, AddToQueueIcon, EditIcon, AddedToLibrary, AddToLibrary, DownloadIcon } from '../Icons';
+import { DescargarListaModal } from '../Modals/DescargarListaModal';
 
 // Services
 import { userService } from '../../services/users';
@@ -37,6 +38,36 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
   const { t } = useTranslation(['playlist']);
   // `Modal.confirm` estático: funciona gracias al puente de React 19 de `index.tsx`.
   const [modal, contextoModal] = Modal.useModal();
+
+  // Descargar la lista entera: se piden sus canciones al servidor y se guardan en la carpeta que
+  // elija el usuario (o en Descargas, si el navegador no deja elegir).
+  const [descargando, setDescargando] = useState(false);
+  const [cancionesParaBajar, setCancionesParaBajar] = useState<
+    { id: string; artista: string; titulo: string }[]
+  >([]);
+
+  const abrirDescarga = useCallback(() => {
+    setDescargando(true);
+    playlistService
+      .getPlaylistItems(playlist.id, { limit: 1000 })
+      .then((r) => {
+        const items = (r.data.items ?? []).map((i) => ({
+          id: i.track.id,
+          artista: i.track.artists?.[0]?.name ?? '',
+          titulo: i.track.name,
+        }));
+        if (!items.length) {
+          message.warning('Esta lista no tiene canciones');
+          setDescargando(false);
+          return;
+        }
+        setCancionesParaBajar(items);
+      })
+      .catch(() => {
+        message.error('No se pudieron leer las canciones de la lista');
+        setDescargando(false);
+      });
+  }, [playlist.id]);
 
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -211,12 +242,32 @@ export const PlayistActionsWrapper: FC<PlayistActionsWrapperProps> = memo((props
       },
     });
 
+    // Descargar la lista entera a una carpeta (para cargar los auriculares o una tarjeta).
+    items.push({
+      label: 'Descargar a una carpeta',
+      key: 'descargar',
+      icon: <DownloadIcon />,
+      onClick: () => {
+        if (!handleUserValidation()) return;
+        abrirDescarga();
+      },
+    });
+
     return items;
-  }, [canEdit, dispatch, handleUserValidation, inLibrary, modal, navigate, playlist, props, t]);
+  }, [canEdit, dispatch, handleUserValidation, inLibrary, modal, navigate, playlist, props, t, abrirDescarga]);
 
   return (
     <>
       {contextoModal}
+      <DescargarListaModal
+        abierto={descargando && cancionesParaBajar.length > 0}
+        onCerrar={() => {
+          setDescargando(false);
+          setCancionesParaBajar([]);
+        }}
+        nombre={playlist.name}
+        canciones={cancionesParaBajar}
+      />
       <Dropdown menu={{ items }} trigger={props.trigger}>
         {children}
       </Dropdown>
