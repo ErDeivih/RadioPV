@@ -13,6 +13,17 @@ Se ejecuta DENTRO del contenedor del API (es donde están la base y el disco de 
 Sin argumentos informa del catálogo entero; con --playlist N revisa además los primeros temas de
 una lista concreta (que es exactamente lo que ocurre al pulsar su botón de reproducir).
 """
+
+# La consola de Windows usa cp1252: un título con emoji o acentos mata el guion justo al imprimir
+# (pasó con «Tiktok Mashup 💗2025💗»). Todo lo que se imprime va en UTF-8 y, si algo no se puede
+# representar, se sustituye en vez de reventar: un informe a medias es peor que uno con un carácter
+# raro.
+for _flujo in (sys.stdout, sys.stderr):
+    try:
+        _flujo.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        pass
+
 from __future__ import annotations
 
 import argparse

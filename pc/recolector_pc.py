@@ -571,7 +571,15 @@ def completar(cfg: dict, maximo: int = 40) -> int:
 
 
 def publicar(cfg: dict) -> int:
-    """Manda lo nuevo: audio, carátulas, fotos de artista y las fichas."""
+    """Manda lo nuevo al servidor: primero la ficha, y sólo después el audio.
+
+    EL ORDEN ES LO QUE AHORRA TRABAJO
+    ---------------------------------
+    Antes se subía el audio y luego se pedía permiso: si la canción ya estaba en el servidor (mismo
+    tema con otro nombre, otra subida…), se habían subido 5-10 MB para nada y el fichero se quedaba
+    en `/music` sin ficha que lo apuntara — disco ocupado y sin rastro. Ahora la ficha va primero
+    (pesa unos cientos de bytes), el servidor contesta cuáles ya tenía, y de ésas no se sube nada.
+    """
     from radiov import db as rdb
 
     _crear_tabla_envios(cfg)
@@ -583,31 +591,15 @@ def publicar(cfg: dict) -> int:
     musica_local = Path(cfg["musica_local"])
     datos_locales = Path(cfg["datos_locales"])
 
-    audio: list[tuple[Path, str]] = []
-    covers: list[tuple[Path, str]] = []
-    artistas: list[tuple[Path, str]] = []
-    for t in pendientes:
-        fp = (t.get("file_path") or "").replace("\\", "/").strip("/")
-        if fp:
-            # En el servidor la música vive en la raíz montada: `catalogada/…` tal cual.
-            audio.append((musica_local / fp, fp))
-        for columna, lista in (("cover_path", covers), ("artist_image_path", artistas)):
-            guardado = (t.get(columna) or "").replace("\\", "/")
-            if guardado:
-                nombre = guardado.split("/")[-1]      # en el servidor sólo se usa el nombre
-                sub = "covers" if columna == "cover_path" else "artists"
-                lista.append((datos_locales / sub / nombre, nombre))
-
-    _enviar_ficheros(cfg, audio, cfg["musica_servidor"], "música")
-    if covers:
-        _enviar_ficheros(cfg, covers, cfg["covers_servidor"], "carátulas")
-    if artistas:
-        _enviar_ficheros(cfg, artistas, cfg["artists_servidor"], "fotos de artistas")
-
-    # Las fichas: los campos que entiende el servidor (el resto de columnas locales se ignoran).
-    # Las rutas van en barra normal: el recolector las escribe con la barra de Windows, y en el
-    # servidor (Linux) una barra invertida sólo funciona porque `resolve_music` sabe interpretarla.
-    # Mejor no depender de eso.
+    # ORDEN IMPORTANTE: PRIMERO LAS FICHAS, DESPUÉS LOS FICHEROS.
+    #
+    # Antes era al revés (el audio se subía antes de preguntar) y tenía un coste tonto: si una
+    # canción ya estaba en el servidor, se subían igualmente sus 5-10 MB de audio… y el servidor
+    # rechazaba la ficha, así que ese fichero se quedaba en `/music` **sin ninguna ficha que lo
+    # apuntara**: ocupaba disco para siempre y no había forma de saber que estaba ahí.
+    #
+    # Ahora se manda primero la ficha (son unos cientos de bytes) y el servidor contesta cuáles ya
+    # tenía. El audio se sube sólo de las nuevas.
     CAMPOS = ("title", "artist", "album", "year", "genre", "language", "bpm", "energy", "gain_db",
               "valence", "tags", "era", "feat", "duration", "file_path", "file_size", "status",
               "source", "youtube_id", "deezer_id", "cover_url", "cover_path", "artist_id",
@@ -628,6 +620,43 @@ def publicar(cfg: dict) -> int:
     repetidas = int(respuesta.get("repetidas") or 0)
     print(f"  fichas enviadas: {respuesta['total']} · nuevas en el servidor: {respuesta['nuevas']}"
           + (f" · ya estaban allí: {repetidas}" if repetidas else ""))
+
+    # Las que el servidor ya tenía: ni se sube su audio ni sus carátulas (ya están allí).
+    ya_en_servidor = {
+        (d.get("youtube_id") or "", (d.get("artist") or "").lower(), (d.get("title") or "").lower())
+        for d in (respuesta.get("repetidas_detalle") or [])
+    }
+
+    def es_nueva(t: dict) -> bool:
+        clave = (t.get("youtube_id") or "", (t.get("artist") or "").lower(),
+                 (t.get("title") or "").lower())
+        return clave not in ya_en_servidor
+
+    a_enviar = [t for t in pendientes if es_nueva(t)]
+    if len(a_enviar) != len(pendientes):
+        print(f"  ficheros que NO se reenvían (la canción ya estaba): "
+              f"{len(pendientes) - len(a_enviar)}")
+
+    audio: list[tuple[Path, str]] = []
+    covers: list[tuple[Path, str]] = []
+    artistas: list[tuple[Path, str]] = []
+    for t in a_enviar:
+        fp = (t.get("file_path") or "").replace("\\", "/").strip("/")
+        if fp:
+            # En el servidor la música vive en la raíz montada: `catalogada/…` tal cual.
+            audio.append((musica_local / fp, fp))
+        for columna, lista in (("cover_path", covers), ("artist_image_path", artistas)):
+            guardado = (t.get(columna) or "").replace("\\", "/")
+            if guardado:
+                nombre = guardado.split("/")[-1]      # en el servidor sólo se usa el nombre
+                sub = "covers" if columna == "cover_path" else "artists"
+                lista.append((datos_locales / sub / nombre, nombre))
+
+    _enviar_ficheros(cfg, audio, cfg["musica_servidor"], "música")
+    if covers:
+        _enviar_ficheros(cfg, covers, cfg["covers_servidor"], "carátulas")
+    if artistas:
+        _enviar_ficheros(cfg, artistas, cfg["artists_servidor"], "fotos de artistas")
 
     # Cuando el servidor dice que una canción «ya estaba», es que la teníamos las dos máquinas: en el
     # PC por haberse bajado de nuevo y en el servidor desde antes (mismo vídeo con otro nombre, u otro

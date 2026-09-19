@@ -282,4 +282,4 @@ def importar(datos: ImportarIn) -> dict:
     rdb.log_event(f"💻 Importadas del recolector de {datos.origen}: {nuevas} nuevas, "
                   f"{len(repetidas)} que ya estaban (no se duplican)", "info")
     return {"nuevas": nuevas, "repetidas": len(repetidas), "total": nuevas + len(repetidas),
-            "repetidas_detalle": repetidas[:20]}
+            "repetidas_detalle": repetidas}

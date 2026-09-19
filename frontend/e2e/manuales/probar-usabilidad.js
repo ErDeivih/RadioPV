@@ -176,7 +176,14 @@ const medir = (p, vista) =>
         ...document.querySelectorAll(
           'button, h1, h2, h3, h4, label, [role="button"], .section-title, .playlist-header, .showMore'
         ),
-      ].filter(visible);
+      ].filter(visible).filter((el) => {
+        // Fuera lo que sea CONTENIDO del catálogo: el título de una canción puede llamarse
+        // «...Popular Songs» o «Home» y eso no es un fallo de traducción. Se detectó como falso
+        // positivo en la pantalla de género: salía «Songs» por una canción llamada «Best EDM
+        // Remixes & Mashups Of Popular Songs». Los elementos que llevan el nombre de una canción o
+        // de un artista se reconocen por sus clases.
+        return !el.closest('.song-details, .song-title, .artist-name, [class*="song-name"], [class*="track-name"]');
+      });
       const enIngles = new Set();
       cromo.forEach((el) => {
         const trozos = [
@@ -186,9 +193,20 @@ const medir = (p, vista) =>
           el.getAttribute('placeholder') || '',
         ];
         trozos.forEach((texto) => {
+          // Se compara la etiqueta ENTERA, no «contiene»: las etiquetas de la interfaz son
+          // exactamente «Mostrar más», «Barajar», «Songs»… Un elemento cuyo texto es «Best Songs,
+          // Remixes & Mashups» (el nombre de una lista del catálogo) no es un fallo de traducción, y
+          // con «contiene» salía en el informe. Se acepta que la etiqueta lleve un número o un
+          // contador detrás («Songs (12)»).
+          const limpio = texto
+            .trim()
+            .replace(/\s*[·|]\s*\d+.*$/, '')
+            .replace(/\s*\(\d+\)\s*$/, '')
+            .trim()
+            .toLowerCase();
+          if (!limpio || limpio.length > 32) return;
           INGLES.forEach((palabra) => {
-            // Palabra completa: "Home" sí, "Hometown" no.
-            if (new RegExp(`(^|[^A-Za-zÁÉÍÓÚáéíóúñÑ])${palabra}([^A-Za-zÁÉÍÓÚáéíóúñÑ]|$)`).test(texto)) {
+            if (limpio === palabra.toLowerCase()) {
               enIngles.add(palabra);
             }
           });

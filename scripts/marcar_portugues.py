@@ -27,6 +27,17 @@ Uso (dentro del contenedor del API):
     docker exec radiopv-api python /app/scripts/marcar_portugues.py --cuarentena
     docker exec radiopv-api python /app/scripts/marcar_portugues.py --revertir   # mira antes la lista
 """
+
+# La consola de Windows usa cp1252: un título con emoji o acentos mata el guion justo al imprimir
+# (pasó con «Tiktok Mashup 💗2025💗»). Todo lo que se imprime va en UTF-8 y, si algo no se puede
+# representar, se sustituye en vez de reventar: un informe a medias es peor que uno con un carácter
+# raro.
+for _flujo in (sys.stdout, sys.stderr):
+    try:
+        _flujo.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        pass
+
 import argparse
 import os
 import sqlite3
