@@ -472,9 +472,17 @@ def rebuild_remixes(db) -> int:
 
     remixes.sort(reverse=True)
     sesiones.sort(reverse=True)
-    n = _swap_system_playlist(db, "Mashups y remixes", [tid for _, tid in remixes[:60]])
-    n += _swap_system_playlist(db, "Sesiones de DJ", [tid for _, tid in sesiones[:40]])
-    log.info("[remixes] %s mashups/remixes y %s sesiones", len(remixes), len(sesiones))
+    # SIN TOPE: la lista tiene que ser TODA la música de ese tipo, no una muestra. Antes cortaba en
+    # 60 y 40, y con el catálogo creciendo eso significaba que las listas del tipo de música que el
+    # usuario más escucha se quedaban cortas y no dejaban ver lo que había: pedía «la lista de este
+    # tipo de canciones» y la lista era una selección de las 60 más populares. Se ordenan por
+    # popularidad, así que lo mejor sigue saliendo primero.
+    todas_remix = [tid for _, tid in remixes]
+    todas_sesiones = [tid for _, tid in sesiones]
+    n = _swap_system_playlist(db, "Mashups y remixes", todas_remix)
+    n += _swap_system_playlist(db, "Sesiones de DJ", todas_sesiones)
+    log.info("[remixes] %s mashups/remixes y %s sesiones (listas completas)",
+             len(todas_remix), len(todas_sesiones))
     return n
 
 

@@ -252,8 +252,17 @@ export const fecthFeaturedPlaylists = createAsyncThunk(
     // debe ofrecer la portada: listas, no canciones sueltas.
     if (!state.auth.user) return [];        // /playlists/system exige sesión
     const { data } = await axios.get<PlaylistOut[]>('/playlists/system');
+    // Las dos listas de mashups/remixes y sesiones de DJ van PRIMERO. Antes se ordenaba sólo por
+    // número de canciones, así que quedaban enterradas entre las demás (y «Sesiones de DJ», que
+    // tiene menos porque hay menos sesiones grabadas, se caía de la fila): el tipo de música que el
+    // usuario más escucha era el que peor se encontraba en la portada.
+    const PRIMERO = ['Mashups y remixes', 'Sesiones de DJ'];
+    const sitio = (n?: string) => {
+      const i = PRIMERO.indexOf(n ?? '');
+      return i === -1 ? PRIMERO.length : i;
+    };
     return [...data]
-      .sort((a, b) => (b.n_tracks ?? 0) - (a.n_tracks ?? 0))
+      .sort((a, b) => sitio(a.name) - sitio(b.name) || (b.n_tracks ?? 0) - (a.n_tracks ?? 0))
       .slice(0, 20)
       .map((p) => toPlaylist(p));
   },

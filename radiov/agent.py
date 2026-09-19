@@ -297,8 +297,25 @@ class AgentManager:
             db.log_event(f"Error procesando {t}: {e}", "error")
             self.progress["last"] = f"error en {t}: {e}"
 
+    def _semillas(self) -> list:
+        """Las semillas, con las de mashups/remixes/sesiones de DJ PRIMERO.
+
+        POR QUÉ SE ORDENAN
+        ------------------
+        El agente recorre la lista de semillas en orden y le da a cada una su cupo de descargas. Como
+        las semillas de éxitos y exploración iban antes en el fichero, las de mashups, remixes y
+        sesiones de DJ (que están al final) no llegaban a tocarse hasta haber dado una vuelta entera
+        a todo lo demás: en la práctica, el contenido que el usuario más escucha era el último de la
+        cola. Ordenarlas aquí —en vez de reorganizar el fichero de configuración— mantiene el orden
+        legible por temas en `config.py` y a la vez hace que cada vuelta empiece por lo que importa.
+        """
+        seeds = list(load_settings().get("agent_seeds", []))
+        prioridad = [s for s in seeds if s.get("mode") == "youtube"]
+        resto = [s for s in seeds if s.get("mode") != "youtube"]
+        return prioridad + resto
+
     def _next_seed(self) -> Optional[dict]:
-        seeds = load_settings().get("agent_seeds", [])
+        seeds = self._semillas()
         if not seeds:
             return None
         with self._lock:
