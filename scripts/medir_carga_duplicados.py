@@ -57,23 +57,24 @@ print(f"   vueltas al día (cada 15 min): 96  →  {bytes_completo * 96 / 104857
 print("   con el incremental, en una vuelta normal: 0 filas (unos 200 bytes)")
 print(f"   ahorro: prácticamente todo ({ms_completo / max(ms_delta, 0.001):.0f}× menos trabajo)")
 
-print("\n--- comprobar duplicados al importar (una vez por lote, no por canción) ---")
+print("\n--- comprobar duplicados al importar ---")
 ms_claves = cronometrar("índice de claves de la biblioteca (1 consulta)",
-                        lambda: rdb.indice_de_claves())
+                        lambda: rdb.indice_de_claves(refrescar=True))
 claves = rdb.indice_de_claves()
 candidatas = [(r["artist"], r["title"]) for r in con.execute(
-    "SELECT artist, title FROM tracks ORDER BY id DESC LIMIT 10")]
+    "SELECT artist, title FROM tracks ORDER BY id DESC LIMIT 200")]
 ms_check = cronometrar(f"comprobar {len(candidatas)} canciones del lote",
                        lambda: [rdb.pista_existente(artist=a, title=t, claves=claves)
                                 for a, t in candidatas])
-print(f"   → {ms_check / max(len(candidatas), 1):.2f} ms por canción")
+print(f"   → {ms_check / max(len(candidatas), 1):.3f} ms por canción "
+      f"(con el diccionario ya hecho: no hay consulta por canción)")
 
 # Comparación honesta: lo que cuesta subir UNA canción.
 tamano = os.path.getsize(f"{DIR}/radiov.db")
-print(f"\n--- para comparar ---")
+print("\n--- para comparar ---")
 print(f"   la base entera son {tamano / 1048576:.1f} MB; un fichero de música, 5-10 MB")
-print(f"   subir una sola canción por tar+ssh cuesta muchísimo más que las "
-      f"{(ms_claves + ms_check) / 1000:.2f} s que suma esta comprobación en toda una vuelta")
+print(f"   lo que suma esta comprobación en una vuelta: "
+      f"{(ms_claves + ms_check) / 1000:.2f} s (una consulta + un recorrido en memoria)")
 
 con.close()
-print("\n[OK] la comprobación de duplicados no carga el servidor: una consulta por vuelta y una por lote")
+print("\n[OK] la comprobación de duplicados no carga el servidor: 1 consulta por vuelta y nada por canción")
