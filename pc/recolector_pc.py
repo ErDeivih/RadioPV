@@ -186,24 +186,39 @@ def sembrar(cfg: dict) -> int:
     indice = pedir(cfg, "collector/indice")
     con = rdb.get_conn()
     nuevas = 0
+    con_ids = 0
     try:
-        for clave in indice["claves"]:
-            if "|" not in clave:
+        # Las fichas sembradas llevan TAMBIÉN los identificadores (id de YouTube y de Deezer).
+        # Al principio sólo se guardaban artista y título, y el PC volvía a descargar canciones que
+        # ya tenía: el recolector mira el id de YouTube antes de bajar nada, y sin ese dato no podía
+        # saberlo (o el mismo vídeo aparecía con otro nombre de artista). Se vio comparando los
+        # ficheros de las dos máquinas: los del servidor eran más antiguos que los del PC, o sea la
+        # misma canción bajada y enviada dos veces.
+        for titulo, artista, yt, dz in indice["pistas"]:
+            if not titulo or not artista:
                 continue
-            artista, titulo = clave.split("|", 1)
-            ya = con.execute("SELECT 1 FROM tracks WHERE artist=? AND title=?",
-                             (artista, titulo)).fetchone()
+            yt = yt or None
+            dz = dz or None
+            ya = con.execute("SELECT id, youtube_id FROM tracks WHERE (artist=? AND title=?)"
+                             " OR (youtube_id IS NOT NULL AND youtube_id=?)",
+                             (artista, titulo, yt)).fetchone()
             if ya:
+                # Se completa el id si la ficha estaba sembrada sin él.
+                if yt and not ya["youtube_id"]:
+                    con.execute("UPDATE tracks SET youtube_id=?, deezer_id=COALESCE(deezer_id, ?) "
+                                "WHERE id=?", (yt, dz, ya["id"]))
+                    con_ids += 1
                 continue
             con.execute(
-                "INSERT INTO tracks(title, artist, status, source, file_path, is_remix) "
-                "VALUES(?,?,?,'sembrado','',0)",
-                (titulo, artista, "descargada"))
+                "INSERT OR IGNORE INTO tracks(title, artist, youtube_id, deezer_id, status, source,"
+                " file_path, is_remix) VALUES(?,?,?,?,'descargada','sembrado','',0)",
+                (titulo, artista, yt, dz))
             nuevas += 1
         con.commit()
     finally:
         con.close()
-    print(f"  índice del servidor: {indice['total']} canciones · {nuevas} fichas nuevas sembradas")
+    print(f"  índice del servidor: {indice['total']} canciones · {nuevas} fichas nuevas · "
+          f"{con_ids} identificadores completados")
     return nuevas
 
 

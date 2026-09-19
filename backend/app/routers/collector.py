@@ -79,10 +79,18 @@ def ajustes() -> dict:
 @router.get("/indice", summary="Qué canciones ya están (para no volver a bajarlas)",
             dependencies=[Depends(require_ingest_token)])
 def indice() -> dict:
-    """Lista compacta de lo que YA hay: por id de YouTube, por id de Deezer y por «artista|título».
+    """Lo que YA hay, con sus identificadores.
 
-    Se manda en tres listas planas en vez de objetos con nombre y apellidos: con 6.000 canciones
-    eso es la diferencia entre 200 KB y 1 MB por vuelta, y esto se pide cada pocos minutos.
+    Se manda una lista de listas (`[título, artista, id_youtube, id_deezer]`) en vez de objetos con
+    nombres de campo: con 6.000 canciones eso es la mitad de bytes, y esto se pide cada pocos
+    minutos.
+
+    **Los identificadores son imprescindibles**, no un extra: el recolector comprueba antes de
+    bajar nada si ese vídeo de YouTube ya está (`track_exists`), y sin el id el PC no puede saberlo.
+    Cuando se mandaban sólo «artista + título», el PC volvía a descargar canciones que ya tenía
+    —con otro nombre de artista, o de otro vídeo— y las volvía a enviar. Se descubrió comparando
+    los ficheros de las dos máquinas: los del servidor eran más antiguos que los del PC, que es
+    exactamente «la misma canción bajada dos veces».
     """
     import sqlite3
     from radiov.config import DB_PATH
@@ -90,19 +98,13 @@ def indice() -> dict:
     con = sqlite3.connect(str(DB_PATH))
     try:
         con.row_factory = sqlite3.Row
-        filas = con.execute("SELECT youtube_id, deezer_id, artist, title, status FROM tracks").fetchall()
+        filas = con.execute("SELECT title, artist, youtube_id, deezer_id FROM tracks").fetchall()
     finally:
         con.close()
 
-    yt, dz, claves = [], [], []
-    for r in filas:
-        if r["youtube_id"]:
-            yt.append(r["youtube_id"])
-        if r["deezer_id"]:
-            dz.append(str(r["deezer_id"]))
-        if r["artist"] and r["title"]:
-            claves.append(f"{r['artist']}|{r['title']}")
-    return {"youtube_ids": yt, "deezer_ids": dz, "claves": claves, "total": len(filas)}
+    pistas = [[r["title"] or "", r["artist"] or "", r["youtube_id"] or "", str(r["deezer_id"] or "")]
+              for r in filas if r["title"] and r["artist"]]
+    return {"total": len(filas), "pistas": pistas}
 
 
 class Rec(BaseModel):

@@ -55,9 +55,10 @@ def test_con_token_devuelve_indice_y_ajustes(client, monkeypatch, radiov_tempora
                    "deezer_id": "999", "file_path": "", "status": "descargada"})
 
     indice = client.get("/collector/indice", headers=cab).json()
-    assert "abc123" in indice["youtube_ids"]
-    assert "999" in indice["deezer_ids"]
-    assert "Alguien|Ya la tengo" in indice["claves"]
+    # El índice lleva los identificadores, no sólo artista y título: sin el id de YouTube el PC
+    # vuelve a descargar lo que ya está (y lo vuelve a enviar).
+    assert ["Ya la tengo", "Alguien", "abc123", "999"] in indice["pistas"]
+    assert indice["total"] >= 1
 
     ajustes = client.get("/collector/ajustes", headers=cab).json()
     # Las semillas viajan al PC: si cada máquina tuviera su copia, con el tiempo se separarían.
