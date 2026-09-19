@@ -111,7 +111,22 @@ def test_solo_se_reinicia_si_toca_descargar_y_el_hilo_esta_muerto():
     assert modulo.debe_reiniciarse(False, True) is False
 
 
-# --- 4 · las canciones perdidas se vuelven a descargar -------------------------------------------
+# --- 5 · el mantenimiento tiene que llegar a ejecutarse -----------------------------------------
+
+def test_el_primer_mantenimiento_tras_arrancar_no_espera_el_intervalo_entero():
+    """Antes, el contador del mantenimiento empezaba en «ahora»: tras cada reinicio había que
+    esperar el intervalo completo (15 minutos por defecto). Con el autodespliegue recreando el
+    contenedor cada pocos minutos, el mantenimiento **no se ejecutaba nunca** y las canciones a
+    medias se quedaban a medias (128 el 19/09)."""
+    import time
+
+    from radiov.agent import AgentManager
+
+    m = AgentManager()                       # no arranca ningún hilo: sólo se construye
+    intervalo_min = int(__import__("radiov.config", fromlist=["load_settings"])
+                        .load_settings().get("maintenance_interval_minutes", 15))
+    restante = intervalo_min * 60 - (time.time() - m._last_maintenance)
+    assert restante <= 61, f"el primer mantenimiento tardaría {restante / 60:.1f} min en llegar"
 
 def test_el_mantenimiento_recupera_las_canciones_perdidas():
     """`recuperar_perdidas` existía y decía en su documentación que se llamaba desde aquí… pero no

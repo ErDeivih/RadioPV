@@ -27,7 +27,15 @@ class AgentManager:
         self.ondemand: "queue.Queue[dict]" = queue.Queue()
         self.agent_enabled = bool(load_settings().get("agent_enabled_by_default", False))
         self.seed_cursor = 0
-        self._last_maintenance = time.time()
+        # El mantenimiento (revisor de metadatos, ganancia, carátulas, republicar) corre cada
+        # `maintenance_interval_minutes`. El contador NO empieza en «ahora»: si empieza en ahora,
+        # después de cada reinicio hay que esperar el intervalo entero, y con el autodespliegue
+        # recreando el contenedor cada pocos minutos el mantenimiento **no llegaba a ejecutarse
+        # nunca**. Medido el 19/09: la última pasada era de las 10:01 y a las 10:40 seguía sin
+        # repetirse, con 128 canciones a medias esperando a que las completara.
+        # Se deja un minuto de margen para que arranque lo demás (migraciones, planificador).
+        intervalo_min = int(load_settings().get("maintenance_interval_minutes", 15))
+        self._last_maintenance = time.time() - max(0, intervalo_min - 1) * 60
         self.mode = "auto"   # auto | descargas | revision | bpm | energia
         self.reviewing = False
         self.review_report = {}
