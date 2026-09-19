@@ -35,8 +35,27 @@ const URL_BASE = process.env.URL || 'http://servidor:8090';
   if (await campo.count()) await campo.fill('Los Huesos');
   await p.waitForTimeout(5000);
 
-  const datos = await p.evaluate(() =>
-    [...document.querySelectorAll('button, a, input')]
+  const datos = await p.evaluate(() => {
+    // Alto EFECTIVO: lo que recibe el toque de verdad, contando pseudo-elementos (así es como se
+    // arregla la «X» del buscador: su caja mide 12 px pero el `::after` la agranda a 44).
+    const altoEfectivo = (el) => {
+      const r = el.getBoundingClientRect();
+      const cx = Math.min(Math.max(r.left + r.width / 2, 1), window.innerWidth - 1);
+      let arriba = r.top;
+      let abajo = r.bottom;
+      for (let d = 4; d <= 24; d += 4) {
+        const t = document.elementFromPoint(cx, r.top - d);
+        if (t && (t === el || el.contains(t))) arriba = r.top - d;
+        else break;
+      }
+      for (let d = 4; d <= 24; d += 4) {
+        const t = document.elementFromPoint(cx, r.bottom + d);
+        if (t && (t === el || el.contains(t))) abajo = r.bottom + d;
+        else break;
+      }
+      return Math.round(abajo - arriba);
+    };
+    return [...document.querySelectorAll('button, a, input')]
       .filter((e) => e.offsetParent !== null)
       .map((e) => {
         const r = e.getBoundingClientRect();
@@ -47,18 +66,18 @@ const URL_BASE = process.env.URL || 'http://servidor:8090';
           texto: (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 22),
           w: Math.round(r.width),
           h: Math.round(r.height),
-          minH: cs.minHeight,
+          hEfectivo: Math.max(Math.round(r.height), altoEfectivo(e)),
           minBlock: cs.minBlockSize,
           height: cs.height,
         };
       })
-      .filter((x) => x.h > 0 && (x.w < 44 || x.h < 44))
-  );
+      .filter((x) => x.h > 0 && (x.w < 44 || x.hEfectivo < 44));
+  });
 
   console.log(`elementos pequeños (< 44 px) en /pedir: ${datos.length}`);
   for (const d of datos) {
     console.log(
-      `   ${d.tag} ${d.w}x${d.h}  min-height=${d.minH} min-block-size=${d.minBlock} height=${d.height}  «${d.texto}»  ${d.clase}`
+      `   ${d.tag} ${d.w}x${d.h} (efectivo ${d.hEfectivo})  min-block-size=${d.minBlock} height=${d.height}  «${d.texto}»  ${d.clase}`
     );
   }
 

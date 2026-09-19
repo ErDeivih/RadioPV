@@ -1162,15 +1162,17 @@ span.ant-dropdown-trigger,
   }
 
   /* La «X» de borrar del campo de búsqueda (antd) mide 12x12 px: el dedo no la acierta. Se le
-     agranda el ÁREA que recibe el toque con un pseudo-elemento, sin agrandar el dibujo (el campo
-     sólo mide 44 px de alto y un icono de 44 se saldría). */
+     agranda el ÁREA que recibe el toque con un pseudo-elemento, sin agrandar el dibujo.
+     Los márgenes están medidos a propósito: en vertical llega justo a los 44 px del campo (no se
+     sale de él) y en horizontal se queda estrecho, hacia la derecha, para no invadir el texto —
+     un área de borrado que pise lo escrito hace que se borre sin querer. */
   .ant-input-clear-icon {
     position: relative;
   }
   .ant-input-clear-icon::after {
     content: '';
     position: absolute;
-    inset: -14px -12px;
+    inset: -16px -8px;
   }
 
   /* Enlaces de la barra de arriba que son un botón de texto dentro de un enlace («Pedir», «Admin»).
