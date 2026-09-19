@@ -27,6 +27,15 @@ import sqlite3
 import sys
 
 sys.path.insert(0, "/app" if os.path.isdir("/app") else ".")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# La consola de Windows usa cp1252 y revienta con emojis y acentos (pasó: un título con 🔥 mató el
+# resumen justo al informar). Todo lo que se imprime va en UTF-8.
+for _flujo in (sys.stdout, sys.stderr):
+    try:
+        _flujo.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        pass
 
 DIR = os.environ.get("RADIOPV_DATA_DIR", "/app/data")
 
@@ -61,20 +70,36 @@ for f in filas[:args.limite]:
     # La carátula se puede deducir sin preguntar a nadie: es la miniatura del vídeo.
     if not f["cover_url"]:
         nuevo["cover_url"] = f"https://i.ytimg.com/vi/{f['youtube_id']}/hqdefault.jpg"
-    # El año sí hay que preguntarlo (una consulta por vídeo, sólo de metadatos, sin descargar audio).
+    # El año, por este orden:
+    #   1. lo que diga el propio vídeo (fecha de subida);
+    #   2. el año que aparece EN EL TÍTULO, que en este contenido es lo normal («Tiktok Mashup
+    #      December 2025», «Best of Arijit Singh Mashup 2024», «The Best Party Mix 2025»);
+    #   3. y si no se sabe, se deja vacío: la canción se publica igual (el año ya no bloquea a lo
+    #      que sólo existe en YouTube). Mejor un mashup que suena sin fecha que una fecha perfecta
+    #      que no suena.
     if not f["year"]:
-        try:
-            import yt_dlp
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True,
-                                   "socket_timeout": 20}) as ydl:
-                info = ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={f['youtube_id']}", download=False)
-            from radiov.youtube import _ano_de_upload
-            ano = _ano_de_upload(info or {})
-            if ano:
-                nuevo["year"] = ano
-        except Exception as e:  # noqa: BLE001
-            print(f"   aviso: no se pudo preguntar por {f['youtube_id']}: {str(e)[:60]}")
+        import re
+        en_titulo = re.search(r"\b(19[5-9]\d|20[0-4]\d)\b", f["title"] or "")
+        if en_titulo:
+            nuevo["year"] = int(en_titulo.group(1))
+        else:
+            try:
+                import yt_dlp
+                # MISMAS cabeceras que la descarga. Sin el User-Agent de un navegador, YouTube
+                # contesta «Sign in to confirm you're not a bot» a la consulta de metadatos.
+                from radiov.youtube import UA, _ano_de_upload
+                opts = {"quiet": True, "no_warnings": True, "skip_download": True,
+                        "socket_timeout": 20, "retries": 2,
+                        "http_headers": {"User-Agent": UA,
+                                         "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"}}
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(
+                        f"https://www.youtube.com/watch?v={f['youtube_id']}", download=False)
+                ano = _ano_de_upload(info or {})
+                if ano:
+                    nuevo["year"] = ano
+            except Exception as e:  # noqa: BLE001
+                print(f"   aviso: no se pudo preguntar por {f['youtube_id']}: {str(e)[:60]}")
     if nuevo:
         cambios.append((f, nuevo))
         print(f"   id={f['id']:<6} {f['artist']} - {f['title']}"[:95])

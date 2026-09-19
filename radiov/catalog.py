@@ -1036,7 +1036,16 @@ def republicar_completas(limit: int = 2000) -> int:
     n = 0
     for r in rows:
         t = dict(r)
-        if all(t.get(k) for k in obligatorios):
+        # EL AÑO NO PUEDE BLOQUEAR A LO QUE SÓLO EXISTE EN YOUTUBE. Deezer no tiene ficha de un
+        # mashup casero ni de una sesión de DJ, así que no hay año que poner. Aquí se exigía igual
+        # que en la puerta de entrada, y con eso las canciones bajadas de YouTube se quedaban
+        # 'incompleta' PARA SIEMPRE: bajaban, se analizaban, se les ponía hasta la carátula… y no
+        # llegaban nunca a la aplicación. Se veía en el registro del recolector como «aviso: 18
+        # descargadas aún sin completar» y ahí se quedaban, incluida una sesión de 36 minutos que el
+        # usuario había pedido a mano. Ahora, si la canción viene de un vídeo, se publica sin año.
+        exigidos = [k for k in obligatorios
+                    if not (k == "year" and t.get("youtube_id"))]
+        if all(t.get(k) for k in exigidos):
             db.update_track(t["id"], status=M.STATUS_DOWNLOADED)
             n += 1
     if n:
