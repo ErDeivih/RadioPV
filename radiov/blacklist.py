@@ -77,10 +77,25 @@ def list_blacklist(kind: str | None = None) -> list[dict]:
     return db.get_blacklist(kind)
 
 
-def delete_tracks(track_ids, veto: bool = True) -> int:
-    """Borra varias canciones en un solo paso (ficheros + filas + lista negra opcional)."""
+def delete_tracks(track_ids, veto: bool = True, fallos: list | None = None) -> int:
+    """Borra varias canciones en un solo paso (ficheros + filas + lista negra opcional).
+
+    OJO CON LOS FICHEROS QUE NO SE PUEDEN BORRAR
+    --------------------------------------------
+    Aquí había `try: unlink() except OSError: pass`. El contenedor de la API montaba la música en
+    **solo lectura**, así que el `unlink` fallaba con EROFS… y se tragaba el error. Resultado: el
+    panel decía «Borradas 412 canciones», las fichas desaparecían del catálogo y **los ficheros
+    seguían ocupando el disco**. Es decir, la herramienta de limpieza no limpiaba nada de verdad, y
+    el mensaje decía que sí. Para colmo, `resolve_music` devuelve la ruta aunque no exista, así que
+    «no existe» y «no tengo permiso» se veían igual.
+
+    Ahora los fallos se recogen (si el que llama pasa una lista) y se apuntan como evento, para que
+    se vea en el panel. La escritura se arregla en el montaje del contenedor (ver
+    `docker-compose.yml`), pero el aviso se queda: un borrado a medias tiene que verse.
+    """
     conn = db.get_conn()
     deleted = 0
+    sin_borrar = 0
     try:
         for tid in track_ids:
             row = conn.execute("SELECT id, title, artist, file_path FROM tracks WHERE id=?", (tid,)).fetchone()
@@ -89,9 +104,16 @@ def delete_tracks(track_ids, veto: bool = True) -> int:
             fp = row["file_path"]
             if fp:
                 try:
-                    resolve_music(fp).unlink(missing_ok=True)
-                except OSError:
-                    pass
+                    fichero = resolve_music(fp)
+                    if fichero.exists():
+                        fichero.unlink()
+                except OSError as e:
+                    # No se pudo borrar el audio (permisos, disco de solo lectura, fichero en uso).
+                    # La fila se borra igual —el catálogo no debe quedarse con música que el usuario
+                    # ha quitado— pero esto hay que decirlo, no esconderlo.
+                    sin_borrar += 1
+                    if fallos is not None:
+                        fallos.append(f"{row['title']} ({str(e)[:40]})")
             if veto:
                 conn.execute(
                     "INSERT OR IGNORE INTO blacklist(kind,value,reason,active,created_at) VALUES (?,?,?,1,?)",
@@ -103,6 +125,9 @@ def delete_tracks(track_ids, veto: bool = True) -> int:
     finally:
         conn.close()
     db.log_event(f"🗑️ Borradas {deleted} canciones" + (" (y vetadas)" if veto else " (sin vetar)"), "info")
+    if sin_borrar:
+        db.log_event(f"⚠️ {sin_borrar} ficheros NO se pudieron borrar del disco "
+                     f"(siguen ocupando sitio): {'; '.join((fallos or [])[:3])}", "warning")
     return deleted
 
 

@@ -170,6 +170,16 @@ export interface BulkResult {
   dry_run: boolean;
 }
 
+/** Resultado de borrar canciones por su id (la tabla, con selección). */
+export interface BorradoResult {
+  borradas: number;
+  solicitadas: number;
+  vetadas: boolean;
+  /** Ficheros que NO se han podido borrar del disco (permisos, disco lleno, fichero en uso). */
+  ficheros_no_borrados?: number;
+  detalle_fallos?: string[];
+}
+
 export interface EventRow {
   id: number;
   ts: string | null;
@@ -206,7 +216,9 @@ export const adminApi = {
   facets: () => axios.get<Facets>('/admin/facets').then((r) => r.data),
 
   deleteTracks: (ids: number[], veto: boolean) =>
-    axios.post('/admin/tracks/delete', { ids, veto }).then((r) => r.data),
+    axios
+      .post<BorradoResult>('/admin/tracks/delete', { ids, veto })
+      .then((r) => r.data),
 
   blacklistTracks: (ids: number[]) =>
     axios.post('/admin/tracks/blacklist', { ids }).then((r) => r.data),

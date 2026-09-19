@@ -73,9 +73,11 @@ _SESION_DUDA_RE = re.compile(
     r"\bsesion(es)?\b|\bsession(s)?\b|\bvol\.?\s*\d+\b|\bdj\b|\bmezcla\b|(?<!re)\bmix\b",
     re.I)
 # Un MASHUP cruza dos o más canciones: «A x B», «A vs B», «mashup», «megamix», «blend».
+# «Medley» también: es literalmente varias canciones seguidas en una sola pista (lo comprobamos
+# contra el catálogo: «Los Del Río - Medley», «Claude Barzotti - Medley»).
 # El cruce se comprueba aparte (`_es_cruce_de_verdad`) porque hay títulos que llevan una «x» sin
 # ser un mashup: «ROSALÍA - Yo x Ti, Tu x Mi» es una canción, no un cruce de dos.
-_MASHUP_RE = re.compile(r"\bmash[\s-]?up\b|\bmegamix\b|\bblend\b", re.I)
+_MASHUP_RE = re.compile(r"\bmash[\s-]?up\b|\bmegamix\b|\bblend\b|\bmedley\b", re.I)
 _SEPARADOR_RE = re.compile(r"\s(?:[xX]|vs\.?|versus)\s", re.I)
 # Trozos en los que NO se busca el cruce: dentro de un paréntesis hay créditos, no cruces, y una
 # coma separa partes de un mismo título.
@@ -110,9 +112,17 @@ def _es_cruce_de_verdad(titulo: str) -> bool:
         if palabras(partes[0]) >= 2 or palabras(partes[1]) >= 2:
             return True
     return False
-# Un REMIX parte de UNA canción.
+# Un REMIX parte de UNA canción. Aquí entran las formas que se usan de verdad en YouTube y que el
+# catálogo tenía sin clasificar (contadas contra las 6.000 pistas reales):
+#   «rmx» (2), «(Original Mix)»/«(Radio Mix)»/«(Club Mix)» (10), «(Extended Version)» (1),
+#   «(Sped up)»/«(Slowed)» (1) y «Medley» va como mashup.
+# El «mix» suelto cuenta como remix y NO como sesión: una sesión ya se ha reconocido antes por su
+# duración, así que lo que llega hasta aquí es «(Donk Mix)» o «(Cumbia Wepa Mix)», que son
+# versiones de una canción.
 _REMIX_RE = re.compile(
-    r"\bremix\b|\bre-?mix\b|\bbootleg\b|\bedit\b|\bflip\b|\brework\b|\brefix\b", re.I)
+    r"\bremix\b|\bre-?mix\b|\brmx\b|\bbootleg\b|\bedit\b|\bflip\b|\brework\b|\brefix\b|"
+    r"\bextended\s+(mix|version)\b|\bsped\s?up\b|\bslowed\b|(?<!re)\bmix\b",
+    re.I)
 
 
 def clasificar(titulo: str = "", artista: str = "", duracion: float | None = None) -> str | None:

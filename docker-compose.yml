@@ -47,7 +47,12 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
-      - /srv/data/media/music:/music:ro
+      # ESCRITURA, no solo lectura: el panel de administración borra ficheros cuando se limpia el
+      # catálogo. Estaba en `:ro`, así que el borrado del audio fallaba con EROFS, el error se
+      # tragaba en silencio y el panel decía «Borradas 412 canciones» mientras los 30 GB seguían en
+      # el disco. Una herramienta de limpieza que no libera espacio y dice que sí es peor que no
+      # tenerla. La API sólo escribe ahí en esa acción, y sólo con un administrador autenticado.
+      - /srv/data/media/music:/music
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 30s

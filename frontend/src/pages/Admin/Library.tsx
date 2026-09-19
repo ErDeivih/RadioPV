@@ -346,6 +346,15 @@ export const Library: FC = () => {
       message.success(
         `Borradas ${r.borradas} canciones${r.vetadas ? ' y añadidas a la lista negra' : ''}`
       );
+      // Si algún fichero no se ha podido borrar, hay que decirlo: el catálogo ya no las tiene, pero
+      // el audio sigue ocupando disco. Antes esto pasaba en silencio (el contenedor no podía
+      // escribir) y el panel aseguraba que todo había ido bien.
+      if (r.ficheros_no_borrados) {
+        message.warning(
+          `${r.ficheros_no_borrados} ficheros NO se han podido borrar del disco: siguen ocupando ` +
+            `sitio. ${r.detalle_fallos?.join(' · ') ?? ''}`
+        );
+      }
       setSeleccion([]);
       void cargar();
     } catch {

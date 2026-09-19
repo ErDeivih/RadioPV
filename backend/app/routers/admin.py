@@ -273,8 +273,14 @@ def admin_delete_tracks(payload: DeleteRequest,
     recolector **no volverá a descargarlas**.
     """
     _, rbl, *_ = _radiov()
-    borradas = rbl.delete_tracks(payload.ids, veto=payload.veto)
-    return {"borradas": borradas, "solicitadas": len(payload.ids), "vetadas": payload.veto}
+    # `fallos` recoge los ficheros que no se han podido borrar del disco. Antes no se podía saber:
+    # el borrado decía «Borradas N» aunque los ficheros siguieran ahí (el contenedor montaba la
+    # música en solo lectura y el error se tragaba). Para una herramienta de limpieza, eso es lo
+    # peor: crees que has liberado 30 GB y no has liberado ninguno.
+    no_borrados: list = []
+    borradas = rbl.delete_tracks(payload.ids, veto=payload.veto, fallos=no_borrados)
+    return {"borradas": borradas, "solicitadas": len(payload.ids), "vetadas": payload.veto,
+            "ficheros_no_borrados": len(no_borrados), "detalle_fallos": no_borrados[:5]}
 
 
 @router.post("/tracks/blacklist", summary="Vetar canciones SIN borrarlas")
