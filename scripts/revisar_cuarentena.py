@@ -11,6 +11,10 @@ Uso (dentro del contenedor del API):
     docker exec radiopv-api python /app/scripts/revisar_cuarentena.py --apply    # republica
 """
 
+
+import os
+import sys
+
 # La consola de Windows usa cp1252: un título con emoji o acentos mata el guion justo al imprimir
 # (pasó con «Tiktok Mashup 💗2025💗»). Todo lo que se imprime va en UTF-8 y, si algo no se puede
 # representar, se sustituye en vez de reventar: un informe a medias es peor que uno con un carácter
@@ -20,9 +24,6 @@ for _flujo in (sys.stdout, sys.stderr):
         _flujo.reconfigure(encoding="utf-8", errors="replace")
     except Exception:  # noqa: BLE001
         pass
-
-import os
-import sys
 
 sys.path.insert(0, "/app")
 sys.path.insert(0, "/app/backend")

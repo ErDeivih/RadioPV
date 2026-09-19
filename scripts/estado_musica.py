@@ -14,6 +14,13 @@ Sin argumentos informa del catálogo entero; con --playlist N revisa además los
 una lista concreta (que es exactamente lo que ocurre al pulsar su botón de reproducir).
 """
 
+
+from __future__ import annotations
+
+import argparse
+import sqlite3
+import sys
+
 # La consola de Windows usa cp1252: un título con emoji o acentos mata el guion justo al imprimir
 # (pasó con «Tiktok Mashup 💗2025💗»). Todo lo que se imprime va en UTF-8 y, si algo no se puede
 # representar, se sustituye en vez de reventar: un informe a medias es peor que uno con un carácter
@@ -23,12 +30,6 @@ for _flujo in (sys.stdout, sys.stderr):
         _flujo.reconfigure(encoding="utf-8", errors="replace")
     except Exception:  # noqa: BLE001
         pass
-
-from __future__ import annotations
-
-import argparse
-import sqlite3
-import sys
 
 sys.path.insert(0, "/app")
 

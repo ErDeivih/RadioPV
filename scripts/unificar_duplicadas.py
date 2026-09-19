@@ -24,6 +24,14 @@ Uso (dentro del contenedor del API):
     docker exec radiopv-api python /app/scripts/unificar_duplicadas.py --aplicar --borrar-ficheros
 """
 
+
+import argparse
+import os
+import re
+import sqlite3
+import sys
+from pathlib import Path
+
 # La consola de Windows usa cp1252: un título con emoji o acentos mata el guion justo al imprimir
 # (pasó con «Tiktok Mashup 💗2025💗»). Todo lo que se imprime va en UTF-8 y, si algo no se puede
 # representar, se sustituye en vez de reventar: un informe a medias es peor que uno con un carácter
@@ -33,12 +41,6 @@ for _flujo in (sys.stdout, sys.stderr):
         _flujo.reconfigure(encoding="utf-8", errors="replace")
     except Exception:  # noqa: BLE001
         pass
-
-import argparse
-import os
-import sqlite3
-import sys
-from pathlib import Path
 
 sys.path.insert(0, "/app" if os.path.isdir("/app") else ".")
 
@@ -53,9 +55,103 @@ ap.add_argument("--base", default="radiov.db", choices=("radiov.db", "backend.db
 ap.add_argument("--limite", type=int, default=10, help="cuántos grupos enseñar")
 ap.add_argument("--huerfanos", action="store_true",
                 help="sólo borra el audio que no usa NADIE (ni esta base ni la otra)")
+ap.add_argument("--sin-ficha", action="store_true",
+                help="sólo mira los ficheros de música que NO tienen ninguna ficha que los apunte")
 args = ap.parse_args()
 
 from radiov import db as rdb  # noqa: E402
+
+# ---------------------------------------------------------------------------------------------
+# MODO «SIN FICHA»: ficheros de audio que ninguna ficha del catálogo apunta
+# ---------------------------------------------------------------------------------------------
+# POR QUÉ PUEDE HABER FICHEROS ASÍ
+# --------------------------------
+# El recolector subía el audio ANTES de mandar la ficha. Si la canción ya estaba en el servidor, el
+# servidor rechazaba la ficha (bien: no se duplica) pero **el audio ya se había subido**: 5-10 MB por
+# canción que se quedaban en `/music` sin que ninguna fila los mencionara. Ocupan disco y no hay
+# forma de verlos desde la aplicación ni desde el panel. Ahora el orden es el contrario (ficha
+# primero), así que esto limpia lo que quedó de antes.
+#
+# CUIDADO CON LO QUE NO ES BASURA: se excluyen las carpetas que empiezan por `_` (pruebas, descartes)
+# y se comprueba contra LAS DOS bases: si el fichero lo usa cualquier ficha, no se toca.
+if args.sin_ficha:
+    referenciados: set[str] = set()
+    for base in ("radiov.db", "backend.db"):
+        ruta = f"{DIR}/{base}"
+        if not os.path.exists(ruta):
+            continue
+        c = sqlite3.connect(ruta)
+        try:
+            for r in c.execute("SELECT file_path FROM tracks WHERE file_path IS NOT NULL"
+                               " AND file_path <> ''"):
+                referenciados.add(str(r[0]).replace("\\", "/").lstrip("/"))
+        finally:
+            c.close()
+
+    sueltos: list[tuple[Path, int]] = []
+    for f in RAIZ.rglob("*"):
+        if not f.is_file() or f.suffix.lower() not in (".mp3", ".m4a", ".opus", ".flac", ".wav"):
+            continue
+        rel = str(f.relative_to(RAIZ)).replace("\\", "/")
+        if rel.split("/")[0].startswith("_"):
+            continue
+        if rel not in referenciados:
+            try:
+                sueltos.append((f, f.stat().st_size))
+            except OSError:
+                pass
+
+    # NO TODO LO QUE NO TIENE FICHA ES BASURA. Antes de proponer borrar un fichero se comprueba que
+    # LA MISMA CANCIÓN siga en el catálogo con su fichero: si no se puede asegurar, se deja quieto y
+    # se avisa. Borrar es irreversible; liberar menos espacio no le hace daño a nadie.
+    con = sqlite3.connect(f"{DIR}/radiov.db")
+    con.row_factory = sqlite3.Row
+    activas: dict[str, str] = {}          # clave normalizada → ruta en el catálogo
+    try:
+        for r in con.execute("SELECT artist, title, file_path FROM tracks"
+                             " WHERE file_path IS NOT NULL AND file_path <> ''"
+                             " AND status != 'retirada'"):
+            activas[rdb.clave_cancion(r["artist"] or "", r["title"] or "")] = r["file_path"]
+    finally:
+        con.close()
+
+    seguros: list[tuple[Path, int]] = []
+    dudosos: list[tuple[Path, int]] = []
+    for f, s in sueltos:
+        # «Artista - Título (3).mp3» → sin el número de copia ni la extensión
+        nombre = re.sub(r"\s*\(\d+\)$", "", f.stem)
+        partes = nombre.split(" - ", 1)
+        artista, titulo = (partes[0], partes[1]) if len(partes) == 2 else ("", partes[0])
+        ruta_catalogo = activas.get(rdb.clave_cancion(artista, titulo))
+        hay_copia = bool(ruta_catalogo) and (RAIZ / str(ruta_catalogo)).exists()
+        (seguros if hay_copia else dudosos).append((f, s))
+
+    total_todos = sum(s for _f, s in sueltos)
+    print(f"ficheros de música SIN ficha que los apunte: {len(sueltos)} ({total_todos / 1048576:.1f} MB)")
+    print(f"   con copia segura en el catálogo (borrables): {len(seguros)} "
+          f"({sum(s for _f, s in seguros) / 1048576:.1f} MB)")
+    print(f"   sin poder asegurarlo (NO se tocan): {len(dudosos)} "
+          f"({sum(s for _f, s in dudosos) / 1048576:.1f} MB)")
+    for f, s in sorted(seguros, key=lambda x: -x[1])[:12]:
+        print(f"      {s / 1048576:7.1f} MB  {f.relative_to(RAIZ)}")
+    if dudosos:
+        print("   los dudosos, para mirarlos a mano:")
+        for f, s in sorted(dudosos, key=lambda x: -x[1])[:8]:
+            print(f"      {s / 1048576:7.1f} MB  {f.relative_to(RAIZ)}")
+
+    if args.aplicar and seguros:
+        borrados = liberado = 0
+        for f, s in seguros:
+            try:
+                f.unlink()
+                borrados += 1
+                liberado += s
+            except OSError as e:
+                print(f"   no se pudo borrar {f}: {e}")
+        print(f"\n[OK] {borrados} ficheros borrados ({liberado / 1048576:.1f} MB liberados)")
+    elif seguros:
+        print("\n[..] añade --aplicar para borrar los que tienen copia segura")
+    raise SystemExit(0)
 
 # ---------------------------------------------------------------------------------------------
 # MODO «HUÉRFANOS»: borrar audio que no usa ninguna ficha ACTIVA de ninguna de las dos bases
