@@ -1,4 +1,4 @@
-"""Rehace AHORA las listas de mashups/remixes y sesiones de DJ, y dice cómo quedan.
+"""Rehace AHORA las listas de mashups/remixes, sesiones de DJ y tech house, y dice cómo quedan.
 
 Para qué: el worker las rehace cada 3 horas, así que después de subir música nueva (o de cambiar la
 regla) puede tardar en verse. Esto las rehace al momento y enseña el resultado.
@@ -29,7 +29,7 @@ con.row_factory = sqlite3.Row
 print("\n=== cómo han quedado ===")
 for p in con.execute(
         "SELECT id, name FROM playlists WHERE type='system' AND (name LIKE '%Mashup%'"
-        " OR name LIKE '%Sesion%') ORDER BY name").fetchall():
+        " OR name LIKE '%Sesion%' OR name LIKE '%Tech house%') ORDER BY name").fetchall():
     filas = con.execute(
         "SELECT t.title, t.artist, t.duration FROM playlist_tracks pt"
         " LEFT JOIN tracks t ON t.id=pt.track_id WHERE pt.playlist_id=?"

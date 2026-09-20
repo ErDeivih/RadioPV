@@ -52,7 +52,11 @@ _PORTUGUES_RE = re.compile(
     r"\bsaudade\b|\bobrigad[oa]\b|\bbeijo\b|\bcê\b|\bsó\b|\bpra\s+mim\b|\bcomigo\b|"
     r"\b(?:um|uma|do|da|no|na|meu|minha|seu|sua|esse|essa)\s+\w+inh[ao]\b|"
     r"\bsertanej\w+|\bpiseiro\b|\bforr[óo]\b|\bpagode\b|\baxé\b|\barrocha\b|\bvaquejada\b|"
-    r"\bsofrência\b|\bbrega\b|\bfunk\s+carioca\b|\bbaile\s+funk\b",
+    r"\bsofrência\b|\bbrega\b|\bfunk\s+carioca\b|\bbaile\s+funk\b|"
+    # «trava» es jerga brasileña del funk (medido: en el catálogo cae UNA pista, y es exactamente la
+    # que se estaba colando: «SET DJ YURI PEDRADA - TRAVA CHIP», funk con MC Meno K y MC Ryan SP).
+    # En español sería «traba», así que no puede llevarse nada en español.
+    r"\btrava\b",
     re.I)
 
 # Artistas brasileños de funk: se llaman «Mc» + nombre («Mc GP», «MC LUUKY»). Se comprueba sólo al
@@ -60,10 +64,27 @@ _PORTUGUES_RE = re.compile(
 _ARTISTA_MC_RE = re.compile(r"^\s*mc[\s.]", re.I)
 
 
+# El diminutivo FEMENINO «-inha» en el TÍTULO. Es la otra mitad de lo que se estaba escapando:
+# «Motinha», «Adivinha o quê» (Lulu Santos), «Recife Minha Cidade» (Reginaldo Rossi), «Fazendinha
+# Sessions». Medido contra el catálogo (5.216 pistas, 20/09/2026): caen 5 pistas y las 5 son
+# brasileñas. Se veía en las listas del usuario: los sets de funk brasileño se colaban en «Sesiones
+# de DJ» y en «Mashups y remixes» (DJ Renato B - MOTINHA MIX…).
+#
+# POR QUÉ FEMENINO Y POR QUÉ SÓLO EL TÍTULO:
+#   · El masculino «-inho» NO se puede añadir: cae «Ninho», un rapero francés (3 pistas), y ya se
+#     quitó una vez justo por eso. La forma femenina no tiene ese problema.
+#   · Sólo el título, no el artista: «Martinha» es una cantante brasileña con una canción en español
+#     («Hoy Daría Yo la Vida») y marcarla por el nombre del artista sería un falso positivo; en el
+#     título, «-inha» es la palabra portuguesa.
+_PORTUGUES_TITULO_RE = re.compile(r"\b\w+inha\b", re.I)
+
+
 def parece_portugues(titulo: str = "", artista: str = "") -> bool:
     """¿Esto es portugués? Se mira el título y el artista (en Brasil el «artista» suele ser el
     cantante del canal: «Mc GP», «Henrique & Juliano»)."""
     if _PORTUGUES_RE.search(f"{titulo or ''} {artista or ''}"):
+        return True
+    if _PORTUGUES_TITULO_RE.search(titulo or ""):
         return True
     return bool(_ARTISTA_MC_RE.match(artista or ""))
 
