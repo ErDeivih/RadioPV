@@ -311,6 +311,10 @@ const medir = (p, vista) =>
       // escucha algo). Tiene su propia prueba funcional (`probar-pedir-cancion.js`); aquí se mide lo
       // de siempre: objetivos táctiles, recortes, controles invisibles y textos en inglés.
       ['Pedir', '/pedir'],
+      // El PANEL DE ADMINISTRACIÓN. El usuario limpia la biblioteca desde el móvil, así que tiene que
+      // cumplir lo mismo que el resto: botones que se aciertan con el dedo y nada cortado. No estaba
+      // en la lista y es la pantalla donde más se pelea con la interfaz.
+      ['Panel', '/admin'],
       // El perfil es la biblioteca: ahí también se ofrecen listas.
       ['Perfil', datos.yo ? `/users/${datos.yo}` : '/'],
       ['Género', datos.genero ? `/genre/${encodeURIComponent(datos.genero)}` : '/'],

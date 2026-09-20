@@ -25,6 +25,47 @@ class DownloadError(Exception):
     pass
 
 
+class DescargaAtascada(Exception):
+    """La descarga dejó de avanzar: se corta en vez de esperar indefinidamente."""
+
+
+def _vigilante_de_progreso(etiqueta: str = ""):
+    """Devuelve un `progress_hook` que CORTA la descarga si deja de avanzar.
+
+    POR QUÉ HACE FALTA (pasó de verdad, 20/09/2026)
+    -----------------------------------------------
+    Una descarga se quedó colgada: el fichero `.part` llevaba **117 MB y hora y cuarenta minutos sin
+    escribir un solo byte**. `yt-dlp` seguía esperando datos de una conexión muerta y el `socket_timeout`
+    de 20 s no saltó (sólo cubre la lectura del socket, no una conexión que se queda abierta sin
+    enviar nada). Consecuencia: la vuelta del recolector **no terminaba**, el candado seguía echado y
+    la tarea programada de Windows (que ignora instancias nuevas) **no arrancó ninguna vuelta más**:
+    toda la tarde sin descargar ni publicar nada.
+
+    Aquí se mira el reloj: si pasan `SIN_AVANCE` segundos sin que el fichero crezca, se lanza una
+    excepción que `yt-dlp` propaga y aborta la descarga. Se pierde esa canción (se reintentará en otra
+    vuelta) y se salva la tarde entera.
+    """
+    import time as _t
+
+    SIN_AVANCE = 120.0        # segundos sin que crezca el fichero → se corta
+    estado = {"bytes": -1, "cuando": _t.time()}
+
+    def hook(d):
+        if d.get("status") != "downloading":
+            return
+        bajado = d.get("downloaded_bytes") or 0
+        ahora = _t.time()
+        if bajado > estado["bytes"]:
+            estado["bytes"] = bajado
+            estado["cuando"] = ahora
+            return
+        if ahora - estado["cuando"] > SIN_AVANCE:
+            raise DescargaAtascada(
+                f"sin avanzar {SIN_AVANCE:.0f} s en {bajado / 1048576:.1f} MB {etiqueta}".strip())
+
+    return hook
+
+
 def _ydl_opts(outdir: Path) -> dict:
     cfg = load_settings()
     opts = {
@@ -44,6 +85,8 @@ def _ydl_opts(outdir: Path) -> dict:
         "ignoreerrors": False,
         "socket_timeout": 20,
         "retries": 2,
+        # El vigilante: sin esto, una conexión muerta deja la vuelta colgada durante horas.
+        "progress_hooks": [_vigilante_de_progreso()],
         "http_headers": {"User-Agent": UA, "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"},
     }
     # CUANDO YOUTUBE PIDE INICIAR SESIÓN
