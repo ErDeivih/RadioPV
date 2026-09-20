@@ -85,6 +85,14 @@ def _ydl_opts(outdir: Path) -> dict:
         "ignoreerrors": False,
         "socket_timeout": 20,
         "retries": 2,
+        # QUE DESCARGA YT-DLP, NO FFMPEG
+        # -----------------------------
+        # Para los streams HLS (`m3u8`) `yt-dlp` delega la descarga en **ffmpeg**, y ahí se acabó el
+        # control: ni el `socket_timeout` ni el vigilante de progreso de más abajo lo cubren. Es
+        # exactamente lo que se colgó: un `ffmpeg` con el fichero `.part` de 117 MB bloqueado hora y
+        # media, sobreviviendo incluso a matar el proceso de Python que lo lanzó.
+        # Con el descargador nativo, la descarga la lleva `yt-dlp` y el vigilante la puede cortar.
+        "hls_prefer_native": True,
         # El vigilante: sin esto, una conexión muerta deja la vuelta colgada durante horas.
         "progress_hooks": [_vigilante_de_progreso()],
         "http_headers": {"User-Agent": UA, "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"},
