@@ -87,6 +87,10 @@ NO_MUSICA = re.compile(
     r"\bringtone|\btono\s+de\s+llamada|"
     r"\b(top|greatest|best)\s*(100|50|40|20|10)\b|"
     r"\btop\s+hits?\b|\bhits?\s+playlist\b|\bhit\s+playlist\b|"
+    # Compilaciones: «200 Mejores Canciones De TikTok», «Las Mejores Canciones De…». Es el mismo
+    # caso que «Top 100» pero en castellano, y se colaba: apareció recuperando descargas del 19/09.
+    r"\b\d{2,3}\s+mejores\s+canciones\b|\bmejores\s+canciones\b|\bmejores\s+exitos\b|"
+    r"\b\d{2,3}\s+best\s+songs\b|\bbest\s+songs\b|"
     r"\bworkout\b|\baerobic\b|\bfitness\b|\bcardio\b|\bstep\s+session\b|\bgym\b|"
     r"\bcartoon\s+opening\b|\bopening\s+theme\b|\btv\s+hits?\b|"
     r"\bkaraoke\b|\bbacking\s+track\b|\bcover\s+version\s+by\b",
@@ -185,6 +189,17 @@ def clasificar(titulo: str = "", artista: str = "", duracion: float | None = Non
         # Con una duración de sesión, cualquiera de estas marcas basta: «DJ …», «session»,
         # «Vol. 3» (que es como se numeran las sesiones de un DJ), «… Mix».
         if re.match(r"^\s*dj", a, re.I) or _SESION_DUDA_RE.search(f"{t} {a}"):
+            return "sesion"
+        # Y SI DURA MÁS DE 20 MINUTOS, ES UNA MEZCLA AUNQUE NO LO DIGA EL TÍTULO.
+        # -------------------------------------------------------------------
+        # Antes esto se decidía sólo por el nombre, y se quedaban fuera mezclas que el usuario
+        # escucha: se midió al recuperar descargas del 19/09 y apareció «BRESH - REMIXES Y REGGAETON
+        # OLD SCHOOL EN AMERIKA», **66 minutos**, rechazada por «duración fuera de rango» porque su
+        # título no dice «sesión» ni «set dj» ni el artista empieza por «DJ». Una canción normal de
+        # 20 minutos no existe: a partir de ahí, o es una mezcla o es una compilación, y las
+        # compilaciones ya las caza `NO_MUSICA` («Top 100», «200 Mejores Canciones»…) antes de
+        # llegar aquí. Así que el que decide es el tiempo, no el nombre.
+        if d > 1200:
             return "sesion"
     if _MASHUP_RE.search(t) or _es_cruce_de_verdad(t):
         return "mashup"
