@@ -187,6 +187,43 @@ def _guardar_estado_indice(cfg: dict, max_id: int) -> None:
 
 
 # --------------------------------------------------------------------------------------------
+# Por qué semilla vamos: para que la vuelta siguiente NO empiece por la primera otra vez
+# --------------------------------------------------------------------------------------------
+def _ruta_estado_semilla(cfg: dict) -> Path:
+    return Path(cfg["datos_locales"]) / "semilla_estado.json"
+
+
+def _leer_estado_semilla(cfg: dict) -> int:
+    """Por qué semilla de la lista íbamos en la vuelta anterior.
+
+    POR QUÉ HACE FALTA (fallo encontrado el 20/09/2026)
+    ---------------------------------------------------
+    El agente recorre las semillas con un contador en memoria (`seed_cursor`) que **empieza en 0 en
+    cada proceso**, y cada vuelta del recolector es un proceso nuevo. Como la vuelta acaba al llegar
+    a su tope (6 canciones o 12 minutos), siempre se quedaba en las PRIMERAS semillas y las de más
+    abajo **no se ejecutaban nunca**. Medido: de las 92 semillas de YouTube, las 37 de tech house
+    están en los puestos 56 a 92 — o sea que era imposible que sonara ni una, por mucho que la semilla
+    estuviera bien puesta. Lo mismo les pasaba a las últimas de mashups y sesiones.
+
+    Con esto, la vuelta siguiente continúa donde se quedó la anterior y la lista se recorre entera.
+    """
+    try:
+        return int(json.loads(_ruta_estado_semilla(cfg).read_text(encoding="utf-8"))["cursor"])
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def _guardar_estado_semilla(cfg: dict, cursor: int, total: int) -> None:
+    try:
+        ruta = _ruta_estado_semilla(cfg)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_text(json.dumps({"cursor": int(cursor), "total": int(total),
+                                    "cuando": time.time()}), encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        print(f"  AVISO: no se pudo guardar por qué semilla íbamos: {e}")
+
+
+# --------------------------------------------------------------------------------------------
 # Sembrar: que el PC sepa lo que YA hay, para no volver a bajarlo
 # --------------------------------------------------------------------------------------------
 def limpiar_restos(cfg: dict) -> int:
@@ -382,7 +419,13 @@ def sembrar(cfg: dict) -> int:
 # Recolectar
 # --------------------------------------------------------------------------------------------
 def recolectar(cfg: dict, minutos: float, maximo: int) -> int:
-    """Enciende el agente del recolector un rato y devuelve cuántas canciones nuevas entraron."""
+    """Enciende el agente del recolector un rato y devuelve cuántas canciones nuevas entraron.
+
+    La vuelta EMPIEZA por la semilla siguiente a la de la vez anterior (`semilla_estado.json`). Sin
+    eso, como el contador vive en memoria y cada vuelta es un proceso nuevo, siempre se recorrían las
+    mismas semillas del principio de la lista y las de más abajo no se ejecutaban nunca (ver
+    `_leer_estado_semilla`).
+    """
     from radiov import db as rdb
     from radiov.agent import get_manager
 
@@ -393,8 +436,14 @@ def recolectar(cfg: dict, minutos: float, maximo: int) -> int:
         con.close()
 
     manager = get_manager()
+    # Se continúa por donde iba la vuelta anterior. Si la lista de semillas ha cambiado de tamaño, el
+    # contador se ajusta con el módulo (mejor repetir alguna que saltarse un tramo entero).
+    cursor = _leer_estado_semilla(cfg)
+    manager.seed_cursor = cursor
     manager.set_agent(True)
-    print(f"  recolectando hasta {minutos:.0f} min o {maximo} canciones nuevas…")
+    n_semillas = len(manager._semillas())
+    print(f"  recolectando hasta {minutos:.0f} min o {maximo} canciones nuevas… "
+          f"(semilla {cursor % max(1, n_semillas) + 1} de {n_semillas})")
 
     t0 = time.time()
     while True:
@@ -411,6 +460,13 @@ def recolectar(cfg: dict, minutos: float, maximo: int) -> int:
             break
 
     manager.set_agent(False)
+    # Dónde se quedó: la próxima vuelta sigue por aquí en vez de volver al principio.
+    try:
+        quedó = int(manager.snapshot().get("seed_cursor", 0))
+    except Exception:  # noqa: BLE001
+        quedó = cursor
+    _guardar_estado_semilla(cfg, quedó, n_semillas)
+    print(f"  la próxima vuelta sigue por la semilla {quedó % max(1, n_semillas) + 1} de {n_semillas}")
     return max(0, hechas)
 
 
