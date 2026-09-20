@@ -189,6 +189,76 @@ def _guardar_estado_indice(cfg: dict, max_id: int) -> None:
 # --------------------------------------------------------------------------------------------
 # Sembrar: que el PC sepa lo que YA hay, para no volver a bajarlo
 # --------------------------------------------------------------------------------------------
+def limpiar_restos(cfg: dict) -> int:
+    """Quita los restos que van dejando las descargas: escombro que se acumula sin que se note.
+
+    QUÉ SE BORRA Y POR QUÉ
+    ----------------------
+      · `<descargas>/_tmp/` — la carpeta donde `yt-dlp` deja el fichero a medias antes de convertirlo
+        a mp3. Se vacía al terminar cada descarga, pero si el proceso muere a mitad (o el PC se
+        suspende) queda ahí. Como sólo hay una vuelta a la vez (candado), al empezar la vuelta no hay
+        ninguna descarga en marcha: se puede vaciar sin miedo. Se vio un `.part` de 0 bytes olvidado.
+      · `*.part` / `*.ytdl` sueltos en la carpeta de descargas con más de un día: descargas que se
+        quedaron a medias y que nadie va a retomar.
+      · `_envios/*.tar` con más de un día: el paquete que se manda al servidor. Se borra al terminar,
+        pero si el envío se cortó puede quedar (y son cientos de MB).
+
+    Nada de esto son canciones: son ficheros intermedios. Las canciones están en `catalogada/`.
+    """
+    import time as _t
+
+    borrados = 0
+    liberado = 0
+    raiz = Path(cfg["musica_local"])
+    descargas = raiz / "descargas"
+
+    # 1) La carpeta temporal de las descargas. OJO: dentro puede haber una descarga EN MARCHA
+    #    (`yt-dlp` escribe ahí el fichero a medias y lo termina moviendo). Sólo se borra lo que lleva
+    #    más de una hora sin escribirse: una descarga viva actualiza la fecha continuamente, así que
+    #    un fichero viejo es uno que se quedó colgado. Se comprobó a lo bruto: borrar esta carpeta
+    #    «porque sólo hay una vuelta a la vez» estaba mal — se puede llamar a esto desde fuera con una
+    #    vuelta en marcha, y ahí hay 122 MB de una descarga legítima.
+    tmp = descargas / "_tmp"
+    if tmp.exists():
+        viejo = _t.time() - 3600
+        for f in list(tmp.rglob("*")):
+            try:
+                if f.is_file() and f.stat().st_mtime < viejo:
+                    liberado += f.stat().st_size
+                    f.unlink()
+                    borrados += 1
+            except OSError:
+                pass
+
+    # 2) Restos de descargas a medias, con más de un día
+    limite = _t.time() - 24 * 3600
+    for patron in ("*.part", "*.ytdl", "*.webm", "*.m4a"):
+        for f in descargas.rglob(patron):
+            try:
+                if f.is_file() and f.stat().st_mtime < limite:
+                    liberado += f.stat().st_size
+                    f.unlink()
+                    borrados += 1
+            except OSError:
+                pass
+
+    # 3) Paquetes de envío que se quedaron
+    envios = Path(cfg["datos_locales"]) / "_envios"
+    if envios.exists():
+        for f in envios.glob("*.tar"):
+            try:
+                if f.stat().st_mtime < limite:
+                    liberado += f.stat().st_size
+                    f.unlink()
+                    borrados += 1
+            except OSError:
+                pass
+
+    if borrados:
+        print(f"  restos borrados: {borrados} ficheros ({liberado / 1048576:.1f} MB)")
+    return borrados
+
+
 def sembrar(cfg: dict) -> int:
     """Trae la lista de lo que ya está y la mete como fichas vacías en la base local.
 
@@ -494,13 +564,24 @@ def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, 
 
     Se escribe a través de un contenedor porque el directorio del servidor es de root: el usuario
     `david` puede usar docker, y así no hace falta ningún permiso especial ni montar Samba.
+
+    DÓNDE SE ARMA EL TAR (esto falló de verdad)
+    -------------------------------------------
+    Antes el tar temporal se creaba con `tempfile`, es decir **en C:** (`%TEMP%`), mientras la música
+    está en `E:`. Con C: casi lleno (quedaban 600 MB) el envío fallaba con
+    `[Errno 28] No space left on device`: **18 vueltas seguidas sin poder publicar nada**, y las
+    canciones se quedaban descargadas en el PC sin llegar al servidor. Ahora el tar se arma en la
+    carpeta de datos del recolector, que está en el mismo disco que la música y con sitio de sobra.
     """
     existentes = [(p, n) for p, n in ficheros if p and p.exists()]
     if not existentes:
         return 0
 
-    with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tmp:
-        tar_path = Path(tmp.name)
+    carpeta_tmp = Path(cfg.get("datos_locales") or ".") / "_envios"
+    carpeta_tmp.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(suffix=".tar", delete=False, dir=str(carpeta_tmp))
+    tar_path = Path(tmp.name)
+    tmp.close()
     try:
         # El tar se crea con el nombre relativo de dentro (catalogada/…, covers/…), para que al
         # descomprimir en el servidor cada cosa caiga en su sitio.
@@ -523,7 +604,8 @@ def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, 
         tar_path.unlink(missing_ok=True)
 
 
-def revisar_extremos(cfg: dict, maximo: int = 12, buscar_otra: int = 2) -> int:
+def revisar_extremos(cfg: dict, maximo: int = 12, buscar_otra: int = 2,
+                     minutos: float = 4) -> int:
     """Mira si las canciones bajadas de YouTube traen intro, diálogo o cola que no es la canción.
 
     POR QUÉ AQUÍ Y NO EN EL SERVIDOR
@@ -539,7 +621,7 @@ def revisar_extremos(cfg: dict, maximo: int = 12, buscar_otra: int = 2) -> int:
 
     print("  mirando intros y colas de lo bajado…")
     revisadas, con_algo, cambiadas = C.revisar_extremos_lote(
-        limit=maximo, buscar_otra=buscar_otra, log=lambda m: print(m))
+        limit=maximo, buscar_otra=buscar_otra, minutos=minutos, log=lambda m: print(m))
     if revisadas or con_algo:
         print(f"  revisadas {revisadas} · con algo en los extremos {con_algo} · "
               f"cambiadas por otra versión {cambiadas}")
@@ -767,6 +849,8 @@ def main() -> int:
         # nadie se enterara. Lo que el usuario quiere es que siga bajando música.
         def fases() -> list:
             return [
+                # Primero el escombro: restos de descargas cortadas y paquetes de envío viejos.
+                ("limpiar restos", lambda: limpiar_restos(cfg)),
                 ("sembrar", lambda: sembrar(cfg)),
                 # Lo pedido desde la app va PRIMERO: es lo que el usuario está esperando.
                 ("atender peticiones", lambda: atender_peticiones(
@@ -778,7 +862,8 @@ def main() -> int:
                 # a lo importante, que es seguir descargando.
                 ("intros y colas", lambda: revisar_extremos(
                     cfg, maximo=int(cfg.get("extremos_por_vuelta", 12)),
-                    buscar_otra=int(cfg.get("versiones_limpias_por_vuelta", 2)))),
+                    buscar_otra=int(cfg.get("versiones_limpias_por_vuelta", 2)),
+                    minutos=float(cfg.get("extremos_minutos", 4)))),
                 ("publicar", lambda: publicar(cfg)),
             ]
 

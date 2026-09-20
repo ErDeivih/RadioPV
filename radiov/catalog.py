@@ -1033,7 +1033,8 @@ def catalog_pending() -> int:
     return count
 
 
-def revisar_extremos_lote(limit: int = 40, buscar_otra: int = 0, *, log=print) -> tuple[int, int, int]:
+def revisar_extremos_lote(limit: int = 40, buscar_otra: int = 0, *, minutos: float = 0,
+                          log=print) -> tuple[int, int, int]:
     """Mira intros y colas de un lote de canciones y devuelve (revisadas, con_algo, cambiadas).
 
     Se ejecuta DONDE ESTÁ EL AUDIO:
@@ -1046,8 +1047,19 @@ def revisar_extremos_lote(limit: int = 40, buscar_otra: int = 0, *, log=print) -
 
     `buscar_otra` = cuántas de las que tienen voz/diálogo se intentan cambiar por otra versión en
     esta pasada (bajar de YouTube tarda, así que va con tope).
+
+    `minutos` = tope de tiempo para TODA la pasada (0 = sin tope). Hace falta: una búsqueda de otra
+    versión puede acabar bajando una sesión de una hora (50-100 MB) y eso solo ya son varios minutos.
+    Sin tope, esta fase alargaba la vuelta del recolector por encima de los 15 minutos que hay entre
+    vuelta y vuelta, y como el candado impide solapar vueltas, **se perdían vueltas de descarga**.
     """
     import json
+    import time as _t
+
+    arranque = _t.time()
+
+    def agotado() -> bool:
+        return bool(minutos) and (_t.time() - arranque) / 60.0 >= minutos
     import time as _t
 
     from .extremos import analizar
@@ -1067,6 +1079,9 @@ def revisar_extremos_lote(limit: int = 40, buscar_otra: int = 0, *, log=print) -
     revisadas = con_algo = 0
     candidatas: list[dict] = []
     for f in filas:
+        if agotado():
+            log(f"   (se acabó el tiempo de esta pasada: {revisadas} revisadas)")
+            break
         ruta = resolve_music(f["file_path"])
         if not Path(ruta).exists():
             # La ficha dice que hay fichero pero no está: se apunta y no se vuelve a intentar.
@@ -1103,6 +1118,9 @@ def revisar_extremos_lote(limit: int = 40, buscar_otra: int = 0, *, log=print) -
         from .pipeline import buscar_version_sin_intro
 
         for cand in candidatas[:buscar_otra]:
+            if agotado():
+                log("   (se acabó el tiempo: no se buscan más versiones en esta pasada)")
+                break
             try:
                 res = buscar_version_sin_intro(
                     cand["artist"], cand["title"], cand["id"], cand["file_path"],
