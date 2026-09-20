@@ -84,6 +84,52 @@ const ok = (n, bien, detalle = '') => {
   ok('el borrado en masa está capado sin filtros (no se puede vaciar por accidente)',
     panel.acciones.some((a) => /borrar todo lo filtrado/i.test(a)));
 
+  // --- el género nuevo (tech house) tiene que poder FILTRARSE desde el panel ---
+  // Se pidió esta música por su nombre («me gustan los tech house remix… por ejemplo Pomata»). De
+  // nada sirve tenerla en el catálogo si en el panel sale como «techhouse» en crudo o no se puede
+  // filtrar. Se hace ANTES de abrir y cerrar el modal del borrado: con el modal abierto, el clic en
+  // la opción no llega al desplegable y la prueba daba un «0 canciones» que no era verdad.
+  const selectorGenero = p.locator('.ant-select', { hasText: 'Género' }).first();
+  if (await selectorGenero.count()) {
+    await selectorGenero.click();
+    await p.waitForTimeout(1200);
+    // Hay 23 géneros y la lista de AntD sólo dibuja 10: hay que ESCRIBIR en la casilla del propio
+    // select para que aparezca el que buscamos (con 5 canciones, tech house queda abajo del todo).
+    // OJO: la casilla de búsqueda NO está dentro del desplegable, está en el select.
+    const casilla = selectorGenero.locator('input').first();
+    if (await casilla.count()) {
+      await casilla.fill('tech');
+      await p.waitForTimeout(1500);
+    }
+    const opciones = await p.evaluate(() =>
+      [...document.querySelectorAll('.ant-select-item-option-content')].map((o) => o.innerText.trim()));
+    const tech = opciones.find((o) => /tech house/i.test(o)) || '';
+    ok('el género tech house sale con nombre legible en el panel', Boolean(tech),
+      tech || `(opciones: ${opciones.slice(0, 6).join(', ')})`);
+    if (tech) {
+      await p.locator('.ant-select-item-option-content', { hasText: tech }).first().click();
+      await p.waitForTimeout(6000);
+      const filtrado = await p.evaluate(() => {
+        const texto = document.body.innerText;
+        const m = texto.match(/([\d.]+) canciones con estos filtros/);
+        const filas = [...document.querySelectorAll('tbody tr')];
+        const dicenTech = filas.map((f) => f.innerText).filter((t) => /tech house/i.test(t)).length;
+        const chip = (document.querySelector('.ant-select-selection-item') || {}).innerText || '';
+        return { cuenta: m ? Number(m[1].replace(/\./g, '')) : -1, filas: filas.length, dicenTech, chip };
+      });
+      // Se comprueba el NÚMERO y el filtro puesto, no sólo que haya filas: antes esta prueba daba
+      // por bueno un «0 canciones con estos filtros» porque sólo miraba que hubiera alguna fila. Y
+      // la columna «Género» NO se mira: en el móvil (390 px) la tabla la esconde a propósito, así
+      // que exigir el texto en las filas hacía fallar la prueba por una columna que no se ve.
+      ok('al filtrar por tech house el recuento y el filtro cuadran',
+        filtrado.cuenta > 0 && filtrado.filas > 0 && /tech house/i.test(filtrado.chip),
+        `recuento=${filtrado.cuenta} · filas=${filtrado.filas} · filtro=${filtrado.chip}`);
+      // Y se quita el filtro para seguir con el resto de la prueba como estaba.
+      await p.locator('.ant-select-clear').first().click({ timeout: 5000 }).catch(() => {});
+      await p.waitForTimeout(2500);
+    }
+  }
+
   // --- un atajo de limpieza: filtros puestos y recuento real ---
   const atajo = p.getByRole('button', { name: /sin idioma detectado|en cuarentena|filas sin fichero/i }).first();
   if (await atajo.count()) {

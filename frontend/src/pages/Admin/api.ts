@@ -329,6 +329,10 @@ export const GENRE_LABELS: Record<string, string> = {
   gospel: 'Gospel',
   banda: 'Banda',
   soul: 'Soul / R&B',
+  // En el catálogo hay 156 pistas con el género `r&b` y no tenía etiqueta: en el panel salía el
+  // valor en crudo («r&b»), que es lo que el usuario ve como un texto sin traducir. Se comprobó
+  // contra los 23 géneros reales que devuelve /facets: era el único sin etiqueta.
+  'r&b': 'R&B',
   other: 'Variado',
 };
 

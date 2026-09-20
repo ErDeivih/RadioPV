@@ -519,9 +519,17 @@ def process_youtube_seed(seed: dict, progress: Optional[dict] = None,
         tid = _persist_yt(bajado, genre=genero, language=idioma, source=M.SOURCE_AGENT)
         if tid is not None:
             added += 1
-            # La recién bajada entra en la lista de claves: si más abajo en la misma búsqueda sale
+            # La recién bajada entra en el índice de claves: si más abajo en la misma búsqueda sale
             # otro vídeo del mismo tema, no se baja dos veces.
-            claves.add(db.clave_cancion(bajado["artist"], bajado["title"]))
+            #
+            # OJO CON EL TIPO: `indice_de_claves()` devuelve un DICCIONARIO `{clave: id}` (antes era
+            # un conjunto y aquí había un `.add()`). Con el `.add()` esta línea lanzaba
+            # AttributeError y **mataba la búsqueda entera en cuanto bajaba la primera canción**:
+            # cada semilla de YouTube (mashups, sesiones y ahora también tech house) sólo podía traer
+            # UNA canción por vuelta en vez de las 6 de su cupo, y el recolector lo apuntaba como
+            # «Fallo en semilla» sin decir por qué. Lo encontró la prueba de una semilla de tech
+            # house a mano (20/09/2026); hay una prueba de regresión en `test_semilla_youtube.py`.
+            claves[db.clave_cancion(bajado["artist"], bajado["title"])] = tid
         if progress is not None:
             progress["last"] = f"{artista} - {titulo}"
             progress["seen"] += 1
