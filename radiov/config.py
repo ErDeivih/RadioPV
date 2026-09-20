@@ -98,9 +98,20 @@ DEFAULT_SETTINGS: dict = {
         "cumbia": ["cumbia", "cumbias"],
         "corridos": ["corridos", "corridos tumbados", "corrido", "mexicano", "regional"],
         "flamenco": ["flamenco", "sevillanas", "rumba"],
+        # TECH HOUSE Y SUS NOMBRES DE LA CALLE, LO PRIMERO DE TODO.
+        # El usuario pidió esto en concreto: le gustan los remixes de tech house hechos por gente
+        # (tipo POMATA, que versiona hits latinos: su «El Farsante» es de Bad Bunny y Ozuna). Y en
+        # España y Argentina ese sonido tiene nombres propios que NO llevan la palabra «house»:
+        #   · «techengue» (y «cachengue») — el tech house de remezclas latinas de Argentina/Uruguay;
+        #   · «guaracha» — el tech house colombiano con cumbia y reggaetón.
+        # VA EL PRIMERO porque en el vocabulario hay otras dos entradas que contienen «house»
+        # (`dance` y `house`) y, a igualdad de aciertos, gana la que está antes: sin este orden,
+        # «Tech House Bootleg» acababa clasificado como `dance`.
+        "techhouse": ["tech house", "techhouse", "techengue", "cachengue", "guaracha",
+                      "bass house", "latin tech", "tech house remix", "afro tech"],
         "dance": ["dance", "electro", "edm", "house", "disco"],
         "disco": ["disco", "funk"],
-        "house": ["house", "deep house", "tech house", "progressive house"],
+        "house": ["house", "deep house", "progressive house"],
         "electro": ["electro", "edm", "electronic", "trance", "techno"],
         "classical": ["clasica", "classical", "piano", "orquesta", "sinfonia", "einaudi", "beethoven"],
         "instrumental": ["instrumental", "soundtrack", "banda sonora", "ost", "vangelis", "zimmer"],
@@ -245,6 +256,67 @@ DEFAULT_SETTINGS: dict = {
     {"mode": "youtube", "query": "sesion dj latin hits", "genre": "latin", "language": "es", "n": 20},
     {"mode": "youtube", "query": "dj ronald hess reggaeton viejo", "genre": "reggaeton", "language": "es", "n": 20},
     {"mode": "youtube", "query": "dj kay slay mix", "genre": "rap", "language": "en", "n": 20},
+
+    # ================= TECH HOUSE: REMEZCLAS HECHAS POR GENTE =================
+    # Petición del usuario: «me gustan los tech house remix y este tipo de canciones hechas por
+    # gente, por ejemplo Pomata en Spotify. Canciones con bass, en español o inglés o mezcla, usando
+    # una o varias canciones originales».
+    #
+    # Esto NO es música de tienda: son ediciones, bootlegs y remezclas que la gente publica en
+    # YouTube y SoundCloud, casi siempre cogiendo un hit (reggaetón, pop, cumbia) y montándolo sobre
+    # un ritmo de tech house con bajo gordo. Los nombres importan mucho:
+    #   · «tech house remix / edit / bootleg» — el término internacional;
+    #   · «techengue» y «cachengue» — así se llama en Argentina y Uruguay (remezclas latinas);
+    #   · «guaracha» — así se llama en Colombia (tech house con cumbia y reggaetón).
+    #
+    # El género va como `techhouse` (no `house`) para poder filtrarlo y hacerle una lista propia.
+
+    # --- el término general, en los dos idiomas ---
+    {"mode": "youtube", "query": "tech house remix", "genre": "techhouse", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "tech house bootleg", "genre": "techhouse", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "tech house edit popular songs", "genre": "techhouse", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "tech house remix español", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "tech house remix reggaeton", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "latin tech house remix", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "bass house remix", "genre": "techhouse", "language": "en", "n": 20},
+
+    # --- los nombres de la calle (aquí está la joya) ---
+    {"mode": "youtube", "query": "techengue remix", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "techengue 2025", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "cachengue remix", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "guaracha remix", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "guaracha tech house", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "guaracha mexicana remix", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "techengue viejo remember", "genre": "techhouse", "language": "es", "n": 20},
+
+    # --- remezclas de hits concretos (una canción original, versión tech house) ---
+    {"mode": "youtube", "query": "bad bunny tech house remix", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "quevedo tech house remix", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "karol g tech house remix", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "rosalia tech house remix", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "rauw alejandro tech house remix", "genre": "techhouse", "language": "es", "n": 20},
+
+    # --- los que hacen este sonido (se busca su nombre, que es donde están sus ediciones) ---
+    {"mode": "youtube", "query": "Pomata tech house", "genre": "techhouse", "language": "es", "n": 25},
+    {"mode": "youtube", "query": "Pomata remix", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "Mau P tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Andruss tech house", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "CASSIMM tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "San Pacho tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Mochakk tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "HUGEL latin tech house", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "Jude Frank tech house", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "Dennis Cruz tech house", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "Tom Collins tech house", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "Beltran tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Cloonee tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Fer Palacio techengue", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "Tomi DJ techengue", "genre": "techhouse", "language": "es", "n": 20},
+
+    # --- las sesiones de este estilo (para escuchar de un tirón) ---
+    {"mode": "youtube", "query": "tech house set 2025", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "techengue session", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "guaracha sesion 2025", "genre": "techhouse", "language": "es", "n": 20},
 
     # Estas siguen buscando en Deezer porque son artistas que SÍ están en las tiendas.
     {"mode": "explore", "genre": "dance", "language": "en",

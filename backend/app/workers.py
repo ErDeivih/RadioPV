@@ -441,35 +441,46 @@ def _swap_system_playlist(db, nombre: str, track_ids: list, user_id=None) -> int
 
 
 def rebuild_remixes(db) -> int:
-    """Listas de mashups, remixes y sesiones de DJ.
+    """Listas de mashups, remixes, sesiones de DJ y TECH HOUSE.
 
     POR QUÉ
     -------
     El usuario escucha mucho este tipo de música y **en la aplicación no había forma de
     encontrarla**: el catálogo la marcaba (`is_remix`) y el panel de administración podía
-    filtrarla, pero para el oído no existía. Se generan dos listas:
+    filtrarla, pero para el oído no existía. Se generan tres listas:
 
       · «Mashups y remixes» — cruces de dos o más canciones y remixes sueltos.
       · «Sesiones de DJ»    — mezclas largas, para escuchar de un tirón.
+      · «Tech house y guaracha» — las remezclas de tech house hechas por gente: es lo que pidió
+        expresamente («me gustan los tech house remix y este tipo de canciones hechas por gente,
+        por ejemplo Pomata… con bass, en español o inglés o mezcla, usando una o varias canciones
+        originales»). Se reconoce por el género de la ficha (`techhouse`), que a su vez sale del
+        título cuando no hay álbum de Deezer («Tech House Remix», «Guaracha», «Techengue»).
 
     El tipo lo decide `radiov.quality.clasificar` (el mismo que usa la puerta de calidad), así que
     la lista y el catálogo no pueden discrepar. Se ordena por popularidad: primero lo que más
     suena, que es lo que se quiere escuchar.
     """
+    from radiov.catalog import guess_genre
     from radiov.quality import clasificar, parece_portugues
 
     filas = (db.query(models.Track.id, models.Track.title, models.Track.artist,
-                      models.Track.duration, models.Track.rank, models.Track.language)
+                      models.Track.duration, models.Track.rank, models.Track.language,
+                      models.Track.genre)
              .filter(models.Track.status == "descargada")
              .all())
-    remixes, sesiones = [], []
-    for tid, title, artist, duration, rank, language in filas:
+    remixes, sesiones, tech_house = [], [], []
+    for tid, title, artist, duration, rank, language, genre in filas:
         # Portugués fuera de las listas: la política del catálogo es español (España y Latinoamérica)
-        # e inglés, con italiano y francés de siempre. Estas dos listas son las que el usuario pone a
+        # e inglés, con italiano y francés de siempre. Estas listas son las que el usuario pone a
         # sonar de un tirón, así que son justo donde no puede aparecer algo que no quiere oír.
         # (Las que ya están dentro y no se detecten aquí se limpian con el atajo «En portugués».)
         if language == "pt" or parece_portugues(title or "", artist or ""):
             continue
+        # El tech house se mira por género Y por título: así entra también lo que se catalogó antes
+        # de que existiera el género `techhouse` (el título lo dice igual de claro).
+        if (genre or "") == "techhouse" or guess_genre(title or "", artist or "") == "techhouse":
+            tech_house.append((rank or 0, tid))
         tipo = clasificar(title or "", artist or "", duration)
         if tipo == "sesion":
             sesiones.append((rank or 0, tid))
@@ -478,6 +489,7 @@ def rebuild_remixes(db) -> int:
 
     remixes.sort(reverse=True)
     sesiones.sort(reverse=True)
+    tech_house.sort(reverse=True)
     # SIN TOPE: la lista tiene que ser TODA la música de ese tipo, no una muestra. Antes cortaba en
     # 60 y 40, y con el catálogo creciendo eso significaba que las listas del tipo de música que el
     # usuario más escucha se quedaban cortas y no dejaban ver lo que había: pedía «la lista de este
@@ -485,10 +497,12 @@ def rebuild_remixes(db) -> int:
     # popularidad, así que lo mejor sigue saliendo primero.
     todas_remix = [tid for _, tid in remixes]
     todas_sesiones = [tid for _, tid in sesiones]
+    todo_tech = [tid for _, tid in tech_house]
     n = _swap_system_playlist(db, "Mashups y remixes", todas_remix)
     n += _swap_system_playlist(db, "Sesiones de DJ", todas_sesiones)
-    log.info("[remixes] %s mashups/remixes y %s sesiones (listas completas)",
-             len(todas_remix), len(todas_sesiones))
+    n += _swap_system_playlist(db, "Tech house y guaracha", todo_tech)
+    log.info("[remixes] %s mashups/remixes · %s sesiones · %s tech house (listas completas)",
+             len(todas_remix), len(todas_sesiones), len(todo_tech))
     return n
 
 

@@ -252,11 +252,12 @@ export const fecthFeaturedPlaylists = createAsyncThunk(
     // debe ofrecer la portada: listas, no canciones sueltas.
     if (!state.auth.user) return [];        // /playlists/system exige sesión
     const { data } = await axios.get<PlaylistOut[]>('/playlists/system');
-    // Las dos listas de mashups/remixes y sesiones de DJ van PRIMERO. Antes se ordenaba sólo por
-    // número de canciones, así que quedaban enterradas entre las demás (y «Sesiones de DJ», que
+    // Las listas de mashups/remixes, sesiones de DJ y tech house van PRIMERO. Antes se ordenaba sólo
+    // por número de canciones, así que quedaban enterradas entre las demás (y «Sesiones de DJ», que
     // tiene menos porque hay menos sesiones grabadas, se caía de la fila): el tipo de música que el
-    // usuario más escucha era el que peor se encontraba en la portada.
-    const PRIMERO = ['Mashups y remixes', 'Sesiones de DJ'];
+    // usuario más escucha era el que peor se encontraba en la portada. El tech house lo pidió él
+    // expresamente, así que va en ese grupo de cabeza.
+    const PRIMERO = ['Tech house y guaracha', 'Mashups y remixes', 'Sesiones de DJ'];
     const sitio = (n?: string) => {
       const i = PRIMERO.indexOf(n ?? '');
       return i === -1 ? PRIMERO.length : i;

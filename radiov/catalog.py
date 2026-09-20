@@ -9,7 +9,11 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from .config import load_settings, DATA_DIR, BASE_MUSIC, resolve_music
+from .config import load_settings, DATA_DIR, BASE_MUSIC, resolve_music, SETTINGS_PATH
+
+# Caché de las palabras clave por género: (fecha del fichero de ajustes, palabras). Ver
+# `_palabras_de_genero` — sin esto se releía el fichero una vez por canción.
+_PALABRAS_GENERO: tuple | None = None
 
 
 def _rel_music(path: str) -> str:
@@ -86,9 +90,49 @@ def detect_language(title: str, artist: str = "") -> str:
     return best
 
 
-def guess_genre(title: str = "", artist: str = "") -> str:
-    cfg = load_settings()
-    kw = cfg.get("genre_keywords", {})
+def _palabras_de_genero() -> dict:
+    """Palabras clave por género, leídas UNA vez (se releen sólo si cambia el fichero de ajustes).
+
+    POR QUÉ
+    -------
+    `_genero_por_palabras` se llama **una vez por pista**, y `load_settings()` lee el JSON de ajustes
+    y crea directorios en cada llamada. Medido en este equipo con 6.000 pistas (una vuelta del
+    recolector, o el repaso de la lista de tech house):
+
+        load_settings          x6000:  8,0 s
+        _genero_por_palabras   x6000: 16,1 s
+        guess_genre            x6000: 15,2 s
+
+    Es decir, 2,7 ms por canción tirados a la basura por releer el mismo fichero. Con el caché la
+    misma cuenta baja a milisegundos en total, y en el servidor (un portátil de 4 GB) eso se nota.
+    La clave del caché es la fecha del fichero: si alguien cambia las palabras clave, se recarga
+    solo, sin reiniciar nada.
+    """
+    global _PALABRAS_GENERO
+    try:
+        marca = SETTINGS_PATH.stat().st_mtime
+    except OSError:
+        marca = None
+    if _PALABRAS_GENERO and _PALABRAS_GENERO[0] == marca:
+        return _PALABRAS_GENERO[1]
+    kw = load_settings().get("genre_keywords", {})
+    _PALABRAS_GENERO = (marca, kw)
+    return kw
+
+
+def _genero_por_palabras(title: str = "", artist: str = "") -> str:
+    """Género mirando las PALABRAS del título y del artista. Devuelve 'other' si no hay pistas.
+
+    Se usa como respaldo cuando no hay álbum de Deezer del que sacar el género, que es justo el caso
+    de todo lo que sólo existe en YouTube: ediciones, remezclas, bootlegs, sesiones y mashups. Antes
+    todo eso acababa en «other» sin mirar siquiera el título, y así era imposible tener una lista de
+    tech house (el usuario lo pidió: «me gustan los tech house remix y este tipo de canciones hechas
+    por gente, por ejemplo Pomata»).
+
+    No es inventar: «Tech House Remix», «Guaracha» o «Techengue» en el título son datos, no
+    suposiciones. Si el título no dice nada, se sigue devolviendo 'other'.
+    """
+    kw = _palabras_de_genero()
     text = _deaccent(f"{title} {artist}".lower())
     best, best_hits = "other", 0
     for genre, words in kw.items():
@@ -118,7 +162,12 @@ DEEZER_GENRE_MAP = {
     "dance": "dance", "edm": "dance", "dancehall": "dance", "electro dance": "dance",
     "electronic": "electro", "dance/electronic": "electro", "electronic/dance": "electro",
     "electro": "electro", "techno": "electro", "trance": "electro", "drum & bass": "electro",
-    "dubstep": "electro", "house": "house", "deep house": "house", "tech house": "house",
+    "dubstep": "electro", "house": "house", "deep house": "house",
+    # «Tech house» va a su PROPIO género, no a `house`: es la música que el usuario pidió
+    # («me gustan los tech house remix y este tipo de canciones hechas por gente, por ejemplo
+    # Pomata»). Diluido en `house` no se podía ni filtrar en el panel ni hacerle una lista, que es
+    # justo lo que hace falta para escucharlo. Deezer sí usa esta etiqueta en los álbumes del género.
+    "tech house": "techhouse", "techhouse": "techhouse",
     "progressive house": "house", "disco": "disco", "ballad": "ballad", "classical": "classical",
     "opera": "classical", "orchestral": "classical", "symphony": "classical", "orchestra": "classical",
     "instrumental": "instrumental", "soundtrack": "instrumental", "movies": "instrumental",
@@ -138,6 +187,15 @@ SOBRESCRIBIR = {
     "hans zimmer": "instrumental", "ludovico einaudi": "classical", "vangelis": "instrumental",
     "natanael cano": "corridos", "junior h": "corridos", "los angeles azules": "cumbia",
     "celia cruz": "salsa", "editors": "rock", "cat stevens": "rock",
+    # Tech house / techengue / guaracha: los que hacen las remezclas y ediciones que el usuario
+    # pidió («canciones hechas por gente… usando una o varias canciones originales»). Sus pistas
+    # casi nunca llevan el género en el título (p. ej. «Drugs From Amsterdam (Extended Mix)»), así
+    # que sin esto se quedaban en «other» y no entraban en la lista de tech house. Curado a mano,
+    # sólo productores cuyo catálogo es de este género (medido: Mau P salía «other»).
+    "pomata": "techhouse", "mau p": "techhouse", "andruss": "techhouse",
+    "cassimm": "techhouse", "san pacho": "techhouse", "mochakk": "techhouse",
+    "hugel": "techhouse", "dennis cruz": "techhouse", "cloonee": "techhouse",
+    "beltran": "techhouse", "jude frank": "techhouse", "tomi dj": "techhouse",
 }
 
 
@@ -163,15 +221,32 @@ def genero_de_album(album_id, client=None) -> str:
 
 
 def guess_genre(title: str = "", artist: str = "", album_id=None, client=None) -> str:
-    """Clasifica por el ÁLBUM de Deezer (no por palabras clave). Fallback 'other'. Respeta el
-    override manual de artistas conocidos."""
+    """Género de una pista: primero por el ÁLBUM de Deezer, y si no hay, por las palabras del título.
+
+    CASCADA, Y POR QUÉ
+    ------------------
+    El álbum de Deezer es la fuente buena (es el género de la discográfica), así que manda cuando
+    existe. Pero **la mayoría del contenido que el usuario más escucha no está en Deezer**: las
+    ediciones, remezclas y bootlegs de tech house, las sesiones de DJ y los mashups sólo existen en
+    YouTube, sin álbum. Con el código anterior esos casos devolvían «other» directamente, sin mirar
+    siquiera el título — que en este contenido dice el género con todas las letras («Tech House
+    Remix», «Guaracha», «Techengue»).
+
+    Resultado medido antes del cambio: `guess_genre("Pomata - El Farsante (Tech House Remix)")`
+    devolvía «other», y con él toda la música de ese tipo: no había forma de hacer una lista de tech
+    house ni de filtrarla en el panel.
+    """
     if artist:
-        a = artist.strip().lower()
+        # Sin tildes y en minúsculas, igual que las claves de la tabla: la base guarda «Metallica» y
+        # «Pomata» con mayúsculas, y una comparación literal no arreglaba nada.
+        a = _deaccent(artist.strip().lower())
         if a in SOBRESCRIBIR:
             return SOBRESCRIBIR[a]
     if album_id:
-        return genero_de_album(album_id, client)
-    return "other"
+        genero = genero_de_album(album_id, client)
+        if genero and genero != "other":
+            return genero
+    return _genero_por_palabras(title, artist)
 
 
 def con_cuota_decadas(candidates: list[dict], pre2000_q: int = 1, denom: int = 4) -> list[dict]:

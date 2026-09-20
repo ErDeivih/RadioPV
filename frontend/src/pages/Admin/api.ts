@@ -315,6 +315,7 @@ export const GENRE_LABELS: Record<string, string> = {
   disco: 'Disco / Funk',
   classical: 'Clásica',
   house: 'House',
+  techhouse: 'Tech house / Guaracha',
   electro: 'Electrónica',
   instrumental: 'Instrumental',
   soundtrack: 'Banda sonora',

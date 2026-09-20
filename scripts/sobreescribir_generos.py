@@ -4,6 +4,15 @@
 Es la única forma de fijar los casos obvios sin adivinar el resto: un diccionario curado
 artista→género. NOTA: pisa el género de Deezer para esos artistas a propósito.
 
+LA TABLA ES UNA SOLA
+--------------------
+Antes este script tenía su **propia copia** de la tabla y la del clasificador (`radiov/catalog.py`)
+era otra. Ya se habían separado: la del clasificador tenía 17 artistas más (Drake, Eminem, Hans
+Zimmer, Celia Cruz…) que este script no conocía, así que `--apply` **no arreglaba en `artists.genre`
+lo mismo que la aplicación usaba al clasificar**: el panel y la app podían decir géneros distintos de
+la misma canción. Ahora importa la tabla del clasificador, así que no pueden discrepar por diseño
+(hay una prueba que lo comprueba).
+
 Uso:
     python scripts/sobreescribir_generos.py            # --dry-run: tabla
     python scripts/sobreescribir_generos.py --apply    # escribe artists.genre (luego reclasificar_generos)
@@ -18,19 +27,30 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 DB_DEFAULT = _ROOT / "data" / "radiov.db"
 
-# Curado (a mano, por alguien que conoce el catálogo): correcciones obvias de la etiqueta de Deezer.
-SOBRESCRIBIR = {
-    "Metallica": "rock",
-    "Loquillo": "rock",
-    "Loquillo Y Los Trogloditas": "rock",
-    "Apocalyptica": "rock",
-    "Karamelo Santo": "rock",
-    "Apollo 3": "rock",
-    "El Fary": "flamenco",
-    "Estopa": "flamenco",
-    "Camela": "flamenco",
-    "Los Chichos": "flamenco",
-}
+# La tabla buena, la del clasificador. Claves en minúsculas.
+from radiov.catalog import SOBRESCRIBIR, _deaccent  # noqa: E402
+
+
+def _clave(nombre: str) -> str:
+    """La misma clave que usa el clasificador: sin tildes, en minúsculas y sin espacios de sobra."""
+    return _deaccent((nombre or "").strip().lower())
+
+
+def _filas(ruta: str) -> dict:
+    """Artistas de la base que hay que corregir: {nombre_tal_como_está_en_la_base: género}.
+
+    Se compara **sin distinguir mayúsculas ni tildes**, que es exactamente como compara el
+    clasificador: la base guarda «Metallica» y la tabla dice «metallica», y con una comparación
+    exacta el arreglo no se aplicaba nunca.
+    """
+    con = sqlite3.connect(ruta)
+    out = {}
+    for (nombre, genero) in con.execute("SELECT name, genre FROM artists"):
+        objetivo = SOBRESCRIBIR.get(_clave(nombre))
+        if objetivo and (genero or "other") != objetivo:
+            out[nombre] = objetivo
+    con.close()
+    return out
 
 
 def main() -> int:
@@ -41,23 +61,19 @@ def main() -> int:
     ap.set_defaults(apply=False)
     args = ap.parse_args()
 
-    con = sqlite3.connect(args.db)
-    cambios = {}
-    for name, g in SOBRESCRIBIR.items():
-        row = con.execute("SELECT genre FROM artists WHERE name=?", (name,)).fetchone()
-        if row and (row[0] or "other") != g:
-            cambios[name] = g
-    print(f"{'ARTISTA':<28} {'GÉNERO':<12}")
+    cambios = _filas(args.db)
+    print(f"{'ARTISTA':<32} {'GÉNERO':<12}")
     for name, g in sorted(cambios.items()):
-        print(f"{name:<28} {g:<12}")
-    print(f"\nCambiarían {len(cambios)} artistas.")
+        print(f"{name:<32} {g:<12}")
+    print(f"\nCambiarían {len(cambios)} artistas (de {len(SOBRESCRIBIR)} en la tabla curada).")
     if args.apply:
+        con = sqlite3.connect(args.db)
         con.executemany("UPDATE artists SET genre=? WHERE name=?", [(g, n) for n, g in cambios.items()])
         con.commit()
+        con.close()
         print("\nAplicado. Luego: python scripts/reclasificar_generos.py --apply")
     else:
         print("\n(--dry-run · añade --apply)")
-    con.close()
     return 0
 
 
