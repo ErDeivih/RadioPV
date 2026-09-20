@@ -615,6 +615,36 @@ def _pendientes(cfg: dict) -> list[dict]:
         con.close()
 
 
+# Tope de tiempo por tanda de envío. 20 minutos es de sobra para 120 MB por la red de casa: si se
+# pasa, es que el envío se ha colgado (pasó con 544 MB: 14 minutos sin moverse y la vuelta entera
+# parada). Al cortarlo, la vuelta sigue y lo que no llegó se reintenta.
+TIEMPO_MAX_ENVIO = 20 * 60
+
+
+def _en_tandas(ficheros: list[tuple[Path, str]], max_mb: float = 120.0) -> list[list[tuple[Path, str]]]:
+    """Parte la lista en tandas de ~`max_mb`: un envío gigante se atasca y bloquea la vuelta entera.
+
+    Se mira el tamaño REAL de cada fichero (no el de la ficha), y una tanda siempre lleva al menos un
+    fichero aunque él solo pase del tope: si no, una sesión de tres horas no se enviaría nunca.
+    """
+    tandas: list[list[tuple[Path, str]]] = []
+    actual: list[tuple[Path, str]] = []
+    acumulado = 0
+    for ruta, nombre in ficheros:
+        try:
+            mb = ruta.stat().st_size / 1024 / 1024
+        except OSError:
+            mb = 0
+        if actual and acumulado + mb > max_mb:
+            tandas.append(actual)
+            actual, acumulado = [], 0
+        actual.append((ruta, nombre))
+        acumulado += mb
+    if actual:
+        tandas.append(actual)
+    return tandas
+
+
 def _ruta_relativa_musica(ruta: str, raiz: Path) -> str:
     """Deja la ruta como la espera el servidor: **relativa a la raíz de música** (`catalogada/…`).
 
@@ -628,8 +658,10 @@ def _ruta_relativa_musica(ruta: str, raiz: Path) -> str:
     return a_ruta_relativa_musica(ruta, raiz)
 
 
-def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, etiqueta: str) -> int:
+def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, etiqueta: str) -> list[str]:
     """Manda ficheros al servidor con tar por ssh (un solo viaje, no uno por fichero).
+
+    Devuelve **los nombres que sí llegaron**. Los que no, no se dan por enviados (ver `publicar`).
 
     Se escribe a través de un contenedor porque el directorio del servidor es de root: el usuario
     `david` puede usar docker, y así no hace falta ningún permiso especial ni montar Samba.
@@ -641,36 +673,63 @@ def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, 
     `[Errno 28] No space left on device`: **18 vueltas seguidas sin poder publicar nada**, y las
     canciones se quedaban descargadas en el PC sin llegar al servidor. Ahora el tar se arma en la
     carpeta de datos del recolector, que está en el mismo disco que la música y con sitio de sobra.
+
+    POR QUÉ EN TANDAS Y CON TOPE DE TIEMPO (fallo real, 20/09/2026)
+    ---------------------------------------------------------------
+    Se mandaron 544 MB de una vez (diez canciones, entre ellas mezclas de tres horas) y el envío se
+    quedó **colgado a mitad**: ni avanzaba ni fallaba. El `timeout` del envío estaba en una hora, así
+    que la vuelta entera se quedó parada; y como la tarea programada es `IgnoreNew`, **la vuelta
+    siguiente no llegó a arrancar** (0x800710E0): el PC dejó de descargar y de publicar sin decir nada.
+    Ahora se manda en tandas de ~120 MB con un tope por tanda y un reintento; si una tanda se atasca,
+    se mata, se avisa y las demás siguen.
     """
     existentes = [(p, n) for p, n in ficheros if p and p.exists()]
     if not existentes:
-        return 0
+        return []
 
     carpeta_tmp = Path(cfg.get("datos_locales") or ".") / "_envios"
     carpeta_tmp.mkdir(parents=True, exist_ok=True)
-    tmp = tempfile.NamedTemporaryFile(suffix=".tar", delete=False, dir=str(carpeta_tmp))
-    tar_path = Path(tmp.name)
-    tmp.close()
-    try:
-        # El tar se crea con el nombre relativo de dentro (catalogada/…, covers/…), para que al
-        # descomprimir en el servidor cada cosa caiga en su sitio.
-        with tarfile.open(tar_path, "w") as tar:
-            for ruta, nombre in existentes:
-                tar.add(str(ruta), arcname=nombre)
-        tam_mb = tar_path.stat().st_size / 1024 / 1024
-        print(f"  {etiqueta}: {len(existentes)} ficheros ({tam_mb:.1f} MB) hacia {destino}")
+    enviados: list[str] = []
 
-        cmd = (f'docker run --rm -i -v "{destino}:/destino" alpine '
-               f'tar -xf - -C /destino')
-        with open(tar_path, "rb") as f:
-            r = subprocess.run(["ssh", cfg["servidor"], cmd], stdin=f,
-                               capture_output=True, text=True, timeout=3600)
-        if r.returncode != 0:
-            print(f"  AVISO: el envío de {etiqueta} falló: {(r.stderr or '')[:200]}")
-            return 0
-        return len(existentes)
-    finally:
-        tar_path.unlink(missing_ok=True)
+    for tanda in _en_tandas(existentes):
+        tmp = tempfile.NamedTemporaryFile(suffix=".tar", delete=False, dir=str(carpeta_tmp))
+        tar_path = Path(tmp.name)
+        tmp.close()
+        try:
+            # El tar se crea con el nombre relativo de dentro (catalogada/…, covers/…), para que al
+            # descomprimir en el servidor cada cosa caiga en su sitio.
+            with tarfile.open(tar_path, "w") as tar:
+                for ruta, nombre in tanda:
+                    tar.add(str(ruta), arcname=nombre)
+            tam_mb = tar_path.stat().st_size / 1024 / 1024
+            print(f"  {etiqueta}: {len(tanda)} ficheros ({tam_mb:.1f} MB) hacia {destino}")
+
+            cmd = (f'docker run --rm -i -v "{destino}:/destino" alpine '
+                   f'tar -xf - -C /destino')
+            llegaron = False
+            for intento in (1, 2):
+                try:
+                    with open(tar_path, "rb") as f:
+                        r = subprocess.run(["ssh", cfg["servidor"], cmd], stdin=f,
+                                           capture_output=True, text=True,
+                                           timeout=TIEMPO_MAX_ENVIO)
+                    if r.returncode == 0:
+                        llegaron = True
+                        break
+                    print(f"  AVISO: el envío de {etiqueta} falló (intento {intento}): "
+                          f"{(r.stderr or '')[:200]}")
+                except subprocess.TimeoutExpired:
+                    # Se mata el ssh colgado: si no, la vuelta se queda parada para siempre.
+                    print(f"  AVISO: el envío de {etiqueta} se quedó colgado más de "
+                          f"{TIEMPO_MAX_ENVIO // 60} min (intento {intento}); se corta y se sigue")
+            if llegaron:
+                enviados.extend(n for _p, n in tanda)
+            else:
+                print(f"  AVISO: {len(tanda)} ficheros de {etiqueta} NO se han podido enviar; "
+                      f"se reintentarán en la próxima vuelta")
+        finally:
+            tar_path.unlink(missing_ok=True)
+    return enviados
 
 
 def revisar_extremos(cfg: dict, maximo: int = 12, buscar_otra: int = 2,
@@ -776,21 +835,42 @@ def publicar(cfg: dict) -> int:
     print(f"  fichas enviadas: {respuesta['total']} · nuevas en el servidor: {respuesta['nuevas']}"
           + (f" · ya estaban allí: {repetidas}" if repetidas else ""))
 
-    # Las que el servidor ya tenía: ni se sube su audio ni sus carátulas (ya están allí).
+    # Las que el servidor ya tenía: su FICHA no se reenvía, pero el AUDIO puede faltar.
+    #
+    # Esto no es teórico: el 20/09/2026 un envío de 544 MB se quedó colgado, la vuelta murió ahí y el
+    # servidor se quedó con diez fichas apuntando a ficheros que no habían llegado. Como el audio de
+    # lo que el servidor «ya tenía» no se subía, esas canciones aparecían en la aplicación y no
+    # sonaban **para siempre**. Ahora el servidor contesta si tiene el fichero y cuánto pesa, y aquí se
+    # vuelve a subir el que falte o el que no cuadre.
     ya_en_servidor = {
-        (d.get("youtube_id") or "", (d.get("artist") or "").lower(), (d.get("title") or "").lower())
+        (d.get("youtube_id") or "", (d.get("artist") or "").lower(), (d.get("title") or "").lower()):
+            d
         for d in (respuesta.get("repetidas_detalle") or [])
     }
 
-    def es_nueva(t: dict) -> bool:
+    def falta_el_audio(t: dict) -> bool:
+        """¿Hay que subir el audio de esta canción, aunque su ficha ya esté en el servidor?"""
         clave = (t.get("youtube_id") or "", (t.get("artist") or "").lower(),
                  (t.get("title") or "").lower())
-        return clave not in ya_en_servidor
+        detalle = ya_en_servidor.get(clave)
+        if not detalle:
+            return False
+        if not detalle.get("tiene_fichero"):
+            return True
+        tam = detalle.get("tamano")
+        local = t.get("file_size")
+        return bool(tam and local and int(tam) != int(local))
 
-    a_enviar = [t for t in pendientes if es_nueva(t)]
+    a_enviar = [t for t in pendientes
+                if (t.get("youtube_id") or "", (t.get("artist") or "").lower(),
+                    (t.get("title") or "").lower()) not in ya_en_servidor or falta_el_audio(t)]
     if len(a_enviar) != len(pendientes):
-        print(f"  ficheros que NO se reenvían (la canción ya estaba): "
+        print(f"  fichas que NO se reenvían (la canción ya estaba): "
               f"{len(pendientes) - len(a_enviar)}")
+    repetidos_sin_audio = [t for t in a_enviar if falta_el_audio(t)]
+    if repetidos_sin_audio:
+        print(f"  canciones que ya estaban pero cuyo AUDIO falta en el servidor: "
+              f"{len(repetidos_sin_audio)} (se vuelve a subir)")
 
     audio: list[tuple[Path, str]] = []
     covers: list[tuple[Path, str]] = []
@@ -811,7 +891,7 @@ def publicar(cfg: dict) -> int:
                 sub = "covers" if columna == "cover_path" else "artists"
                 lista.append((datos_locales / sub / nombre, nombre))
 
-    _enviar_ficheros(cfg, audio, cfg["musica_servidor"], "música")
+    llegaron_audio = _enviar_ficheros(cfg, audio, cfg["musica_servidor"], "música")
     if covers:
         _enviar_ficheros(cfg, covers, cfg["covers_servidor"], "carátulas")
     if artistas:
@@ -835,15 +915,42 @@ def publicar(cfg: dict) -> int:
         except Exception:  # noqa: BLE001
             pass
 
+    # Los nombres que se dieron por enviados (por etiqueta), para no apuntar como enviada una canción
+    # cuyo audio no llegó: eso la dejaba en el servidor «apuntando al vacío» para siempre.
+    enviados_audio = set(llegaron_audio)
+
     con = rdb.get_conn()
     try:
         for t in pendientes:
-            con.execute("INSERT OR REPLACE INTO pc_enviadas(track_id, enviada_en) VALUES(?,?)",
-                        (t["id"], time.strftime("%Y-%m-%dT%H:%M:%S")))
+            clave = (t.get("youtube_id") or "", (t.get("artist") or "").lower(),
+                     (t.get("title") or "").lower())
+            fp = _ruta_relativa_musica(t.get("file_path") or "", musica_local)
+            ya_estaba = ya_en_servidor.get(clave)
+            # Se apunta como enviada si: el servidor ya tenía la canción Y su fichero, o si el audio
+            # acaba de llegar. Si no, se deja pendiente para la próxima vuelta.
+            if ya_estaba and ya_estaba.get("tiene_fichero") and not falta_el_audio(t):
+                listo = True
+            elif fp:
+                listo = fp in enviados_audio
+            else:
+                listo = bool(ya_estaba)      # sin fichero local no hay nada que subir
+            if listo:
+                con.execute("INSERT OR REPLACE INTO pc_enviadas(track_id, enviada_en) VALUES(?,?)",
+                            (t["id"], time.strftime("%Y-%m-%dT%H:%M:%S")))
         con.commit()
+        pendientes_siguen = len([t for t in pendientes
+                                 if _ruta_relativa_musica(t.get("file_path") or "", musica_local)
+                                 and _ruta_relativa_musica(t.get("file_path") or "", musica_local)
+                                 not in enviados_audio
+                                 and not (ya_en_servidor.get(
+                                     (t.get("youtube_id") or "", (t.get("artist") or "").lower(),
+                                      (t.get("title") or "").lower())) or {}).get("tiene_fichero")])
     finally:
         con.close()
-    return len(pendientes)
+    if pendientes_siguen:
+        print(f"  quedan {pendientes_siguen} canciones sin enviar su audio: se reintentarán en la "
+              f"próxima vuelta")
+    return len(pendientes) - pendientes_siguen
 
 
 # --------------------------------------------------------------------------------------------

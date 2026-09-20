@@ -290,10 +290,30 @@ def importar(datos: ImportarIn) -> dict:
                                  claves=claves)
         if ya:
             rellenos = rdb.rellenar_huecos(ya, campos)
+            # ¿EL SERVIDOR TIENE EL AUDIO? No es lo mismo tener la ficha que tener el fichero.
+            #
+            # El PC manda primero la ficha y después el audio, y si se corta entre las dos cosas (pasó
+            # el 20/09/2026: un envío de 544 MB se quedó colgado y la vuelta murió ahí) el servidor se
+            # queda con la canción apuntando a un fichero que no existe: **aparece en la aplicación y
+            # no suena**. Y como el PC se salta el audio de lo que el servidor «ya tenía», ese fichero
+            # no se subía nunca más. Por eso se contesta también si el fichero está y cuánto pesa: con
+            # eso el PC sabe que tiene que volver a mandarlo.
+            ruta = campos.get("file_path") or ""
+            tiene, tamano = False, None
+            if ruta:
+                try:
+                    from radiov.config import resolve_music
+                    f = resolve_music(ruta)
+                    if f.exists():
+                        tiene, tamano = True, f.stat().st_size
+                except Exception:  # noqa: BLE001
+                    pass
             repetidas.append({"id": ya, "artist": campos.get("artist"),
                               "title": campos.get("title"),
                               "youtube_id": campos.get("youtube_id"),
-                              "rellenos": rellenos})
+                              "rellenos": rellenos,
+                              "tiene_fichero": tiene, "tamano": tamano,
+                              "tamano_local": campos.get("file_size")})
             continue
         try:
             nuevo_id = rdb.add_track(campos)
