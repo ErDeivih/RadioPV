@@ -566,6 +566,21 @@ def buscar_version_sin_intro(artist: str, title: str, track_id: int, file_path: 
     if not title:
         return "sin título que buscar"
 
+    # UNA MEZCLA NO SE CAMBIA POR «OTRA VERSIÓN»
+    # ------------------------------------------
+    # Se aprendió con un caso real (20/09/2026): se cambió la sesión que el usuario había pedido a
+    # mano («Dj RuLoX - Mix REGGAETON VIEJO», 36 min) por otra subida de **otro canal** («DJ Naydee»)
+    # que se llamaba casi igual y duraba parecido. Son mezclas DISTINTAS: no es «la misma canción sin
+    # la intro», es otro trabajo, con otro orden, otros cortes y otras canciones dentro. Para una
+    # canción normal, cambiar el vídeo oficial por el audio del disco es seguro (misma grabación);
+    # para una sesión no lo es. A partir de 20 minutos **sólo se informa**: queda apuntado que tiene
+    # intro para que el usuario decida, y no se le toca la música.
+    from .quality import clasificar
+
+    if clasificar(title, artist, duracion or 0) == "sesion" or (duracion or 0) > 1200:
+        return ("es una mezcla: no se cambia sola por otra subida del mismo título "
+                f"(tiene {intro_actual + cola_actual:.0f}s de intro/cola, queda apuntado)")
+
     cfg = load_settings()
     candidatos: list[dict] = []
     vistos: set[str] = set()
@@ -614,10 +629,16 @@ def buscar_version_sin_intro(artist: str, title: str, track_id: int, file_path: 
         vid = cand.get("id")
         if db.pista_existente(youtube_id=vid) or db.track_exists(vid):
             continue
-        # La duración tiene que parecerse: si es un directo de 8 minutos, es otra cosa.
+        # La duración tiene que encajar con «la misma grabación sin el trozo de más»:
+        #   · puede ser MÁS CORTA, pero no más de lo que se quiere quitar (intro+cola) más un margen
+        #     de 30 s: si es mucho más corta, es otra edición (un radio edit, un corte);
+        #   · y no puede ser más larga que un 10 %: eso sería una versión extendida o un directo.
+        # Antes se admitía un ±25 % y por ahí cabía casi cualquier cosa con el mismo título.
         dur_cand = float(cand.get("duration") or 0)
-        if duracion and dur_cand and abs(dur_cand - float(duracion)) / max(float(duracion), 1) > 0.25:
-            continue
+        if duracion and dur_cand:
+            margen_abajo = float(intro_actual) + float(cola_actual) + 30.0
+            if dur_cand < float(duracion) - margen_abajo or dur_cand > float(duracion) * 1.10:
+                continue
 
         bajado = Y.download_video(vid, artist=artist, title=title)
         if not bajado or not bajado.get("file_path"):
