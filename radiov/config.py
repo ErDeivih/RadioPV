@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 # Directorio raíz del proyecto (el padre de este paquete)
@@ -34,6 +35,52 @@ def resolve_music(path: str) -> Path:
     relativa (nueva, cuelga de BASE_MUSIC). El recolector accede al fichero usando esto."""
     p = Path(path)
     return p if p.is_absolute() else (BASE_MUSIC / p)
+
+
+# Carpetas de primer nivel de la música: por ellas se reconoce dónde empieza la parte útil de una
+# ruta (ver `a_ruta_relativa_musica`).
+SUBCARPETAS_MUSICA = ("catalogada", "descargas", "covers", "artists", "artistas",
+                      "playlists", "listas", "cuarentena")
+
+
+def a_ruta_relativa_musica(ruta: str, raiz=None) -> str:
+    """Deja una ruta de fichero como la espera el servidor: relativa a la raíz de música.
+
+        E:/MusicaRadioPV/catalogada/DJ/tema.mp3   →  catalogada/DJ/tema.mp3
+        MusicaRadioPV/catalogada/DJ/tema.mp3      →  catalogada/DJ/tema.mp3
+        /music/catalogada/DJ/tema.mp3             →  catalogada/DJ/tema.mp3
+        catalogada/DJ/tema.mp3                    →  catalogada/DJ/tema.mp3  (ya estaba bien)
+
+    POR QUÉ HACE FALTA (fallo real, 20/09/2026)
+    -------------------------------------------
+    En el PC la ficha guarda la ruta ABSOLUTA del fichero (`E:\\MusicaRadioPV\\catalogada\\…`) hasta
+    que el organizador la pasa a relativa, en la fase de mantenimiento de la vuelta. Tres canciones
+    de tech house se publicaron antes de esa fase y el servidor recibió la ruta absoluta tal cual, con
+    dos consecuencias silenciosas: la canción **aparecía en la aplicación y no sonaba** (en el
+    servidor `/music/E:/…` no existe) y su audio se subió con ese nombre, cayendo en
+    `/music/MusicaRadioPV/…` en vez de donde está el resto de la biblioteca.
+
+    Está en `radiov/config.py` (y no en cada máquina) a propósito: el PC y el servidor tienen que
+    limpiar las rutas **igual**. Dos copias de la misma regla ya se separaron una vez en este proyecto
+    (la tabla de géneros) y el resultado fue que el panel y la aplicación decían cosas distintas.
+    """
+    p = str(ruta or "").strip().strip('"').replace("\\", "/")
+    if not p:
+        return ""
+    base = str(raiz if raiz is not None else BASE_MUSIC).replace("\\", "/").rstrip("/")
+    if base and p.lower().startswith(base.lower() + "/"):
+        p = p[len(base) + 1:]
+    else:
+        p = re.sub(r"^[A-Za-z]:/", "", p).lstrip("/")
+    # Si todavía queda un prefijo desconocido delante de una carpeta de música conocida (el nombre de
+    # la carpeta de la música del PC, «music», …), se corta por ahí: es donde empieza la parte que el
+    # servidor entiende.
+    partes = p.split("/")
+    for i, parte in enumerate(partes):
+        if parte.lower() in SUBCARPETAS_MUSICA:
+            p = "/".join(partes[i:])
+            break
+    return p
 
 # ---------- Ajustes por defecto ----------
 DEFAULT_SETTINGS: dict = {

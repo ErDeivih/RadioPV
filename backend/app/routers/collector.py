@@ -34,6 +34,29 @@ from .. import models
 router = APIRouter(prefix="/collector", tags=["collector"])
 
 
+def _file_path_relativo(ruta: Any) -> Any:
+    """Deja `file_path` como lo espera la aplicación: relativo a `/music` (`catalogada/…`).
+
+    POR QUÉ (fallo real, 20/09/2026)
+    --------------------------------
+    El PC guarda la ruta ABSOLUTA del fichero (`E:\\MusicaRadioPV\\catalogada\\…`) hasta que el
+    organizador la pasa a relativa en la fase de mantenimiento de la vuelta. Si una ficha se publica
+    antes (se vio con tres canciones de tech house bajadas a mano), el servidor la guardaba tal cual y
+    pasaban dos cosas: la canción **aparecía en la aplicación y no sonaba** (aquí no existe
+    `/music/E:/…`) y su audio se subía con ese nombre, cayendo en `/music/MusicaRadioPV/…` en vez de
+    donde está el resto de la biblioteca.
+
+    El PC ya lo manda bien (`radiov.config.a_ruta_relativa_musica`, que es esta misma función); esto
+    es la segunda línea: aunque la otra máquina esté con una versión vieja, aquí no entra una ruta
+    absoluta.
+    """
+    if not isinstance(ruta, str) or not ruta.strip():
+        return ruta
+    from radiov.config import a_ruta_relativa_musica
+
+    return a_ruta_relativa_musica(ruta) or ruta
+
+
 def _token_esperado() -> Optional[str]:
     return os.environ.get("RADIOPV_INGEST_TOKEN") or None
 
@@ -255,6 +278,11 @@ def importar(datos: ImportarIn) -> dict:
     repetidas: list[dict] = []
     for rec in datos.pistas:
         campos: dict[str, Any] = rec.model_dump(exclude_none=True)
+        # Nunca una ruta absoluta: en el servidor la música cuelga de la raíz montada (ver
+        # `_file_path_relativo`).
+        for _campo in ("file_path", "cover_path", "artist_image_path"):
+            if campos.get(_campo):
+                campos[_campo] = _file_path_relativo(campos[_campo])
         ya = rdb.pista_existente(youtube_id=campos.get("youtube_id"),
                                  deezer_id=campos.get("deezer_id"),
                                  artist=campos.get("artist", ""),

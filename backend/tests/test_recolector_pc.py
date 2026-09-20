@@ -115,6 +115,42 @@ def test_importar_mete_las_pistas_y_no_las_duplica(client, monkeypatch, radiov_t
     assert n == 1
 
 
+def test_importar_no_acepta_rutas_absolutas(client, monkeypatch, radiov_temporal):
+    """Una ruta absoluta del PC haría que la canción apareciera en la app y NO sonara.
+
+    Pasó de verdad (20/09/2026): tres canciones de tech house se publicaron antes de que el
+    organizador pasara su ruta a relativa, y llegaron como `E:/MusicaRadioPV/catalogada/…`. Aquí no
+    existe esa ruta, así que en la aplicación salían y el reproductor no encontraba nada. Se arregla
+    en el PC y también aquí: aunque la otra máquina esté con una versión vieja, no entra.
+    """
+    import sqlite3
+
+    monkeypatch.setenv("RADIOPV_INGEST_TOKEN", "secreto-de-pruebas")
+    cab = {"X-Ingest-Token": "secreto-de-pruebas"}
+
+    # OJO con los títulos: tienen que ser DISTINTOS después de normalizar. La clave de canción corta
+    # el título en palabras vacías («Prueba ruta con unidad» y «Prueba ruta con barras» dan la MISMA
+    # clave, y la segunda se rechaza como repetida — que es justo lo que debe hacer). Se usan palabras
+    # sueltas para que cada fila sea una canción distinta de verdad.
+    for titulo, ruta, esperada in (
+        ("Alfa", "E:/MusicaRadioPV/catalogada/DJ/2022/tema.mp3", "catalogada/DJ/2022/tema.mp3"),
+        ("Bravo", "E:\\MusicaRadioPV\\catalogada\\DJ\\tema.mp3", "catalogada/DJ/tema.mp3"),
+        ("Charlie", "MusicaRadioPV/catalogada/DJ/tema.mp3", "catalogada/DJ/tema.mp3"),
+        ("Delta", "/music/catalogada/DJ/tema.mp3", "catalogada/DJ/tema.mp3"),
+        ("Eco", "catalogada/DJ/tema.mp3", "catalogada/DJ/tema.mp3"),
+    ):
+        r = client.post("/collector/importar", json={"pistas": [
+            {"title": titulo, "artist": "DJ Pruebas", "status": "descargada", "file_path": ruta}
+        ], "origen": "pc-de-casa"}, headers=cab)
+        assert r.status_code == 200, r.text
+        con = sqlite3.connect(str(radiov_temporal))
+        con.row_factory = sqlite3.Row
+        fila = con.execute("SELECT file_path FROM tracks WHERE title=?", (titulo,)).fetchone()
+        con.close()
+        assert fila is not None, f"no entró «{titulo}»"
+        assert fila["file_path"] == esperada, f"«{titulo}»: {fila['file_path']}"
+
+
 def test_una_pista_que_falla_no_tumba_el_resto(client, monkeypatch, radiov_temporal):
     """Si una fila viene mal, las demás tienen que entrar igual: el PC manda lotes."""
     monkeypatch.setenv("RADIOPV_INGEST_TOKEN", "secreto-de-pruebas")

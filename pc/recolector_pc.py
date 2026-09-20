@@ -615,6 +615,19 @@ def _pendientes(cfg: dict) -> list[dict]:
         con.close()
 
 
+def _ruta_relativa_musica(ruta: str, raiz: Path) -> str:
+    """Deja la ruta como la espera el servidor: **relativa a la raíz de música** (`catalogada/…`).
+
+    La regla vive en `radiov.config.a_ruta_relativa_musica` (la usan el PC y el servidor, para que las
+    dos máquinas limpien las rutas igual); aquí sólo se le pasa la raíz de música de ESTE PC.
+    El porqué está contado allí: una ruta absoluta publicada antes de que el organizador la pasara a
+    relativa hacía que la canción apareciera en la aplicación y no sonara.
+    """
+    from radiov.config import a_ruta_relativa_musica
+
+    return a_ruta_relativa_musica(ruta, raiz)
+
+
 def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, etiqueta: str) -> int:
     """Manda ficheros al servidor con tar por ssh (un solo viaje, no uno por fichero).
 
@@ -751,7 +764,11 @@ def publicar(cfg: dict) -> int:
         rec = {k: t.get(k) for k in CAMPOS if t.get(k) is not None}
         for k in RUTAS:
             if rec.get(k):
-                rec[k] = str(rec[k]).replace("\\", "/")
+                # `file_path` SIEMPRE relativo a la raíz de música: en el servidor la música está en
+                # `/music` y `E:/MusicaRadioPV/catalogada/…` no existe (la canción sonaría vacía). Ver
+                # `_ruta_relativa_musica`.
+                rec[k] = (_ruta_relativa_musica(rec[k], musica_local) if k == "file_path"
+                          else str(rec[k]).replace("\\", "/"))
         pistas.append(rec)
 
     respuesta = pedir(cfg, "collector/importar", datos={"pistas": pistas, "origen": cfg.get("nombre_pc", "pc")})
@@ -779,9 +796,13 @@ def publicar(cfg: dict) -> int:
     covers: list[tuple[Path, str]] = []
     artistas: list[tuple[Path, str]] = []
     for t in a_enviar:
-        fp = (t.get("file_path") or "").replace("\\", "/").strip("/")
+        fp = _ruta_relativa_musica(t.get("file_path") or "", musica_local)
         if fp:
-            # En el servidor la música vive en la raíz montada: `catalogada/…` tal cual.
+            # En el servidor la música vive en la raíz montada: `catalogada/…` tal cual. Se comprueba
+            # que exista aquí: si no, se avisa en vez de mandar una ficha que apunta al vacío.
+            if not (musica_local / fp).exists():
+                print(f"  AVISO: no encuentro el fichero de «{(t.get('title') or '')[:50]}» ({fp}); "
+                      f"se manda la ficha, pero no el audio")
             audio.append((musica_local / fp, fp))
         for columna, lista in (("cover_path", covers), ("artist_image_path", artistas)):
             guardado = (t.get(columna) or "").replace("\\", "/")
