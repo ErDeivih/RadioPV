@@ -22,6 +22,7 @@ interface LikedSongsListProps {
 export const LikedSongsList: FC<LikedSongsListProps> = memo(({ color }) => {
   const dispatch = useAppDispatch();
   const total = useAppSelector((state) => state.likedSongs.total);
+  const loading = useAppSelector((state) => state.likedSongs.loading);
   const tracks = useAppSelector((state) => state.likedSongs.items);
 
   return (
@@ -40,6 +41,15 @@ export const LikedSongsList: FC<LikedSongsListProps> = memo(({ color }) => {
       ) : (
         <Divider />
       )}
+
+      {/* Sin canciones guardadas la página se quedaba EN BLANCO: ni lista, ni mensaje, ni pista de
+       *  qué hacer. No era un fallo de datos (de verdad no había ninguna canción guardada), pero
+       *  desde el móvil parecía que la aplicación estaba rota. */}
+      {!total && !loading ? (
+        <p className='empty-state'>
+          Todavía no has guardado ninguna canción. Pulsa el corazón de una canción y aparecerá aquí.
+        </p>
+      ) : null}
 
       <InfiniteScroll
         loader={null}

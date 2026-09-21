@@ -18,12 +18,18 @@ const initialState: {
   following: boolean;
   playlists: Playlist[];
   songs: TrackWithSave[];
+  // `loading` y `notFound` existen para poder distinguir TRES cosas que antes se veían igual (una
+  // pantalla en negro): «todavía está cargando», «ese usuario no existe» y «la petición ha fallado».
+  loading: boolean;
+  notFound: boolean;
 } = {
   songs: [],
   user: null,
   artists: [],
   playlists: [],
   following: false,
+  loading: false,
+  notFound: false,
 };
 
 const fetchMyArtists = createAsyncThunk<Artist[], void>(
@@ -143,6 +149,8 @@ const profileSlice = createSlice({
       state.playlists = [];
       state.artists = [];
       state.songs = [];
+      state.loading = false;
+      state.notFound = false;
     },
     setLinkedStateForTrack: (state, action) => {
       state.songs = state.songs.map((track) => {
@@ -157,10 +165,23 @@ const profileSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    builder.addCase(fetchUser.pending, (state) => {
+      state.loading = true;
+      state.notFound = false;
+      state.user = null;
+    });
     builder.addCase(fetchUser.fulfilled, (state, action) => {
       state.user = action.payload[0];
       state.playlists = action.payload[1];
       state.following = action.payload[2];
+      state.loading = false;
+      // Si la API no devuelve usuario (pasa cuando el id no existe), se dice, en vez de dejar la
+      // pantalla en blanco.
+      state.notFound = !action.payload[0];
+    });
+    builder.addCase(fetchUser.rejected, (state) => {
+      state.loading = false;
+      state.notFound = true;
     });
     builder.addCase(fetchMyArtists.fulfilled, (state, action) => {
       state.artists = action.payload;

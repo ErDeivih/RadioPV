@@ -27,12 +27,14 @@ const PANTALLAS = [
   // ninguna pantalla donde ver el mix).
   ['mix-diario', '/mix/daily_1'],
   ['mix-radar', '/mix/radar'],
-  ['mis-listas', '/users/1/playlists'],
+  ['mis-listas', '/users/PERFIL/playlists'],
   ['me-gusta', '/collection/tracks'],
   ['pedir', '/pedir'],
   ['ajustes', '/settings'],
   ['admin', '/admin'],
-  ['perfil', '/users/1'],
+  // El perfil es el del usuario que ha iniciado sesión: el id se lee del enlace del avatar (antes
+  // estaba a fuego `/users/1`, un id que ya no existe, así que la captura salía NEGRA y no se notó).
+  ['perfil', '/users/PERFIL'],
 ];
 
 (async () => {
@@ -62,7 +64,25 @@ const PANTALLAS = [
       console.log(`  (aviso: no se pudo iniciar sesión: ${String(e).split('\n')[0].slice(0, 90)})`);
     }
 
-    for (const [nombre, ruta] of PANTALLAS) {
+    // El id del perfil se pregunta a la propia aplicación (el enlace del avatar de la barra de
+    // arriba), en vez de escribirlo a mano: con `1` a fuego la captura del perfil salía en negro
+    // durante semanas y nadie lo vio.
+    let idPerfil = '';
+    try {
+      idPerfil = await p.evaluate(() => {
+        const enlace = document.querySelector('a.avatar-link[href^="/users/"]');
+        return (enlace && enlace.getAttribute('href') || '').split('/')[2] || '';
+      });
+    } catch (e) {
+      console.log(`  (aviso: no se pudo leer el id del perfil)`);
+    }
+    if (!idPerfil) {
+      console.log('  (aviso: sin id de perfil; las capturas de perfil se omiten)');
+    }
+
+    for (const [nombre, rutaBase] of PANTALLAS) {
+      const ruta = rutaBase.replace('PERFIL', idPerfil || '1');
+      if (rutaBase.includes('PERFIL') && !idPerfil) continue;
       await p.goto(URL_BASE + ruta, { waitUntil: 'domcontentloaded' });
       await p.waitForTimeout(4500);
       // Un poco de scroll para que se vean también las filas de abajo

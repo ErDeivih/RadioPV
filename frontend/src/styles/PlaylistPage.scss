@@ -38,6 +38,17 @@
   padding: 30px;
   transition: 'background: 0.5s';
 
+  /* Mensaje de página vacía («todavía no has guardado ninguna canción»). Antes, sin canciones, la
+   * página se quedaba en blanco y parecía rota. */
+  .empty-state {
+    color: #b3b3b3;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 28px auto 0;
+    max-width: 420px;
+    text-align: center;
+  }
+
   .column-name {
     color: rgb(186, 186, 186);
   }
