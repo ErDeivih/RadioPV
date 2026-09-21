@@ -620,6 +620,15 @@ def republicar_completas(db=None) -> int:
         sys.path.insert(0, root)
     try:
         from radiov import catalog as CAT
+        # Antes de republicar: la carátula del propio vídeo para lo que no tiene ninguna. Es
+        # determinista y no gasta red, y sin ella la puerta de metadatos no deja publicar: había
+        # canciones esperando desde hacía días sólo por eso.
+        try:
+            puestas = CAT.caratulas_desde_youtube(limit=200)
+            if puestas:
+                CAT.fetch_media(limit=puestas)      # y al disco, que es lo que sirve la aplicación
+        except Exception:  # noqa: BLE001
+            log.exception("[republicar_completas] no se pudieron poner las carátulas del vídeo")
         return CAT.republicar_completas()
     except Exception:  # noqa: BLE001
         log.exception("[republicar_completas] FALLÓ")

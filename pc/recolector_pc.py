@@ -773,10 +773,14 @@ def completar(cfg: dict, maximo: int = 40) -> int:
     print("  completando lo descargado (ganancia, energía, carátulas)…")
     e = C.analyze_energy_missing(limit=maximo)
     g = C.analizar_gain_missing(limit=maximo)
+    # La carátula del propio vídeo, para lo que no tiene ninguna (es determinista y gratis): sin esto
+    # hay canciones que se quedan sin publicar para siempre por no tener una imagen.
+    yt_covers = C.caratulas_desde_youtube(limit=maximo)
     med = C.enrich_media(limit=maximo)
     img = C.fetch_media(limit=maximo)
     rep = C.republicar_completas(limit=600)
-    print(f"  energías={e} · ganancias={g} · fichas={med} · imágenes={img} · publicadas={rep}")
+    print(f"  energías={e} · ganancias={g} · carátulas del vídeo={yt_covers} · fichas={med} · "
+          f"imágenes={img} · publicadas={rep}")
     return rep
 
 

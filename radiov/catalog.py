@@ -1027,6 +1027,40 @@ def review_all(limit: int = 200, progress: Optional[dict] = None) -> int:
     return n
 
 
+def caratulas_desde_youtube(limit: int = 200) -> int:
+    """Pone la carátula del PROPIO vídeo cuando la canción no tiene ninguna.
+
+    POR QUÉ HACE FALTA (medido el 21/09/2026)
+    -----------------------------------------
+    Un vídeo de YouTube **siempre** tiene miniatura, y su dirección es determinista
+    (`i.ytimg.com/vi/<id>/hqdefault.jpg`): no hace falta ni una petición para saberla. Pero las
+    canciones bajadas antes de que el recolector guardara la miniatura se quedaron sin `cover_url`, y
+    como la puerta de metadatos exige carátula, **nueve canciones del servidor** llevaban desde
+    entonces sin poder publicarse: bajadas, con su fichero y sin llegar nunca a la aplicación.
+
+    Después de esto hay que descargarla al disco (`fetch_media`), que es lo que sirve la aplicación.
+    """
+    from . import youtube as Y
+
+    conn = db.get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, youtube_id FROM tracks WHERE youtube_id IS NOT NULL AND youtube_id != '' "
+            "AND (cover_url IS NULL OR cover_url = '') "
+            "AND (cover_path IS NULL OR cover_path = '') LIMIT ?", (limit,)).fetchall()
+    finally:
+        conn.close()
+    n = 0
+    for r in rows:
+        url = Y._mejor_miniatura({"id": r["youtube_id"]})
+        if url:
+            db.update_track(r["id"], cover_url=url)
+            n += 1
+    if n:
+        db.log_event(f"🖼️ Carátula puesta desde el vídeo de YouTube en {n} canciones", "info")
+    return n
+
+
 def _download_image(url: str, dest: Path) -> bool:
     import requests
     try:
