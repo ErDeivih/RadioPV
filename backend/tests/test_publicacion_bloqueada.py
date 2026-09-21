@@ -73,6 +73,28 @@ def test_la_caratula_vale_por_cualquiera_de_las_dos_vias():
     assert campos_que_faltan(sin_nada) == ["cover_url"]
 
 
+def test_un_cero_es_un_valor_no_un_hueco():
+    """`gain_db = 0.0` significa «ya está al volumen correcto», no «falta la ganancia».
+
+    Dos canciones del servidor llevaban días sin publicarse por esto (21/09/2026): en Python `0.0` es
+    falso, así que la comprobación `not t.get("gain_db")` las veía sin ganancia. Y no había salida: el
+    analizador de audio tampoco las mira, porque su consulta pide `gain_db IS NULL`.
+    """
+    sin_ajuste = _completa(deezer_id="1", year=2020, cover_url="http://x/c.jpg", gain_db=0.0)
+    assert campos_que_faltan(sin_ajuste) == [], "un 0.0 de ganancia no puede bloquear la publicación"
+
+    energia_cero = _completa(deezer_id="1", year=2020, cover_url="http://x/c.jpg", energy=0.0)
+    assert campos_que_faltan(energia_cero) == []
+
+    # Pero lo que de verdad falta, sigue faltando.
+    for campo in ("gain_db", "energy", "duration", "bpm", "genre", "language"):
+        rec = _completa(deezer_id="1", year=2020, cover_url="http://x/c.jpg")
+        rec[campo] = None
+        assert campos_que_faltan(rec) == [campo], campo
+    sin_ano = _completa(deezer_id="1", cover_url="http://x/c.jpg", year=0)
+    assert campos_que_faltan(sin_ano) == ["year"], "un año 0 no es un año"
+
+
 def test_la_lista_de_obligatorios_no_se_queda_corta():
     """Si alguien añade un campo obligatorio, esta prueba obliga a mirarlo (y a documentarlo)."""
     assert set(CAMPOS_OBLIGATORIOS) == {"year", "genre", "language", "bpm", "energy", "gain_db",

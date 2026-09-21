@@ -21,6 +21,24 @@ CAMPOS_OBLIGATORIOS = ("year", "genre", "language", "bpm", "energy", "gain_db", 
                        "cover_url")
 
 
+def _falta(valor, campo: str) -> bool:
+    """¿Este campo está sin poner? OJO: **el cero es un valor, no un hueco**.
+
+    Aquí estaba el fallo (21/09/2026): se miraba `not t.get(campo)`, y en Python `0.0` es falso. Dos
+    canciones del servidor tenían `gain_db = 0.0` —que es un dato perfectamente válido: significa «ya
+    está a -14 LUFS, no hay que tocarle el volumen»— y llevaban días sin publicarse porque el sistema
+    las veía «sin ganancia». No había forma de arreglarlo: el analizador de audio tampoco las mira
+    (su consulta pide `gain_db IS NULL`, y 0.0 no es NULL). Un cero no es un hueco.
+    """
+    if valor is None:
+        return True
+    if isinstance(valor, str):
+        return not valor.strip()
+    if campo == "year":
+        return float(valor) == 0        # un año 0 no existe: eso sí es un dato que falta
+    return False
+
+
 def campos_que_faltan(t: dict) -> list[str]:
     """Qué metadatos obligatorios le faltan a una ficha para poder publicarse.
 
@@ -56,7 +74,7 @@ def campos_que_faltan(t: dict) -> list[str]:
             # pedidas desde la app, con su imagen descargada y sin publicar.
             if t.get("cover_url") or t.get("cover_path"):
                 continue
-        if not t.get(campo):
+        if _falta(t.get(campo), campo):
             faltan.append(campo)
     return faltan
 
