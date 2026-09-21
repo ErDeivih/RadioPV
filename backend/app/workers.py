@@ -626,7 +626,10 @@ def republicar_completas(db=None) -> int:
         try:
             puestas = CAT.caratulas_desde_youtube(limit=200)
             if puestas:
-                CAT.fetch_media(limit=puestas)      # y al disco, que es lo que sirve la aplicación
+                # Y al disco, que es lo que sirve la aplicación (`/media/covers/<fichero>`). El
+                # límite se deja holgado: `fetch_media` no ordena, así que con el mínimo justo
+                # podría coger otras y no éstas.
+                CAT.fetch_media(limit=max(50, puestas))
         except Exception:  # noqa: BLE001
             log.exception("[republicar_completas] no se pudieron poner las carátulas del vídeo")
         return CAT.republicar_completas()
