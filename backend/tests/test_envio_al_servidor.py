@@ -89,7 +89,44 @@ def test_sin_ficheros_no_hace_nada(tmp_path):
     assert rcp._enviar_ficheros(cfg, [(tmp_path / "no-existe.mp3", "x")], "/destino", "música") == []
 
 
+def test_el_presupuesto_de_una_vuelta_corta_el_envio(tmp_path, monkeypatch):
+    """Un atraso grande no puede hacer que la vuelta se pase de la hora que le da Windows.
+
+    El 21/09/2026 había 172 canciones esperando su audio (más de 2 GB): el envío encadenaba tandas sin
+    parar y la vuelta se acercaba al límite de una hora de la tarea programada. Si la mata a mitad se
+    pierde el resto de la vuelta, así que ahora la fase de publicación tiene su propio presupuesto y lo
+    que falte se manda en la siguiente (no se apunta como enviado, así que se reintenta solo).
+    """
+    rcp = _recolector()
+    ficheros = [(_falso(tmp_path, f"f{i}.mp3", 10), f"catalogada/f{i}.mp3") for i in range(4)]
+    llamadas = []
+
+    class Resultado:
+        returncode = 0
+        stderr = ""
+
+    def falso_run(cmd, **kw):
+        llamadas.append(cmd)
+        return Resultado()
+
+    monkeypatch.setattr(rcp.subprocess, "run", falso_run)
+    # El reloj avanza: tras la primera tanda el presupuesto ya está agotado.
+    reloj = {"t": 0.0}
+
+    def reloj_falso():
+        reloj["t"] += 10 ** 6
+        return reloj["t"]
+
+    monkeypatch.setattr(rcp.time, "time", reloj_falso)
+    cfg = {"datos_locales": str(tmp_path), "servidor": "david@servidor.local"}
+    llegaron = rcp._enviar_ficheros(cfg, ficheros, "/srv/data/media/music", "música")
+
+    assert len(llamadas) < len(ficheros), f"se enviaron todas las tandas: {len(llamadas)}"
+    assert len(llegaron) < len(ficheros), "lo que no se envió no puede darse por enviado"
+
+
 def test_el_tope_de_tiempo_es_razonable():
     """20 minutos para 120 MB: si tarda más, está colgado (14 minutos fue el atasco real)."""
     rcp = _recolector()
     assert 300 <= rcp.TIEMPO_MAX_ENVIO <= 3600
+    assert 300 <= rcp.TIEMPO_MAX_PUBLICAR <= 3600

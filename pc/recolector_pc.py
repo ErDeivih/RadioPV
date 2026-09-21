@@ -620,6 +620,14 @@ def _pendientes(cfg: dict) -> list[dict]:
 # parada). Al cortarlo, la vuelta sigue y lo que no llegó se reintenta.
 TIEMPO_MAX_ENVIO = 20 * 60
 
+# Y un presupuesto para TODA la fase de publicación de una vuelta. Cuando hay mucho atrasado (el
+# 21/09/2026 había 172 canciones esperando su audio, más de 2 GB), el envío encadenaba tandas sin
+# parar y la vuelta se acercaba al límite de una hora que tiene la tarea programada de Windows: si la
+# mata a mitad, se pierde el resto de la vuelta (el análisis, las intros) y encima hay que volver a
+# empezar. Con presupuesto, la vuelta termina a tiempo y lo que falte se manda en la siguiente: lo que
+# no llegó no se apunta como enviado, así que se reintenta solo.
+TIEMPO_MAX_PUBLICAR = 20 * 60
+
 
 def _en_tandas(ficheros: list[tuple[Path, str]], max_mb: float = 120.0) -> list[list[tuple[Path, str]]]:
     """Parte la lista en tandas de ~`max_mb`: un envío gigante se atasca y bloquea la vuelta entera.
@@ -690,8 +698,13 @@ def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, 
     carpeta_tmp = Path(cfg.get("datos_locales") or ".") / "_envios"
     carpeta_tmp.mkdir(parents=True, exist_ok=True)
     enviados: list[str] = []
+    limite = time.time() + TIEMPO_MAX_PUBLICAR
+    pendientes_por_tiempo = 0
 
     for tanda in _en_tandas(existentes):
+        if time.time() >= limite:
+            pendientes_por_tiempo += len(tanda)
+            continue
         tmp = tempfile.NamedTemporaryFile(suffix=".tar", delete=False, dir=str(carpeta_tmp))
         tar_path = Path(tmp.name)
         tmp.close()
@@ -729,6 +742,9 @@ def _enviar_ficheros(cfg: dict, ficheros: list[tuple[Path, str]], destino: str, 
                       f"se reintentarán en la próxima vuelta")
         finally:
             tar_path.unlink(missing_ok=True)
+    if pendientes_por_tiempo:
+        print(f"  ({pendientes_por_tiempo} ficheros de {etiqueta} esperan a la próxima vuelta: "
+              f"se ha agotado el presupuesto de {TIEMPO_MAX_PUBLICAR // 60} min de envío)")
     return enviados
 
 
