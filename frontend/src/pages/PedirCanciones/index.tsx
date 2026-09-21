@@ -412,8 +412,10 @@ export const PedirCanciones: FC = () => {
         )}
       </Card>
 
+      {/* Decía «el recolector que corre en el PC de casa»: desde el 20/09/2026 las descargas las
+        * hace el propio servidor (el PC dejó de encargarse de eso), así que el texto mentía. */}
       <Paragraph type='secondary' style={{ fontSize: 12, marginTop: 12 }}>
-        Las peticiones las atiende el recolector que corre en el PC de casa, cada 15 minutos.
+        Las peticiones las atiende el recolector del propio servidor, cada 15 minutos.
       </Paragraph>
     </div>
   );
