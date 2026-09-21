@@ -9,6 +9,7 @@ $fuente-sistema: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helveti
 
 @use './home.scss';
 @use './Mix.scss';
+@use './Wrapped.scss';
 @use './header.scss';
 @use './Navbar.scss';
 @use './Profile.scss';

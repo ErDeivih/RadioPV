@@ -23,6 +23,14 @@ const PANTALLAS = [
   ['genero', '/genre/genre:techhouse'],
   ['genero-pop', '/genre/genre:pop'],
   ['artista', '/artist/Bad Bunny'],
+  // Estas dos llevan LISTA/ALBUM como marca: sus ids no se escriben a mano (es lo que dejó la
+  // captura del perfil en negro durante semanas), se leen del primer enlace que aparezca en la
+  // pantalla anterior —la lista, de la portada; el álbum, de la página del artista—.
+  ['lista', 'LISTA'],
+  ['album', 'ALBUM'],
+  ['discografia', '/artist/Bad Bunny/discography'],
+  ['mis-canciones', '/users/PERFIL/tracks'],
+  ['momentos', '/wrapped'],
   // «Hecho para ti»: la tarjeta del mix y la pantalla del mix (antes llevaban a /search y no había
   // ninguna pantalla donde ver el mix).
   ['mix-diario', '/mix/daily_1'],
@@ -52,41 +60,78 @@ const PANTALLAS = [
 
     await p.goto(URL_BASE, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(4000);
-    // Entrar (hace falta para las pantallas de listas y para el panel)
-    try {
-      await p.getByRole('button', { name: 'Iniciar sesión', exact: true }).first().click({ timeout: 5000 });
-      await p.waitForTimeout(1500);
+
+    /** ¿Hay sesión de verdad? Se le pregunta a la API con el token del navegador.
+     *
+     *  POR QUÉ: entrar es un flujo con ventana y pestañas, y a veces falla (una vez de cada
+     *  varias). Cuando fallaba, el script seguía y sacaba capturas de la aplicación SIN SESIÓN
+     *  —pantallas vacías o con la ventana de «Iniciar sesión»— y esas capturas se revisaban como
+     *  si fueran buenas. Es el mismo tipo de fallo que tuvo la captura del perfil en negro durante
+     *  semanas: verificar mirando algo que no es lo que se cree. */
+    const haySesion = async () =>
+      p.evaluate(async () => {
+        const token = localStorage.getItem('access_token');
+        if (!token) return '';
+        try {
+          const r = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } });
+          if (!r.ok) return '';
+          const j = await r.json();
+          return String(j.id || '');
+        } catch (e) {
+          return '';
+        }
+      });
+
+    const entrar = async () => {
+      await p.getByRole('button', { name: 'Iniciar sesión', exact: true }).first().click({ timeout: 6000 });
+      await p.waitForTimeout(1800);
       await p.locator('input[placeholder="Email"]').first().fill(EMAIL);
       await p.locator('input[placeholder="Contraseña"]').first().fill(CLAVE);
       await p.getByRole('button', { name: /Iniciar sesión|Entrar/i }).last().click();
-      await p.waitForTimeout(5000);
-    } catch (e) {
-      console.log(`  (aviso: no se pudo iniciar sesión: ${String(e).split('\n')[0].slice(0, 90)})`);
-    }
+      await p.waitForTimeout(6000);
+    };
 
-    // El id del perfil se le pregunta a la API con la sesión que acaba de abrir el navegador, en
-    // vez de escribirlo a mano: con `1` a fuego la captura del perfil salía en negro durante
-    // semanas y nadie lo vio. (Primero se intentó leyendo el enlace del avatar, pero ese enlace no
-    // siempre está en el DOM; la API sí contesta siempre.)
     let idPerfil = '';
-    try {
-      idPerfil = await p.evaluate(async () => {
-        const token = localStorage.getItem('access_token');
-        if (!token) return '';
-        const r = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } });
-        if (!r.ok) return '';
-        const j = await r.json();
-        return String(j.id || '');
-      });
-    } catch (e) {
-      console.log(`  (aviso: no se pudo leer el id del perfil)`);
+    for (let intento = 1; intento <= 3 && !idPerfil; intento++) {
+      try {
+        await entrar();
+      } catch (e) {
+        console.log(`  (aviso: intento ${intento} de entrar falló: ${String(e).split('\n')[0].slice(0, 80)})`);
+        await p.goto(URL_BASE, { waitUntil: 'domcontentloaded' });
+        await p.waitForTimeout(2500);
+      }
+      idPerfil = await haySesion();
     }
     if (!idPerfil) {
-      console.log('  (aviso: sin id de perfil; las capturas de perfil se omiten)');
+      // Sin sesión no se saca NADA de este tamaño: es mejor decir que no se ha verificado que
+      // revisar capturas de una aplicación a la que no se ha entrado.
+      console.log(`  FALLO: no se pudo entrar como ${EMAIL} en ${vista}; se omiten sus capturas`);
+      await c.close();
+      continue;
     }
+    console.log(`  (sesión abierta: usuario ${idPerfil})`);
+
+    // Los ids de lista y de álbum se leen del primer enlace de la pantalla correspondiente, en vez
+    // de escribirlos a mano (que es justo lo que dejó la captura del perfil en negro semanas).
+    let idLista = '';
+    let idAlbum = '';
 
     for (const [nombre, rutaBase] of PANTALLAS) {
-      const ruta = rutaBase.replace('PERFIL', idPerfil || '1');
+      let ruta = rutaBase.replace('PERFIL', idPerfil || '1');
+      if (rutaBase === 'LISTA') {
+        if (!idLista) {
+          console.log('  (aviso: sin lista que capturar)');
+          continue;
+        }
+        ruta = idLista;
+      }
+      if (rutaBase === 'ALBUM') {
+        if (!idAlbum) {
+          console.log('  (aviso: sin álbum que capturar)');
+          continue;
+        }
+        ruta = idAlbum;
+      }
       if (rutaBase.includes('PERFIL') && !idPerfil) continue;
       await p.goto(URL_BASE + ruta, { waitUntil: 'domcontentloaded' });
       await p.waitForTimeout(4500);
@@ -97,6 +142,27 @@ const PANTALLAS = [
       await p.screenshot({ path: archivo, fullPage: movil });
       const alto = await p.evaluate(() => document.body.scrollHeight);
       console.log(`  ${archivo.padEnd(38)} alto ${alto}px`);
+
+      // De dónde salen los ids para las dos pantallas de arriba. La lista se pide a la API (las
+      // tarjetas de la portada navegan con `onClick`, no llevan `href` que leer) y el álbum se lee
+      // de un enlace real, que sí existe en las tablas de canciones.
+      if (nombre === 'inicio' && !idLista) {
+        idLista = await p.evaluate(async () => {
+          const token = localStorage.getItem('access_token');
+          const r = await fetch('/api/playlists/system', {
+            headers: { Authorization: 'Bearer ' + token },
+          });
+          if (!r.ok) return '';
+          const j = await r.json();
+          return Array.isArray(j) && j.length ? '/playlist/' + j[0].id : '';
+        });
+      }
+      if (!idAlbum) {
+        const href = await p.evaluate(
+          () => (document.querySelector('a[href^="/album/"]') || {}).getAttribute?.('href') || ''
+        );
+        if (href) idAlbum = href;
+      }
     }
     if (errores.length) console.log(`  errores JS en ${vista}: ${errores.slice(0, 3).join(' | ')}`);
     await c.close();

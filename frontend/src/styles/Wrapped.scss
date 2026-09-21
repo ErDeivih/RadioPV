@@ -1,0 +1,109 @@
+@use './variables.scss' as *;
+
+/* Estadísticas («Momentos», /wrapped).
+ *
+ * Esta pantalla era HTML sin una sola clase —`<h2>`, `<button>`, `<ol>`— sobre el fondo negro de la
+ * aplicación: el texto salía gris oscuro sobre negro y no se leía. En la captura de escritorio sólo
+ * se adivinaba «0 min escuchados», con 56 escuchas de verdad en la base. */
+
+.wrapped {
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 24px;
+
+  /* El título de esta pantalla no lleva la barra lateral de las listas, así que se le quita el
+   * margen lateral que trae la clase compartida. */
+  .playlist-header {
+    margin-left: 0;
+  }
+
+  .playlist-subheader {
+    margin-left: 0;
+  }
+}
+
+.wrapped-periodos {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 24px;
+}
+
+.wrapped-periodo {
+  background: #2a2a2a;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+
+  &:hover {
+    background: #333;
+  }
+
+  &.active {
+    background: #fff;
+    color: #000;
+  }
+}
+
+.wrapped-minutos {
+  color: #b3b3b3;
+  font-size: 1.1rem;
+  margin: 0 0 24px;
+
+  b {
+    color: #fff;
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+  }
+}
+
+.wrapped-card {
+  background: #181818;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+
+  &__titulo {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+}
+
+.wrapped-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    align-items: baseline;
+    border-bottom: 1px solid #2a2a2a;
+    display: flex;
+    gap: 12px;
+    padding: 6px 0;
+  }
+
+  li:last-child {
+    border-bottom: 0;
+  }
+
+  &__puesto {
+    color: #b3b3b3;
+    font-variant-numeric: tabular-nums;
+    min-width: 20px;
+  }
+
+  &__texto {
+    color: #eaeaea;
+    font-size: 0.95rem;
+  }
+}
+
+.wrapped-vacio {
+  color: #b3b3b3;
+  margin: 0;
+}
