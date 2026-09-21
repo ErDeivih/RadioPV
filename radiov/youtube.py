@@ -93,6 +93,15 @@ def _ydl_opts(outdir: Path) -> dict:
         # media, sobreviviendo incluso a matar el proceso de Python que lo lanzó.
         # Con el descargador nativo, la descarga la lleva `yt-dlp` y el vigilante la puede cortar.
         "hls_prefer_native": True,
+        # FORZAR IPv4
+        # -----------
+        # El servidor tiene IPv6 a medias: Cloudflare le devuelve direcciones IPv6 primero (por eso
+        # el DNS «funciona») pero **no hay salida IPv6**. Sin esto, `yt-dlp` intenta la dirección
+        # IPv6, se queda esperando al `socket_timeout` y sólo después cae a IPv4: cada búsqueda y
+        # cada descarga perdía veinte segundos de reloj por ese camino, y con `retries` se
+        # multiplicaba. Se pidió que las descargas las hiciera el servidor (20/09/2026), así que
+        # esto es justo lo que hace falta para que funcionen a la primera.
+        "force_ipv4": True,
         # El vigilante: sin esto, una conexión muerta deja la vuelta colgada durante horas.
         "progress_hooks": [_vigilante_de_progreso()],
         "http_headers": {"User-Agent": UA, "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"},

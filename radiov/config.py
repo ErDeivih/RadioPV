@@ -201,6 +201,63 @@ DEFAULT_SETTINGS: dict = {
     #  - mode "genre_artists": coge los temas más famosos de cada artista (curado → música conocida).
     #  - mode "query": coge lo trending por popularidad en Deezer.
     "agent_seeds": [
+        # ============ EDM, CAR BASS Y BASS MUSIC ============
+        # VAN LAS PRIMERAS A PROPÓSITO, y no al final como el resto de bloques añadidos después.
+        # El recolector recorre esta lista EN ORDEN (y al reiniciarse vuelve a empezar por el
+        # principio), así que un bloque nuevo al final tarda HORAS en tocarse: primero repasa todos
+        # los éxitos, mashups, sesiones y tech house. Esto es lo que el usuario acaba de pedir
+        # («algún género de car bass, edm, etc»), así que va lo primero.
+        #
+        # El EDM de festival se busca por sello y por artista (Deezer los tiene todos) y el «car
+        # bass» por YouTube, que es donde vive: en las tiendas no existe esa etiqueta, son canales
+        # que suben «bass boosted» y música para el coche.
+        {"mode": "youtube", "query": "edm festival mix 2025", "genre": "edm", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "big room house mix", "genre": "edm", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "edm remix popular songs", "genre": "edm", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "edm drops mix", "genre": "edm", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "tropical house mix", "genre": "edm", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "slap house mix", "genre": "edm", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Monstercat mix", "genre": "edm", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Revealed recordings mix", "genre": "edm", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "STMPD records mix", "genre": "edm", "language": "en", "n": 20},
+
+        {"mode": "youtube", "query": "car bass boosted", "genre": "carbass", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "bass boosted car music", "genre": "carbass", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "car music bass test", "genre": "carbass", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "subwoofer bass test", "genre": "carbass", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "hard bass car music", "genre": "carbass", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "bass boosted español", "genre": "carbass", "language": "es", "n": 20},
+        {"mode": "youtube", "query": "phonk car music", "genre": "carbass", "language": "en", "n": 20},
+
+        {"mode": "youtube", "query": "dubstep mix 2025", "genre": "dubstep", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "riddim dubstep mix", "genre": "dubstep", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "drum and bass mix 2025", "genre": "dnb", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "liquid drum and bass mix", "genre": "dnb", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "hardstyle mix 2025", "genre": "hardstyle", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "rawstyle hardstyle remix", "genre": "hardstyle", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "hardstyle remix español", "genre": "hardstyle", "language": "es", "n": 20},
+        {"mode": "youtube", "query": "trance mix 2025", "genre": "trance", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "psytrance set", "genre": "trance", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "vocal trance classics", "genre": "trance", "language": "en", "n": 20},
+
+        # Artistas de estas escenas: en Deezer está su catálogo, así que se traen con `explore` (y de
+        # cada uno salen los relacionados, o sea que la lista crece sola).
+        {"mode": "explore", "genre": "edm", "language": "en",
+         "seeds": ["Martin Garrix", "Hardwell", "Afrojack", "Dimitri Vegas & Like Mike", "Steve Aoki",
+                   "Alan Walker", "Kygo", "Zedd", "Galantis", "Sigala"]},
+        {"mode": "explore", "genre": "dubstep", "language": "en",
+         "seeds": ["Skrillex", "Excision", "Subtronics", "Zomboy", "Virtual Riot", "Slander"]},
+        {"mode": "explore", "genre": "dnb", "language": "en",
+         "seeds": ["Sub Focus", "Pendulum", "Chase & Status", "Wilkinson", "Netsky"]},
+        {"mode": "explore", "genre": "hardstyle", "language": "en",
+         "seeds": ["Headhunterz", "Da Tweekaz", "Brennan Heart", "Coone", "Wildstylez"]},
+        {"mode": "explore", "genre": "trance", "language": "en",
+         "seeds": ["Armin van Buuren", "Above & Beyond", "Tiësto", "Paul van Dyk", "Aly & Fila"]},
+        {"mode": "query", "genre": "edm", "query": "edm hits", "language": "en"},
+        {"mode": "query", "genre": "carbass", "query": "bass boosted", "language": "en"},
+        {"mode": "query", "genre": "dubstep", "query": "dubstep", "language": "en"},
+        {"mode": "query", "genre": "hardstyle", "query": "hardstyle", "language": "en"},
+        {"mode": "query", "genre": "trance", "query": "trance", "language": "en"},
         # Listas de éxitos reales (Apple Music, varios países) → artistas → expansión continua
         {"mode": "hits_apple", "country": "es", "genre": "latin", "language": "es", "limit": 20},
         {"mode": "hits_apple", "country": "us", "genre": "pop", "language": "en", "limit": 20},
@@ -456,58 +513,6 @@ DEFAULT_SETTINGS: dict = {
     # Estas siguen buscando en Deezer porque son artistas que SÍ están en las tiendas.
     {"mode": "explore", "genre": "dance", "language": "en",
      "seeds": ["DJ Snake", "Tiesto", "Marshmello", "Robin Schulz"]},
-
-    # ============ EDM, CAR BASS Y BASS MUSIC («car bass, edm, etc», lo pidió el usuario) ============
-    # El EDM de festival se busca por sello y por artista (Deezer los tiene todos) y el «car bass»
-    # por YouTube, que es donde vive: en las tiendas no existe esa etiqueta, son canales que suben
-    # «bass boosted» y música para el coche.
-    {"mode": "youtube", "query": "edm festival mix 2025", "genre": "edm", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "big room house mix", "genre": "edm", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "edm remix popular songs", "genre": "edm", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "edm drops mix", "genre": "edm", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "tropical house mix", "genre": "edm", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "slap house mix", "genre": "edm", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "Monstercat mix", "genre": "edm", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "Revealed recordings mix", "genre": "edm", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "STMPD records mix", "genre": "edm", "language": "en", "n": 20},
-
-    {"mode": "youtube", "query": "car bass boosted", "genre": "carbass", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "bass boosted car music", "genre": "carbass", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "car music bass test", "genre": "carbass", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "subwoofer bass test", "genre": "carbass", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "hard bass car music", "genre": "carbass", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "bass boosted español", "genre": "carbass", "language": "es", "n": 20},
-    {"mode": "youtube", "query": "phonk car music", "genre": "carbass", "language": "en", "n": 20},
-
-    {"mode": "youtube", "query": "dubstep mix 2025", "genre": "dubstep", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "riddim dubstep mix", "genre": "dubstep", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "drum and bass mix 2025", "genre": "dnb", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "liquid drum and bass mix", "genre": "dnb", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "hardstyle mix 2025", "genre": "hardstyle", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "rawstyle hardstyle remix", "genre": "hardstyle", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "hardstyle remix español", "genre": "hardstyle", "language": "es", "n": 20},
-    {"mode": "youtube", "query": "trance mix 2025", "genre": "trance", "language": "en", "n": 25},
-    {"mode": "youtube", "query": "psytrance set", "genre": "trance", "language": "en", "n": 20},
-    {"mode": "youtube", "query": "vocal trance classics", "genre": "trance", "language": "en", "n": 20},
-
-    # Artistas de estas escenas: en Deezer está su catálogo, así que se traen con `explore` (y de
-    # cada uno salen los relacionados, o sea que la lista crece sola).
-    {"mode": "explore", "genre": "edm", "language": "en",
-     "seeds": ["Martin Garrix", "Hardwell", "Afrojack", "Dimitri Vegas & Like Mike", "Steve Aoki",
-               "Alan Walker", "Kygo", "Zedd", "Galantis", "Sigala"]},
-    {"mode": "explore", "genre": "dubstep", "language": "en",
-     "seeds": ["Skrillex", "Excision", "Subtronics", "Zomboy", "Virtual Riot", "Slander"]},
-    {"mode": "explore", "genre": "dnb", "language": "en",
-     "seeds": ["Sub Focus", "Pendulum", "Chase & Status", "Wilkinson", "Netsky"]},
-    {"mode": "explore", "genre": "hardstyle", "language": "en",
-     "seeds": ["Headhunterz", "Da Tweekaz", "Brennan Heart", "Coone", "Wildstylez"]},
-    {"mode": "explore", "genre": "trance", "language": "en",
-     "seeds": ["Armin van Buuren", "Above & Beyond", "Tiësto", "Paul van Dyk", "Aly & Fila"]},
-    {"mode": "query", "genre": "edm", "query": "edm hits", "language": "en"},
-    {"mode": "query", "genre": "carbass", "query": "bass boosted", "language": "en"},
-    {"mode": "query", "genre": "dubstep", "query": "dubstep", "language": "en"},
-    {"mode": "query", "genre": "hardstyle", "query": "hardstyle", "language": "en"},
-    {"mode": "query", "genre": "trance", "query": "trance", "language": "en"},
     ],
     "max_per_artist": 10,
     # Actividades/ritmos: subdivisión de BPM + orientación para el usuario.
