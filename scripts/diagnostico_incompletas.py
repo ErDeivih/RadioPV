@@ -49,6 +49,18 @@ for fila in con.execute(
         "GROUP BY dia ORDER BY dia DESC LIMIT 10"):
     print(f"   {fila['dia']}  {fila['n']:5d}")
 
+# Muestra con la ficha a la vista: sin esto sólo se ven recuentos y no se puede decidir NADA (¿tiene
+# vídeo del que sacar el año?, ¿tiene la carátula ya descargada?, ¿es una recuperada del disco?).
+LIMITE = int(os.environ.get("MUESTRA", "12"))
+print(f"\nmuestra (hasta {LIMITE}):")
+for r in con.execute("SELECT * FROM tracks WHERE status='incompleta' ORDER BY id LIMIT ?",
+                     (LIMITE,)):
+    faltan = [c for c in CAMPOS if not r[c]]
+    tiene = ("yt" if r["youtube_id"] else "--") + " " + ("dz" if r["deezer_id"] else "--") + \
+            " " + ("caratula-fichero" if r["cover_path"] else "sin-caratula")
+    print(f"   id={r['id']:<6} [{(r['source'] or '?'):10}] falta={','.join(faltan) or 'NADA':28} "
+          f"[{tiene:26}] {(r['artist'] or '')[:20]} - {(r['title'] or '')[:34]}")
+
 print("\ncomparacion con las publicadas (mismo periodo):")
 for fila in con.execute(
         "SELECT status, COUNT(*) n, SUM(CASE WHEN gain_db IS NULL THEN 1 ELSE 0 END) sin_gain, "
