@@ -954,6 +954,32 @@ def publicar(cfg: dict) -> int:
 
 
 # --------------------------------------------------------------------------------------------
+# Un candado más viejo que esto se da por muerto aunque el PID parezca vivo (los PIDs se reciclan).
+# Una vuelta normal dura 12-20 minutos y el tope de la tarea programada es 1 hora.
+CADUCIDAD_CANDADO = 45 * 60
+
+
+def _proceso_vivo(pid: int) -> bool:
+    """¿Sigue existiendo ese proceso? Sirve para saber si un candado es de una vuelta de verdad.
+
+    OJO CON WINDOWS: `os.kill(pid, 0)` **no** sirve para preguntar si un proceso vive — en Windows
+    `os.kill` sólo entiende las señales de consola, y con cualquier otra **mata** el proceso. Se
+    pregunta con `tasklist`, que es de sólo lectura. Si no se puede saber, se contesta que SÍ está
+    vivo: más vale perder una vuelta que pisar una que está trabajando.
+    """
+    if not pid:
+        return False
+    try:
+        if os.name == "nt":
+            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                               capture_output=True, text=True, timeout=20)
+            return str(pid) in (r.stdout or "")
+        os.kill(pid, 0)          # POSIX: aquí sí sirve
+        return True
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def _bloqueo(cfg: dict):
     """Impide que se solapen dos vueltas.
 
@@ -968,9 +994,19 @@ def _bloqueo(cfg: dict):
     import os
 
     ruta = Path(cfg["datos_locales"]) / "recolector_pc.lock"
-    if ruta.exists() and (time.time() - ruta.stat().st_mtime) < 3 * 3600:
-        print(f"Ya hay otra vuelta en marcha (candado {ruta}). Salgo sin hacer nada.")
-        return None
+    if ruta.exists():
+        try:
+            edad = time.time() - ruta.stat().st_mtime
+            pid = int((ruta.read_text(encoding="utf-8") or "0").strip() or 0)
+        except Exception:  # noqa: BLE001
+            edad, pid = 0.0, 0
+        if edad < CADUCIDAD_CANDADO:
+            if _proceso_vivo(pid):
+                print(f"Ya hay otra vuelta en marcha (candado {ruta}, PID {pid}). "
+                      f"Salgo sin hacer nada.")
+                return None
+            print(f"  candado de una vuelta que ya no existe (PID {pid}, {edad / 60:.0f} min de "
+                  f"antigüedad): se toma el relevo")
     ruta.write_text(str(os.getpid()), encoding="utf-8")
     return ruta
 

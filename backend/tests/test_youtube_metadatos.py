@@ -66,11 +66,22 @@ def test_el_ano_no_puede_bloquear_para_siempre_a_lo_que_solo_existe_en_youtube()
 
     Deezer no tiene ficha de un mashup casero ni de una sesión de DJ: no hay año que poner. Con la
     regla estricta se quedaban en «incompleta» de por vida y no llegaban NUNCA a la aplicación.
+
+    Se comprueba el COMPORTAMIENTO (la regla de qué es obligatorio), no el texto del código: antes
+    esta prueba buscaba `'k != "year"'` dentro de `_persist_yt` con `inspect.getsource`, así que
+    reescribir la misma regla en otro sitio la hacía fallar sin que nada estuviera roto… y al revés:
+    podía pasar con el código cambiado de forma que la regla ya no se aplicara.
     """
+    from radiov.catalog import campos_que_faltan
+
+    # De un vídeo: el año no bloquea (la carátula sí se espera: el vídeo la trae).
+    faltan = campos_que_faltan({"youtube_id": "VIDEO123", "cover_url": "https://i.ytimg.com/x.jpg"})
+    assert "year" not in faltan
+    # Y la regla se aplica de verdad en la puerta de entrada y en el republicador.
     import inspect
 
     from radiov import pipeline
+    from radiov import catalog as C
 
-    fuente = inspect.getsource(pipeline._persist_yt)
-    assert 'k != "year"' in fuente, "el año vuelve a bloquear la publicación de lo bajado de YouTube"
-    assert "youtube_id" in fuente
+    assert "campos_que_faltan" in inspect.getsource(pipeline._persist_yt)
+    assert "campos_que_faltan" in inspect.getsource(C.republicar_completas)

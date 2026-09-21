@@ -16,6 +16,37 @@ from .config import load_settings, DATA_DIR, BASE_MUSIC, resolve_music, SETTINGS
 _PALABRAS_GENERO: tuple | None = None
 
 
+# Campos que la puerta de metadatos exige antes de publicar una canción.
+CAMPOS_OBLIGATORIOS = ("year", "genre", "language", "bpm", "energy", "gain_db", "duration",
+                       "cover_url")
+
+
+def campos_que_faltan(t: dict) -> list[str]:
+    """Qué metadatos obligatorios le faltan a una ficha para poder publicarse.
+
+    LA REGLA ES UNA Y ESTÁ AQUÍ (no repetida en cada sitio)
+    ------------------------------------------------------
+    Antes esto estaba escrito dos veces —con distintas excepciones— y en los dos sitios faltaba lo
+    mismo: **lo que no se puede saber no puede bloquear para siempre**.
+
+      · **El año** no bloquea si la canción viene de un vídeo de YouTube (Deezer no tiene ficha de un
+        mashup casero ni de una sesión de DJ) ni si no hay **ninguna** fuente de la que sacarlo.
+      · **La carátula** no bloquea si no hay ni vídeo ni ficha de tienda: un fichero recuperado del
+        disco no tiene de dónde sacarla, y con la regla vieja esas canciones se quedaban
+        'incompleta' **para siempre** — en el disco, medidas, y sin llegar nunca a la aplicación.
+        Medido el 21/09/2026: 167 canciones recuperadas en esa situación exacta.
+      · Todo lo demás (género, idioma, duración, energía, ganancia y BPM) sí se exige: son cosas que
+        el análisis del propio audio puede sacar, así que faltar significa «aún no le ha tocado».
+    """
+    sin_fuente = not t.get("youtube_id") and not t.get("deezer_id")
+    exentos = set()
+    if sin_fuente or t.get("youtube_id"):
+        exentos.add("year")
+    if sin_fuente:
+        exentos.add("cover_url")
+    return [k for k in CAMPOS_OBLIGATORIOS if k not in exentos and not t.get(k)]
+
+
 def _rel_music(path: str) -> str:
     """Ruta relativa a BASE_MUSIC (fallback: la misma si ya no cuelga de él)."""
     p = Path(path)
@@ -1234,20 +1265,14 @@ def republicar_completas(limit: int = 2000) -> int:
         if n:
             db.log_event(f"✅ {n} incompletas republicadas (modo no estricto)", "info")
         return n
-    obligatorios = ("year", "genre", "language", "bpm", "energy", "gain_db", "duration", "cover_url")
+    obligatorios = CAMPOS_OBLIGATORIOS
     n = 0
     for r in rows:
         t = dict(r)
-        # EL AÑO NO PUEDE BLOQUEAR A LO QUE SÓLO EXISTE EN YOUTUBE. Deezer no tiene ficha de un
-        # mashup casero ni de una sesión de DJ, así que no hay año que poner. Aquí se exigía igual
-        # que en la puerta de entrada, y con eso las canciones bajadas de YouTube se quedaban
-        # 'incompleta' PARA SIEMPRE: bajaban, se analizaban, se les ponía hasta la carátula… y no
-        # llegaban nunca a la aplicación. Se veía en el registro del recolector como «aviso: 18
-        # descargadas aún sin completar» y ahí se quedaban, incluida una sesión de 36 minutos que el
-        # usuario había pedido a mano. Ahora, si la canción viene de un vídeo, se publica sin año.
-        exigidos = [k for k in obligatorios
-                    if not (k == "year" and t.get("youtube_id"))]
-        if all(t.get(k) for k in exigidos):
+        # El año y la carátula no bloquean cuando no hay de dónde sacarlos; el resto sí se exige. La
+        # regla vive en `campos_que_faltan` y es la MISMA que usa la puerta de entrada, para que no
+        # puedan discrepar (antes estaban escritas por separado y una excepción se quedó sin poner).
+        if not campos_que_faltan(t):
             db.update_track(t["id"], status=M.STATUS_DOWNLOADED)
             n += 1
     if n:

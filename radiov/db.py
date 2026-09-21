@@ -682,11 +682,27 @@ def get_track_by_id(track_id: int) -> Optional[dict]:
 
 
 def get_tracks_needing_bpm(limit: int = 200) -> list[dict]:
+    """Pistas con fichero a las que les falta el BPM (y con él la energía, el género y el idioma).
+
+    AQUÍ HABÍA UN BLOQUEO MUTUO (encontrado el 21/09/2026)
+    -----------------------------------------------------
+    Esta consulta pedía `status = 'descargada'`, pero una pista **no llega a 'descargada' hasta que
+    tiene BPM**: el análisis de BPM sólo miraba las ya publicadas y la publicación exigía el BPM, así
+    que una pista 'incompleta' sin BPM no se analizaba nunca y, por tanto, no se publicaba nunca. Se
+    veía en el recolector como «aviso: 179 descargadas aún sin completar» vuelta tras vuelta, con las
+    canciones en el disco y sin llegar a la aplicación: 167 de ellas eran las recuperadas del disco.
+
+    Ahora se analiza todo lo que tenga fichero y no esté fuera de circulación (cuarentena o retirada):
+    el estado no tiene nada que ver con que se pueda medir el audio.
+    """
     conn = get_conn()
     try:
+        # 'retirada' no es una constante de `models` (la escribe el panel al retirar una canción), así
+        # que va como texto: lo que importa es no gastar CPU analizando lo que está fuera de juego.
         rows = conn.execute(
-            "SELECT * FROM tracks WHERE status=? AND bpm IS NULL ORDER BY id LIMIT ?",
-            (M.STATUS_DOWNLOADED, limit)).fetchall()
+            "SELECT * FROM tracks WHERE bpm IS NULL AND file_path IS NOT NULL AND file_path != '' "
+            "AND (status IS NULL OR status NOT IN (?, ?)) ORDER BY id LIMIT ?",
+            (M.STATUS_QUARANTINE, "retirada", limit)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

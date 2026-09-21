@@ -94,18 +94,13 @@ def _persist_yt(yt: dict, *, genre: str, language: str, source: str, meta: Optio
     else:
         # C4 · metadatos completos: si falta algo obligatorio, no se publica aún (lo completa el
         # análisis → revisor antes de 'descargada').
+        #
+        # La regla de qué es obligatorio de verdad vive en `radiov.catalog.campos_que_faltan`, y es la
+        # MISMA que usa el republicador: estaba escrita dos veces con excepciones distintas y una de
+        # ellas se quedó sin poner (las canciones recuperadas del disco, sin año ni carátula posibles,
+        # se quedaban 'incompleta' para siempre sin llegar nunca a la aplicación).
         if load_settings().get("metadata_strict", True):
-            faltan = [k for k in ("year", "genre", "language", "bpm", "energy", "gain_db",
-                                  "duration", "cover_url") if not rec.get(k)]
-            # EL AÑO NO PUEDE BLOQUEAR PARA SIEMPRE LO QUE SÓLO EXISTE EN YOUTUBE. Deezer no tiene
-            # ficha de un mashup casero ni de una sesión de DJ, así que no hay año que poner: con la
-            # regla estricta, esas canciones se quedaban en «incompleta» de por vida y no llegaban
-            # NUNCA a la aplicación (ni la sesión de 36 minutos que el usuario pidió a mano). Lo que
-            # hay se rellena —el año de subida del vídeo, ver `youtube._download_by_id`—, y si aun
-            # así no se sabe, se publica sin año: mejor una canción que suena sin fecha que una
-            # fecha perfecta que no suena.
-            if rec.get("youtube_id"):
-                faltan = [k for k in faltan if k != "year"]
+            faltan = C.campos_que_faltan(rec)
             if faltan:
                 rec["status"] = "incompleta"
                 db.log_event(f"⏳ Incompleta ({','.join(faltan)}): {rec['artist']} - {rec['title']}", "info")

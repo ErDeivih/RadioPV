@@ -1,6 +1,16 @@
 """¿Por que 279 pistas se quedan 'incompleta'? ¿Que campo falta exactamente y desde cuando?"""
 import os
 import sqlite3
+import sys
+
+# La consola de Windows (cp1252) revienta con algunos caracteres: un evento con emoji mataba el
+# informe justo al imprimirlo (pasó con «⏳ Incompleta …»). Se imprime en UTF-8 y, si algo no se puede
+# representar, se sustituye.
+for _flujo in (sys.stdout, sys.stderr):
+    try:
+        _flujo.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        pass
 
 DB = os.environ.get("RADIOPV_DATA_DIR", "/app/data") + "/radiov.db"
 con = sqlite3.connect(DB)

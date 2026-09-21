@@ -11,6 +11,9 @@ import type { Category } from '../../interfaces/categories';
 import type { Playlist } from '../../interfaces/playlists';
 import type { PlaylistOut, TrackOut } from '../../api/types';
 
+// Etiquetas legibles para la cabecera de la página (ver `utils/etiquetas.ts`)
+import { labelFacet } from '../../utils/etiquetas';
+
 const PLACEHOLDER = '/images/playlist.png';
 
 /** id = `{tipo}:{valor}` (p. ej. `genre:Reggaeton`, `era:2020s`). Devuelve el param y el valor. */
@@ -67,7 +70,9 @@ export const fetchGenre = createAsyncThunk<[Category, Track[], number, Playlist[
     const r = await axios.get<TrackOut[]>('/tracks', { params: { [param]: value, limit: 50 } });
     const total = Number(r.headers['x-total-count'] ?? r.data.length) || r.data.length;
     const category: Category = {
-      id, name: value, href: '',
+      // La cabecera enseña `name`: con el valor crudo ponía «techhouse» o «es». El `id` sigue
+      // llevando el valor de verdad, que es el que filtra.
+      id, name: labelFacet(param, value), href: '',
       icons: [{ url: PLACEHOLDER, width: 300, height: 300 }],
       count: total,
     };

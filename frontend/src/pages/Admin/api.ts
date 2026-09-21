@@ -286,68 +286,17 @@ export const adminApi = {
       .then((r) => r.data),
 };
 
-/** Etiquetas legibles para los idiomas que usa el recolector. */
-export const LANGUAGE_LABELS: Record<string, string> = {
-  es: 'Español',
-  en: 'Inglés',
-  it: 'Italiano',
-  fr: 'Francés',
-  pt: 'Portugués',
-  other: 'Otro / sin detectar',
-};
-
-/** Etiquetas legibles para los géneros. */
-export const GENRE_LABELS: Record<string, string> = {
-  reggaeton: 'Reggaetón',
-  pop: 'Pop',
-  rock: 'Rock',
-  bachata: 'Bachata',
-  salsa: 'Salsa',
-  merengue: 'Merengue',
-  latin: 'Latino / Urbano',
-  dance: 'Dance / Electrónica',
-  rap: 'Rap / Hip-Hop',
-  ballad: 'Balada',
-  cumbia: 'Cumbia',
-  corridos: 'Corridos / Mexicano',
-  flamenco: 'Flamenco',
-  reggae: 'Reggae',
-  disco: 'Disco / Funk',
-  classical: 'Clásica',
-  house: 'House',
-  techhouse: 'Tech house / Guaracha',
-  electro: 'Electrónica',
-  instrumental: 'Instrumental',
-  soundtrack: 'Banda sonora',
-  jazz: 'Jazz',
-  blues: 'Blues',
-  metal: 'Metal',
-  indie: 'Indie',
-  folk: 'Folk',
-  techno: 'Techno',
-  lofibeat: 'Lo-Fi',
-  gospel: 'Gospel',
-  banda: 'Banda',
-  soul: 'Soul / R&B',
-  // En el catálogo hay 156 pistas con el género `r&b` y no tenía etiqueta: en el panel salía el
-  // valor en crudo («r&b»), que es lo que el usuario ve como un texto sin traducir. Se comprobó
-  // contra los 23 géneros reales que devuelve /facets: era el único sin etiqueta.
-  'r&b': 'R&B',
-  other: 'Variado',
-};
-
-export const STATUS_LABELS: Record<string, string> = {
-  pendiente: 'Pendiente',
-  descargando: 'Descargando',
-  descargada: 'Descargada',
-  fallida: 'Fallida',
-  en_cola: 'En cola',
-  cuarentena: 'Cuarentena',
-};
-
-export const labelLang = (v?: string | null) => (v ? LANGUAGE_LABELS[v] ?? v : '—');
-export const labelGenre = (v?: string | null) => (v ? GENRE_LABELS[v] ?? v : '—');
-export const labelStatus = (v?: string | null) => (v ? STATUS_LABELS[v] ?? v : '—');
+// Las etiquetas legibles viven en `src/utils/etiquetas.ts` porque las usa también la aplicación
+// (explorar y la cabecera de un género enseñaban «es», «en» o «techhouse» en crudo). Se reexportan
+// desde aquí para no tener que tocar todo el panel.
+export {
+  GENRE_LABELS,
+  LANGUAGE_LABELS,
+  STATUS_LABELS,
+  labelGenre,
+  labelLang,
+  labelStatus,
+} from '../../utils/etiquetas';
 
 export const mb = (bytes?: number | null) =>
   bytes ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : '—';

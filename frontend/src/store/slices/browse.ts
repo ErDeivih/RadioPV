@@ -6,11 +6,15 @@ import axios from '../../axios';
 // Interfaces
 import type { Category } from '../../interfaces/categories';
 
+// Etiquetas legibles: la pantalla de explorar enseñaba los valores en crudo («es», «techhouse»)
+import { labelFacet } from '../../utils/etiquetas';
+
 const PLACEHOLDER = '/images/playlist.png';
 
+/** `value` viaja en la URL (tiene que ser el valor crudo); `name` es lo que se lee en pantalla. */
 const facetToCategory = (prefix: string, value: string, count: number): Category => ({
   id: `${prefix}:${value}`,
-  name: value,
+  name: labelFacet(prefix, value),
   href: '',
   icons: [{ url: PLACEHOLDER, width: 300, height: 300 }],
   count,
