@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Divider } from 'antd';
 
 import axios from '../../axios';
-import { toTrack } from '../../api/adapt';
+import { toTrack, urlDeApi } from '../../api/adapt';
 import type { TrackOut } from '../../api/types';
 import { Portada } from '../../components/Lists/GridCards';
 import { PlayCircle } from '../../components/Lists/PlayCircle';
@@ -91,12 +91,19 @@ const MixPage: FC<{ container: RefObject<HTMLDivElement | null> }> = (props) => 
   // Para que el botón grande se ponga en «pausa» sólo si lo que suena es ESTE mix.
   const esElActual = useAppSelector((state) => state.spotify.state?.context?.uri === uriDelMix);
 
+  // Las rutas de la API hay que hacerlas absolutas (ver `urlDeApi`): en crudo, nginx devuelve el
+  // HTML de la aplicación y las carátulas salen rotas.
+  const caratulas = useMemo(
+    () => (mix?.collage ?? []).map((url) => urlDeApi(url)).filter((url): url is string => !!url),
+    [mix]
+  );
+
   return (
     <div className='Playlist-section' ref={props.container}>
       <div className='mix-cabecera'>
         <div className='mix-cabecera__portada'>
-          {mix?.collage?.length ? (
-            <Portada images={mix.collage} title={titulo} />
+          {caratulas.length ? (
+            <Portada images={caratulas} title={titulo} />
           ) : (
             <div className='mix-card__fondo'>{titulo}</div>
           )}
@@ -119,7 +126,7 @@ const MixPage: FC<{ container: RefObject<HTMLDivElement | null> }> = (props) => 
           <PlayCircle
             size={30}
             big
-            image={mix?.collage?.[0]}
+            image={caratulas[0]}
             isCurrent={esElActual}
             context={{ context_uri: uriDelMix }}
           />

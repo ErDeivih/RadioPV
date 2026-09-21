@@ -223,6 +223,47 @@ def test_tracks_de_un_mix_en_su_orden(client):
     assert r.status_code == 200, r.text
     assert [t["id"] for t in r.json()] == list(reversed(ids)), r.text
     assert client.get("/mixes/no-existe/tracks", headers=h).status_code == 404
+    # Un tipo que no existe NO puede además crear mixes: eso fue lo que llenó la portada de
+    # tarjetas repetidas (una consulta de prueba con un tipo inventado añadió otra tanda entera).
+    assert db.query(models.Mix).filter_by(user_id=u.id).count() == 1
+    # limpieza
+    db.query(models.Play).filter_by(user_id=u.id).delete()
+    db.query(models.Reaction).filter_by(user_id=u.id).delete()
+    db.query(models.Mix).filter_by(user_id=u.id).delete()
+    db.query(models.User).filter_by(id=u.id).delete()
+    db.query(models.Track).filter(models.Track.source == SRC).delete()
+    db.commit(); db.close()
+
+
+def test_regenerar_los_mixes_no_deja_dos_tandas(client):
+    """Regenerar los mixes del mismo usuario deja UN mix por tipo, y `/mixes` tampoco repite.
+
+    La fila «Hecho para ti» llegó a pintar **diez** tarjetas en vez de cinco (cada mix dos veces)
+    porque cada regeneración añadía otra tanda a la base y la API las devolvía todas."""
+    from app.database import SessionLocal
+    from app.workers import _generar_mixes_usuario
+
+    db = SessionLocal()
+    r = client.post("/auth/register", json={"email": "mixdup@t.com", "password": "clave-larga-1"})
+    assert r.status_code == 200, r.text
+    tok = r.json()["access_token"]
+    for i in range(12):
+        db.add(models.Track(title=f"D{i}", artist=f"DA{i % 4}", genre=("pop", "rock", "flamenco", "latin")[i % 4],
+                            era="2020s", year=2000 + i, rank=1000 - i, status="descargada",
+                            source=SRC, file_path="E:/x.mp3", duration=200))
+    db.commit()
+    u = db.query(models.User).filter_by(email="mixdup@t.com").first()
+
+    _generar_mixes_usuario(db, u)
+    _generar_mixes_usuario(db, u)                 # segunda pasada: la que duplicaba
+
+    kinds = [m.kind for m in db.query(models.Mix).filter_by(user_id=u.id).all()]
+    assert len(kinds) == len(set(kinds)), f"hay mixes repetidos: {sorted(kinds)}"
+
+    h = {"Authorization": f"Bearer {tok}"}
+    ms = client.get("/mixes", headers=h).json()
+    assert len(ms) == len({m["kind"] for m in ms}), [m["kind"] for m in ms]
+
     # limpieza
     db.query(models.Play).filter_by(user_id=u.id).delete()
     db.query(models.Reaction).filter_by(user_id=u.id).delete()

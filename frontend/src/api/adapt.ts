@@ -10,6 +10,15 @@ const API = API_BASE;
 const img = (p?: string | null) => (p ? API + p : undefined);
 const PLACEHOLDER = '/images/playlist.png';   // ya existe en public/images
 
+/** Ruta relativa de la API (`/media/covers/x.jpg`) → URL que el navegador puede pedir.
+ *
+ *  Es OBLIGATORIO usarla con cualquier imagen que venga de la API. Quien sirve `/media/...` es el
+ *  contenedor de la API, que en producción está detrás de `/api`: sin el prefijo el navegador pide
+ *  `/media/...` a nginx, que no tiene esa ruta y devuelve el `index.html` de la aplicación (¡con
+ *  código 200!), así que la imagen sale **rota** y además parece que existe. Pasó con las carátulas
+ *  del mosaico de «Hecho para ti», que se pasaban tal cual llegaban. */
+export const urlDeApi = (p?: string | null) => img(p);
+
 const _album_images = (url?: string) => [{ url: url ?? PLACEHOLDER, width: 640, height: 640 }];
 
 const _artist_simple = (name: string): SimpleArtist => ({

@@ -121,6 +121,14 @@ def _generar_mixes_usuario(db, user, hoy=None) -> int:
 
     def guarda(kind, track_ids, expl):
         nonlocal n
+        # UN mix por tipo y usuario: se borra el anterior antes de guardar el nuevo.
+        #
+        # POR QUÉ
+        # -------
+        # Antes sólo se añadía, así que cada regeneración dejaba otra tanda de mixes del mismo
+        # tipo en la base. Como `/mixes` devolvía todas, la fila «Hecho para ti» de la portada
+        # pintó **diez tarjetas** en vez de cinco (cada mix repetido), y el usuario lo vio.
+        db.query(models.Mix).filter_by(user_id=user.id, kind=kind).delete()
         if track_ids:
             db.add(models.Mix(user_id=user.id, kind=kind, seed=f"{user.id}-{hoy}",
                               tracks_json=str(track_ids), explicacion=expl))

@@ -213,11 +213,13 @@
 //   text-decoration: underline;
 // }
 
-/* Las tarjetas de «Hecho para ti» (`.mix-card`) comparten con las de playlist el mosaico de la
- * portada y el botón de reproducir que aparece al pasar el ratón, así que las reglas son las
- * mismas. Lo propio de cada tarjeta (fondo, tipografía, rejilla) está en `Mix.scss`. */
+/* Las tarjetas de «Hecho para ti» (`.mix-card`) y la portada de la página de un mix
+ * (`.mix-cabecera__portada`) comparten con las tarjetas de playlist el mosaico 2×2 y el botón de
+ * reproducir que aparece al pasar el ratón, así que las reglas son las mismas. Lo propio de cada
+ * tarjeta (fondo, tipografía, rejilla) está en `Mix.scss`. */
 .playlist-card,
-.mix-card {
+.mix-card,
+.mix-cabecera__portada {
   /* Mosaico 2×2 de las carátulas de las primeras canciones (listas generadas por la aplicación).
      Spotify lo usa en sus listas automáticas y es lo que hace que la portada se vea «llena» en vez
      de repetir el mismo icono gris en todas. Sin huecos y con las esquinas redondeadas del padre. */

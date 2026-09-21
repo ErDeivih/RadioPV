@@ -223,14 +223,21 @@ def _mix_out(db: Session, mix: models.Mix) -> schemas.MixOut:
 def my_mixes(user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     """U2 · los mixes del usuario (kind, explicacion, tracks_json) para la fila "Hecho para ti".
     Si el usuario aún no tiene mezclas (recién registrado), se generan en frío al momento."""
-    mix = (db.query(models.Mix).filter_by(user_id=user.id)
-           .order_by(models.Mix.created_at.desc()).all())
-    if not mix:
+    filas = (db.query(models.Mix).filter_by(user_id=user.id)
+             .order_by(models.Mix.created_at.desc()).all())
+    if not filas:
         from ..workers import _generar_mixes_usuario
         _generar_mixes_usuario(db, user)
-        mix = (db.query(models.Mix).filter_by(user_id=user.id)
-               .order_by(models.Mix.created_at.desc()).all())
-    return [_mix_out(db, m) for m in mix]
+        filas = (db.query(models.Mix).filter_by(user_id=user.id)
+                 .order_by(models.Mix.created_at.desc()).all())
+    # UN mix por tipo: el más nuevo. En la base puede haber más de uno del mismo tipo (se
+    # regeneran cada día), y la portada pintaba **diez tarjetas** en vez de cinco —cada mix dos
+    # veces— porque se devolvían todas las tandas. El que manda es el más reciente, que es
+    # justamente el que sirve `/mixes/{kind}/tracks`.
+    por_tipo: dict[str, models.Mix] = {}
+    for m in filas:
+        por_tipo.setdefault(m.kind, m)
+    return [_mix_out(db, m) for m in por_tipo.values()]
 
 
 @router.get("/mixes/{kind}/tracks", response_model=list[schemas.TrackOut])
@@ -247,8 +254,13 @@ def tracks_of_mix(kind: str, user: models.User = Depends(get_current_user),
     mix = (db.query(models.Mix).filter_by(user_id=user.id, kind=kind)
            .order_by(models.Mix.created_at.desc()).first())
     if not mix:
-        # Sin mix de ese tipo se generan todos (es lo mismo que hace `/mixes`) y se reintenta
-        # una vez: un usuario recién registrado no tiene ninguno todavía.
+        # Sólo se generan si el usuario NO TIENE NINGÚN mix (recién registrado). Antes se generaban
+        # cada vez que se pedía un tipo que no existía —incluido uno inventado— y eso AÑADÍA otra
+        # tanda de mixes a la base: la portada acabó pintando cinco tarjetas repetidas, diez en
+        # total, por una consulta de prueba con un tipo que no existe.
+        tiene = db.query(models.Mix).filter_by(user_id=user.id).count()
+        if tiene:
+            raise HTTPException(404, "Ese mix no existe")
         from ..workers import _generar_mixes_usuario
         _generar_mixes_usuario(db, user)
         mix = (db.query(models.Mix).filter_by(user_id=user.id, kind=kind)

@@ -1,7 +1,8 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+import { urlDeApi } from '../../../../api/adapt';
 import { Portada } from '../../../../components/Lists/GridCards';
 import { PlayCircle } from '../../../../components/Lists/PlayCircle';
 import { useAppSelector } from '../../../../store/store';
@@ -28,6 +29,14 @@ const MixCard = memo(({ mix }: { mix: MixResumen }) => {
 
   const label = LABEL[mix.kind] ?? mix.kind;
 
+  // Las carátulas llegan como rutas de la API (`/media/covers/x.jpg`) y hay que hacerlas
+  // absolutas: sin el prefijo de la API el navegador las pide a nginx, que devuelve el HTML de la
+  // aplicación con código 200 y la imagen sale rota.
+  const caratulas = useMemo(
+    () => mix.collage.map((url) => urlDeApi(url)).filter((url): url is string => !!url),
+    [mix.collage]
+  );
+
   const abrir = useCallback(() => navigate(`/mix/${mix.kind}`), [navigate, mix.kind]);
 
   return (
@@ -42,8 +51,8 @@ const MixCard = memo(({ mix }: { mix: MixResumen }) => {
       }}
     >
       <div className='mix-card__portada'>
-        {mix.collage.length ? (
-          <Portada images={mix.collage} title={label} />
+        {caratulas.length ? (
+          <Portada images={caratulas} title={label} />
         ) : (
           // Sin ninguna carátula local no se pinta un `img` roto: se pinta un fondo con el nombre
           // del mix, que al menos se ve entero y no parece que falte un fichero.
@@ -55,7 +64,7 @@ const MixCard = memo(({ mix }: { mix: MixResumen }) => {
          *  propagación del clic, así que pulsar aquí suena el mix sin salir de la portada. */}
         <div className={`circle-play-div ${isCurrent && !paused ? 'active' : ''}`}>
           <PlayCircle
-            image={mix.collage[0]}
+            image={caratulas[0]}
             isCurrent={isCurrent}
             context={{ context_uri: mix.uri }}
           />

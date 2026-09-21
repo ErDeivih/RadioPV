@@ -23,6 +23,10 @@ const PANTALLAS = [
   ['genero', '/genre/genre:techhouse'],
   ['genero-pop', '/genre/genre:pop'],
   ['artista', '/artist/Bad Bunny'],
+  // «Hecho para ti»: la tarjeta del mix y la pantalla del mix (antes llevaban a /search y no había
+  // ninguna pantalla donde ver el mix).
+  ['mix-diario', '/mix/daily_1'],
+  ['mix-radar', '/mix/radar'],
   ['mis-listas', '/users/1/playlists'],
   ['me-gusta', '/collection/tracks'],
   ['pedir', '/pedir'],
