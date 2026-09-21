@@ -637,6 +637,31 @@ def _tamano(p: Path) -> int:
         return 0
 
 
+# Cuánta diferencia de tamaño se tolera antes de dar por hecho que el fichero del servidor NO es el
+# mismo. Las etiquetas del MP3 se reescriben después de apuntar `file_size`, así que unos KB de
+# diferencia son normales; una subida cortada se nota muchísimo más que esto.
+TOLERANCIA_TAMANO = 0.02          # 2 %
+TOLERANCIA_TAMANO_MINIMA = 128 * 1024   # y al menos 128 KB, para ficheros pequeños
+
+
+def _tamano_distinto(en_servidor, local) -> bool:
+    """¿El fichero del servidor es distinto (de verdad) del que tenemos aquí?"""
+    try:
+        a = int(en_servidor) if en_servidor is not None else None
+    except (TypeError, ValueError):
+        a = None
+    try:
+        b = int(local) if local is not None else None
+    except (TypeError, ValueError):
+        b = None
+    if a is None or not b:
+        return False              # sin los dos datos no se puede juzgar: no se reenvía por sospecha
+    if a == 0:
+        return True               # un fichero de 0 bytes en el servidor no es la música: se reenvía
+    margen = max(TOLERANCIA_TAMANO_MINIMA, int(b * TOLERANCIA_TAMANO))
+    return abs(a - b) > margen
+
+
 def _ordenar_por_tamano(ficheros: list[tuple[Path, str]]) -> list[tuple[Path, str]]:
     """De lo pequeño a lo grande. El porqué está en `publicar`: con 1 MB/s de enlace, lo que hace que
     la aplicación suene antes son las canciones cortas (no se pierde ninguna, sólo cambia el orden)."""
@@ -855,6 +880,13 @@ def publicar(cfg: dict) -> int:
     pistas = []
     for t in pendientes:
         rec = {k: t.get(k) for k in CAMPOS if t.get(k) is not None}
+        # El tamaño REAL del fichero que se va a mandar, no el que se apuntó al catalogarlo: si se
+        # queda viejo, el servidor cree que su copia no es la misma y el PC la vuelve a subir.
+        fp_real = _ruta_relativa_musica(rec.get("file_path") or "", musica_local)
+        if fp_real:
+            tam = _tamano(musica_local / fp_real)
+            if tam:
+                rec["file_size"] = tam
         for k in RUTAS:
             if rec.get(k):
                 # `file_path` SIEMPRE relativo a la raíz de música: en el servidor la música está en
@@ -883,7 +915,15 @@ def publicar(cfg: dict) -> int:
     }
 
     def falta_el_audio(t: dict) -> bool:
-        """¿Hay que subir el audio de esta canción, aunque su ficha ya esté en el servidor?"""
+        """¿Hay que subir el audio de esta canción, aunque su ficha ya esté en el servidor?
+
+        OJO CON EL TAMAÑO: se compara con TOLERANCIA (ver `_tamano_distinto`). Comparando byte a byte
+        se reenviaban una y otra vez canciones que YA estaban: el fichero del servidor pesa unos KB más
+        que el `file_size` de la ficha (las etiquetas se escriben después de apuntar el tamaño), así que
+        la comparación exacta daba «no cuadra» siempre. Con el enlace a 10 Mbps eso es un bucle
+        infinito: el mismo 1,8 GB cada vuelta y nada nuevo avanzando. Se vio el 21/09/2026 comparando
+        los tamaños de las canciones ya subidas: cinco de nueve «no cuadraban» por 11-150 KB.
+        """
         clave = (t.get("youtube_id") or "", (t.get("artist") or "").lower(),
                  (t.get("title") or "").lower())
         detalle = ya_en_servidor.get(clave)
@@ -891,9 +931,7 @@ def publicar(cfg: dict) -> int:
             return False
         if not detalle.get("tiene_fichero"):
             return True
-        tam = detalle.get("tamano")
-        local = t.get("file_size")
-        return bool(tam and local and int(tam) != int(local))
+        return _tamano_distinto(detalle.get("tamano"), t.get("file_size"))
 
     a_enviar = [t for t in pendientes
                 if (t.get("youtube_id") or "", (t.get("artist") or "").lower(),

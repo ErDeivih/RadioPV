@@ -143,6 +143,27 @@ def test_la_cola_se_ordena_de_lo_pequeno_a_lo_grande(tmp_path):
     assert sorted(orden) == sorted(n for _p, n in (grande, pequena, mediana))
 
 
+def test_el_tamano_se_compara_con_tolerancia(tmp_path):
+    """Si no, se reenvía lo mismo una y otra vez (pasó: el fichero del servidor pesa unos KB más).
+
+    El `file_size` de la ficha se apunta antes de reescribir las etiquetas del MP3, así que el fichero
+    acaba pesando unos KB más. Comparando byte a byte, cinco de nueve canciones ya subidas salían como
+    «no cuadra» y el PC las volvía a mandar en cada vuelta: con el enlace a 10 Mbps, el mismo 1,8 GB en
+    bucle y nada nuevo avanzando.
+    """
+    rcp = _recolector()
+    # Diferencias normales (etiquetas): NO hay que reenviar.
+    assert not rcp._tamano_distinto(10_086_954, 10_075_772)
+    assert not rcp._tamano_distinto(130_711_699, 130_579_964)
+    assert not rcp._tamano_distinto(1_000_000, 1_000_050)
+    # Un fichero cortado, vacío o distinto: SÍ hay que reenviarlo.
+    assert rcp._tamano_distinto(1_000_000, 100_000)
+    assert rcp._tamano_distinto(0, 5_000_000), "un fichero de 0 bytes en el servidor está roto"
+    # Y sin los dos datos no se juzga (no se reenvía por sospecha).
+    assert not rcp._tamano_distinto(1_000_000, None)
+    assert not rcp._tamano_distinto(None, 1_000_000)
+
+
 def test_el_tope_de_tiempo_es_razonable():
     """20 minutos para 120 MB: si tarda más, está colgado (14 minutos fue el atasco real)."""
     rcp = _recolector()
