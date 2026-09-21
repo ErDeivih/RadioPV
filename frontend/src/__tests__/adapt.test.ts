@@ -1,6 +1,25 @@
-﻿import { describe, it, expect } from 'vitest';
-import { toTrack, toArtist, toPage, toPlaylist, toUser } from '../api/adapt';
+import { describe, it, expect } from 'vitest';
+import { toTrack, toArtist, toPage, toPlaylist, toUser, toAlbum, urlDeApi } from '../api/adapt';
 import { API_BASE } from '../apiBase';
+
+describe('adapt Â· URLs de imagen (la regla que se olvidÃ³ dos veces)', () => {
+  it('a una ruta relativa se le pone delante la base de la API', () => {
+    expect(urlDeApi('/media/covers/1.jpg')).toBe(API_BASE + '/media/covers/1.jpg');
+  });
+  it('una URL ABSOLUTA se deja tal cual (Deezer sirve sus carÃ¡tulas desde su CDN)', () => {
+    const cdn = 'https://cdn-images.dzcdn.net/images/cover/abc/1000x1000-000000-80-0-0.jpg';
+    expect(urlDeApi(cdn)).toBe(cdn);
+  });
+  it('sin imagen devuelve undefined (para que cada pantalla use su relleno)', () => {
+    expect(urlDeApi(null)).toBeUndefined();
+    expect(urlDeApi('')).toBeUndefined();
+  });
+  it('la discografÃ­a de un artista no acaba con la URL inventada /apihttps://â€¦', () => {
+    const cdn = 'https://cdn-images.dzcdn.net/images/cover/abc/1000x1000-000000-80-0-0.jpg';
+    const album = toAlbum({ title: 'Un disco', artist: 'Alguien', year: 2024, cover_url: cdn });
+    expect(album.images[0].url).toBe(cdn);
+  });
+});
 
 const pista = {
   id: 42, title: 'CanciÃ³n', artist: 'Artista', album: 'Ãlbum', year: 2020,

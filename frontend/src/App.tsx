@@ -9,7 +9,7 @@ import { getFromLocalStorageWithExpiry } from './utils/localstorage';
 import { getRefreshToken } from './utils/spotify/login';
 
 // Components
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, theme } from 'antd';
 import { AppLayout } from './components/Layout';
 import { Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 
@@ -268,7 +268,22 @@ const RootComponent = () => {
 
 function App() {
   return (
-    <ConfigProvider theme={{ token: { fontFamily: 'SpotifyMixUI' } }}>
+    /* TEMA OSCURO GLOBAL + VERDE DE SPOTIFY.
+     *
+     * Antes aquí sólo se cambiaba la tipografía, así que los componentes de Ant Design salían con su
+     * tema CLARO: en «Pedir una canción» había una tarjeta BLANCA con un texto gris claro sobre una
+     * aplicación negra, y en el panel pasaba lo mismo. La página de Ajustes ya se envolvía en su
+     * propio `ConfigProvider` oscuro a mano (y por eso era la única que se veía bien): eso era el
+     * síntoma, no la solución. Se pone el algoritmo oscuro una vez, para toda la aplicación.
+     *
+     * El verde (#1db954) es el de Spotify, que es el que ya usan a mano los botones de reproducir:
+     * sin esto, los botones y los campos de Ant Design salían AZULES y desentonaban. */
+    <ConfigProvider
+      theme={{
+        algorithm: theme.darkAlgorithm,
+        token: { fontFamily: 'SpotifyMixUI', colorPrimary: '#1db954' },
+      }}
+    >
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
           <SpotifyContainer>

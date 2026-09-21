@@ -7,17 +7,27 @@ import { API_BASE } from '../apiBase';
 
 /** Traduce nuestro TrackOut/ArtistOut a la forma "estilo Spotify" que la UI ya espera. */
 const API = API_BASE;
-const img = (p?: string | null) => (p ? API + p : undefined);
 const PLACEHOLDER = '/images/playlist.png';   // ya existe en public/images
 
-/** Ruta relativa de la API (`/media/covers/x.jpg`) → URL que el navegador puede pedir.
+/** Ruta de imagen que manda la API → URL que el navegador puede pedir. REGLA ÚNICA.
  *
- *  Es OBLIGATORIO usarla con cualquier imagen que venga de la API. Quien sirve `/media/...` es el
- *  contenedor de la API, que en producción está detrás de `/api`: sin el prefijo el navegador pide
- *  `/media/...` a nginx, que no tiene esa ruta y devuelve el `index.html` de la aplicación (¡con
- *  código 200!), así que la imagen sale **rota** y además parece que existe. Pasó con las carátulas
- *  del mosaico de «Hecho para ti», que se pasaban tal cual llegaban. */
-export const urlDeApi = (p?: string | null) => img(p);
+ *  - Relativa (`/media/covers/x.jpg`): se le pone delante la base de la API. Es OBLIGATORIO: quien
+ *    sirve `/media/...` es el contenedor de la API, que en producción está detrás de `/api`. Sin el
+ *    prefijo, el navegador pide `/media/...` a nginx, que no tiene esa ruta y devuelve el
+ *    `index.html` de la aplicación **con código 200**: la imagen sale rota y encima parece que
+ *    existe.
+ *  - Absoluta (`https://cdn-images.dzcdn.net/…`): se deja TAL CUAL. Deezer sirve las carátulas de
+ *    sus álbumes desde su CDN, y antes se les pegaba el prefijo igual, así que la URL quedaba
+ *    `/apihttps://cdn-images…` y **todas las carátulas de la discografía de un artista salían
+ *    rotas**.
+ */
+export const urlDeApi = (p?: string | null) => {
+  if (!p) return undefined;
+  return /^https?:\/\//i.test(p) ? p : API + p;
+};
+
+// Nombre corto para el resto de este fichero: es la misma función, con la regla de arriba.
+const img = urlDeApi;
 
 const _album_images = (url?: string) => [{ url: url ?? PLACEHOLDER, width: 640, height: 640 }];
 
