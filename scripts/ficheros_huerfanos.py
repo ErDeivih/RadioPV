@@ -59,36 +59,58 @@ def _rutas_en_las_bases() -> set[str]:
     return conocidas
 
 
-def _claves_de_canciones() -> set[str]:
-    """Los TÍTULOS normalizados de todo el catálogo, para no borrar música que nadie más tiene.
+def _catalogo_por_titulo() -> dict[str, list[tuple[float | None, str]]]:
+    """Título normalizado → [(duración, ruta), …] de todas las fichas, para comparar de verdad.
 
-    Se compara por TÍTULO y no por «artista - título» del nombre del fichero, porque los ficheros
-    huérfanos llevan a menudo un artista mal puesto o inventado («Fonsi - Échame la culpa (3).mp3»
-    cuando en el catálogo está como «Luis Fonsi - Échame la culpa.mp3», o «Álex y Christina - Chu
-    chu.mp3» para un tema de Alejandro Fernández). Con la comparación estricta, once de los catorce
-    huérfanos salían como «música única» y no lo eran: son copias de algo que la aplicación ya toca.
-
-    Si el título NO está en el catálogo, no se borra: puede ser música que sólo existe en ese fichero.
+    La duración es lo que distingue «la misma grabación» de «otra canción con el mismo nombre» (hay
+    títulos repetidos de artistas distintos, y hasta un «PARADIXE» de Coldplay y otro de Stevie
+    Appleton). Sin comparar la duración, borrar por título es apostar.
     """
     from radiov.db import clave_cancion
 
-    titulos: set[str] = set()
+    catalogo: dict[str, list[tuple[float | None, str]]] = {}
     for base in BASES:
         ruta = f"{DIR}/{base}"
         if not os.path.exists(ruta):
             continue
         con = sqlite3.connect(ruta)
         try:
-            for (title,) in con.execute("SELECT title FROM tracks WHERE title IS NOT NULL"):
-                # `clave_cancion` normaliza (sin tildes, sin paréntesis de ruido…): se usa sólo la
-                # parte del título.
-                titulos.add(clave_cancion("", title).split("|", 1)[-1])
+            for title, dur, fp in con.execute(
+                    "SELECT title, duration, file_path FROM tracks WHERE title IS NOT NULL"):
+                clave = clave_cancion("", title).split("|", 1)[-1]
+                catalogo.setdefault(clave, []).append((dur, fp or ""))
         finally:
             con.close()
-    return titulos
+    return catalogo
 
 
-def _posible_clave(p: Path) -> str:
+def _duracion(p: Path) -> float | None:
+    try:
+        from mutagen import File
+
+        audio = File(str(p))
+        if audio is not None and audio.info is not None:
+            return float(audio.info.length)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _es_copia_segura(p: Path, catalogo: dict) -> bool:
+    """¿La misma canción (título Y duración) ya está en el catálogo? Sólo entonces se borra."""
+    clave = _clave_del_nombre(p)
+    candidatos = catalogo.get(clave) or []
+    if not candidatos:
+        return False
+    mia = _duracion(p)
+    for dur, fp in candidatos:
+        if mia and dur and abs(float(dur) - mia) <= 2.0:
+            return True
+    # Sin duración no se puede comparar: se prefiere no borrar.
+    return False
+
+
+def _clave_del_nombre(p: Path) -> str:
     """Título que se deduce del nombre del fichero («Artista - Tema (3).mp3» → «tema»)."""
     from radiov.db import clave_cancion
 
@@ -132,10 +154,10 @@ def main() -> int:
         print("Nada que limpiar: cada fichero del disco tiene su ficha.")
         return 0
 
-    # Sólo se borra lo que tiene copia segura en el catálogo (misma canción, otra ficha).
-    claves = _claves_de_canciones()
-    con_copia = [(p, mb) for p, mb in huerfanos if _posible_clave(p) in claves]
-    sin_copia = [(p, mb) for p, mb in huerfanos if _posible_clave(p) not in claves]
+    # Sólo se borra lo que tiene copia segura: MISMA canción (título y duración) ya en el catálogo.
+    catalogo = _catalogo_por_titulo()
+    con_copia = [(p, mb) for p, mb in huerfanos if _es_copia_segura(p, catalogo)]
+    sin_copia = [(p, mb) for p, mb in huerfanos if not _es_copia_segura(p, catalogo)]
     print(f"   de ellos, {len(con_copia)} son copias de una canción que YA está en el catálogo "
           f"({sum(mb for _p, mb in con_copia):.1f} MB)")
     print(f"   y {len(sin_copia)} NO se corresponden con ninguna canción del catálogo "
