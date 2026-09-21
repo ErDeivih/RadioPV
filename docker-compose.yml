@@ -17,6 +17,26 @@ name: radiopv
 x-comun: &comun
   build: .
   restart: unless-stopped
+  # SERVIDORES DNS A FUEGO, y no los del sistema.
+  #
+  # POR QUÉ
+  # -------
+  # El 20/09/2026 el `/etc/resolv.conf` del servidor quedó apuntando SÓLO a los dos resolutores de
+  # Tailscale (100.100.1.1 y 100.90.1.1), que no contestan: desde entonces el servidor no resuelve
+  # NINGÚN nombre. Eso dejó sin descargas al recolector (no encontraba youtube.com ni
+  # api.deezer.com) y sin despliegue automático al `git fetch` de github.com.
+  #
+  # Docker lee el resolv.conf del anfitrión al arrancar, así que los contenedores heredaban el
+  # problema. Con esto, los contenedores preguntan directamente a Cloudflare (1.1.1.1) y a Quad9
+  # (9.9.9.9) y dejan de depender de la configuración del anfitrión. **Esto no arregla el `git
+  # fetch` del anfitrión**, que necesita `sudo tailscale set --accept-dns=false` (ver
+  # docs/20-radiopv-despliegue.md), pero sí deja al recolector trabajando.
+  #
+  # Los nombres entre contenedores los sigue resolviendo el DNS interno de Docker (127.0.0.11):
+  # `dns:` sólo cambia a quién se le pregunta lo de fuera.
+  dns:
+    - 1.1.1.1
+    - 9.9.9.9
   environment: &entorno
     RADIOPV_ENV: prod
     SECRET_KEY: "${RADIOPV_SECRET_KEY:?Falta RADIOPV_SECRET_KEY en el fichero .env}"

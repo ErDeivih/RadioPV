@@ -222,10 +222,14 @@ DEEZER_GENRE_MAP = {
     "salsa": "salsa", "salsa y sone": "salsa", "bachata": "bachata",
     "merengue": "merengue", "cumbia": "cumbia", "cumbia sonidera": "cumbia",
     "corridos": "corridos", "corridos tumbados": "corridos", "ranchera": "ballad",
-    "dance": "dance", "edm": "dance", "dancehall": "dance", "electro dance": "dance",
+    "dance": "dance", "edm": "edm", "dancehall": "dance", "electro dance": "dance",
     "electronic": "electro", "dance/electronic": "electro", "electronic/dance": "electro",
-    "electro": "electro", "techno": "electro", "trance": "electro", "drum & bass": "electro",
-    "dubstep": "electro", "house": "house", "deep house": "house",
+    "electro": "electro", "techno": "electro",
+    # Estos cuatro van a su PROPIO género, no a `electro`: son escenas con nombre, artistas y
+    # seguidores propios, y dentro de «electro» no se podían ni filtrar ni escuchar seguidas.
+    # Deezer sí usa estas etiquetas en los álbumes.
+    "trance": "trance", "dubstep": "dubstep", "drum & bass": "dnb", "hardstyle": "hardstyle",
+    "house": "house", "deep house": "house",
     # «Tech house» va a su PROPIO género, no a `house`: es la música que el usuario pidió
     # («me gustan los tech house remix y este tipo de canciones hechas por gente, por ejemplo
     # Pomata»). Diluido en `house` no se podía ni filtrar en el panel ni hacerle una lista, que es

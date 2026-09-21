@@ -477,10 +477,17 @@ def rebuild_remixes(db) -> int:
                       models.Track.genre)
              .filter(models.Track.status == "descargada")
              .all())
-    remixes, sesiones, tech_house, club = [], [], [], []
+    remixes, sesiones, tech_house, club, bajos = [], [], [], [], []
     # Géneros que son «música de pista» (el terreno del perfil de electrónica que pidió el usuario):
-    # la electrónica de baile del catálogo, sin las canciones de otros estilos.
-    DE_PISTA = {"dance", "house", "electro", "techno", "techhouse"}
+    # la electrónica de baile del catálogo, sin las canciones de otros estilos. Desde el 20/09/2026
+    # entra también lo que pidió después —EDM de festival, hardstyle, trance, dubstep y drum and
+    # bass—, que hasta entonces caía en `electro`/`dance` y no tenía ni género propio.
+    DE_PISTA = {"dance", "house", "electro", "techno", "techhouse",
+                "edm", "hardstyle", "trance", "dubstep", "dnb", "carbass"}
+    # «Bass y car music»: la música de graves, que es la que se escucha en el coche. Va aparte de
+    # «Club y festival» porque se busca por otra cosa (el bajo, no el club) y porque así la lista
+    # tiene sentido propio.
+    DE_GRAVES = {"carbass", "dubstep", "dnb"}
     for tid, title, artist, duration, rank, language, genre in filas:
         # Portugués fuera de las listas: la política del catálogo es español (España y Latinoamérica)
         # e inglés, con italiano y francés de siempre. Estas listas son las que el usuario pone a
@@ -488,12 +495,18 @@ def rebuild_remixes(db) -> int:
         # (Las que ya están dentro y no se detecten aquí se limpian con el atajo «En portugués».)
         if language == "pt" or parece_portugues(title or "", artist or ""):
             continue
-        # El tech house se mira por género Y por título: así entra también lo que se catalogó antes
-        # de que existiera el género `techhouse` (el título lo dice igual de claro).
-        if (genre or "") == "techhouse" or guess_genre(title or "", artist or "") == "techhouse":
+        # El género se mira por la FICHA y por el TÍTULO. Por el título porque hay música ya
+        # catalogada antes de que existieran estos géneros (un «Car Bass Boosted» de 2023 está en la
+        # base como `other`), y las palabras de estos géneros no se confunden con nada: «bass
+        # boosted», «dubstep» o «drum and bass» no aparecen en una balada.
+        genero_titulo = guess_genre(title or "", artist or "")
+        # El tech house se mira igual (es lo que hacía antes): por género Y por título.
+        if (genre or "") == "techhouse" or genero_titulo == "techhouse":
             tech_house.append((rank or 0, tid))
         if (genre or "") in DE_PISTA:
             club.append((rank or 0, tid))
+        if (genre or "") in DE_GRAVES or genero_titulo in DE_GRAVES:
+            bajos.append((rank or 0, tid))
         tipo = clasificar(title or "", artist or "", duration)
         if tipo == "sesion":
             sesiones.append((rank or 0, tid))
@@ -504,6 +517,7 @@ def rebuild_remixes(db) -> int:
     sesiones.sort(reverse=True)
     tech_house.sort(reverse=True)
     club.sort(reverse=True)
+    bajos.sort(reverse=True)
     # SIN TOPE: la lista tiene que ser TODA la música de ese tipo, no una muestra. Antes cortaba en
     # 60 y 40, y con el catálogo creciendo eso significaba que las listas del tipo de música que el
     # usuario más escucha se quedaban cortas y no dejaban ver lo que había: pedía «la lista de este
@@ -513,6 +527,7 @@ def rebuild_remixes(db) -> int:
     todas_sesiones = [tid for _, tid in sesiones]
     todo_tech = [tid for _, tid in tech_house]
     todo_club = [tid for _, tid in club]
+    todos_bajos = [tid for _, tid in bajos]
     n = _swap_system_playlist(db, "Mashups y remixes", todas_remix)
     n += _swap_system_playlist(db, "Sesiones de DJ", todas_sesiones)
     n += _swap_system_playlist(db, "Tech house y guaracha", todo_tech)
@@ -520,9 +535,12 @@ def rebuild_remixes(db) -> int:
     # house). Nace del perfil de electrónica que pasó el usuario —dinámica de club y de festival,
     # con las sesiones y los clásicos de baile—, para que esa música tenga su sitio donde se ve.
     n += _swap_system_playlist(db, "Club y festival", todo_club)
-    log.info("[remixes] %s mashups/remixes · %s sesiones · %s tech house · %s club y festival "
-             "(listas completas)", len(todas_remix), len(todas_sesiones), len(todo_tech),
-             len(todo_club))
+    # «Bass y car music»: dubstep, drum and bass y «car bass» / «bass boosted», la música de graves
+    # que el usuario pidió con nombre propio («car bass, edm, etc»). Sin tope, por popularidad.
+    n += _swap_system_playlist(db, "Bass y car music", todos_bajos)
+    log.info("[remixes] %s mashups/remixes · %s sesiones · %s tech house · %s club y festival · "
+             "%s bass y car music (listas completas)", len(todas_remix), len(todas_sesiones),
+             len(todo_tech), len(todo_club), len(todos_bajos))
     return n
 
 
