@@ -14,6 +14,13 @@ export const PlaylistsProfileSection = memo(() => {
   return (
     <div>
       <GridItemList multipleRows items={playlists} title={t('Public playlists')} />
+
+      {/* Sin listas públicas la pantalla quedaba en blanco: sólo el título y nada más. Se dice. */}
+      {!playlists?.length ? (
+        <p className='empty-state'>
+          No hay listas públicas. Las listas que crees y marques como públicas aparecerán aquí.
+        </p>
+      ) : null}
     </div>
   );
 });

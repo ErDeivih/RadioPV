@@ -25,6 +25,13 @@ export const SongsProfileSection: FC<SongsProfileSectionProps> = memo((props) =>
         </div>
       </Flex>
       <ProfileTracksTable {...props} />
+
+      {/* Sin canciones escuchadas la pantalla quedaba con el título y nada debajo. Se dice. */}
+      {!tracks.length ? (
+        <p className='empty-state'>
+          Todavía no hay canciones que enseñar: aquí salen las que más escuchas cada mes.
+        </p>
+      ) : null}
     </div>
   );
 });

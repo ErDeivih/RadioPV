@@ -20,6 +20,13 @@ export const ArtistsProfileSection = memo(() => {
           title={t('Top artists this month')}
           subtitle={t('Only visible to you')}
         />
+
+        {/* Sin artistas escuchados la pantalla quedaba en blanco: sólo el título. Se dice. */}
+        {!artists?.length ? (
+          <p className='empty-state'>
+            Todavía no hay artistas que enseñar: aparecen aquí los que más escuchas cada mes.
+          </p>
+        ) : null}
       </div>
     </div>
   );

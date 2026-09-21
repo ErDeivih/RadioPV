@@ -33,21 +33,30 @@
   font-weight: 400;
 }
 
+/* Mensaje de página vacía («todavía no has guardado ninguna canción», «no hay listas públicas»).
+ * Antes, sin datos, estas páginas se quedaban en blanco y parecían rotas.
+ *
+ * Va a NIVEL DE FICHERO y no dentro de `.playlist-list` porque estos mensajes salen también en
+ * páginas que no son listas (el perfil y sus apartados): dentro del bloque sólo se habrían pintado
+ * en la página de una lista y en las demás habría salido texto sin estilo. */
+.empty-state {
+  color: #d7d7d7;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 28px auto 0;
+  max-width: 420px;
+  text-align: center;
+
+  a {
+    color: #fff;
+    text-decoration: underline;
+  }
+}
+
 .playlist-list {
   min-height: 60%;
   padding: 30px;
   transition: 'background: 0.5s';
-
-  /* Mensaje de página vacía («todavía no has guardado ninguna canción»). Antes, sin canciones, la
-   * página se quedaba en blanco y parecía rota. */
-  .empty-state {
-    color: #b3b3b3;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    margin: 28px auto 0;
-    max-width: 420px;
-    text-align: center;
-  }
 
   .column-name {
     color: rgb(186, 186, 186);
