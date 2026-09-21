@@ -19,6 +19,12 @@ const CLAVE = process.env.CLAVE || 'clave-de-pruebas-larga-123';
   ]) {
     const c = await b.newContext({ viewport: tamano, isMobile: movil, hasTouch: movil });
     const p = await c.newPage();
+    p.on('pageerror', (e) =>
+      console.log('ERROR JS:', String(e.stack || e).split('\n').slice(0, 4).join(' | ').slice(0, 400))
+    );
+    p.on('console', (m) => {
+      if (m.type() === 'error') console.log('CONSOLA:', m.text().slice(0, 160));
+    });
     await p.goto(URL_BASE, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(3000);
     try {
@@ -32,9 +38,21 @@ const CLAVE = process.env.CLAVE || 'clave-de-pruebas-larga-123';
       console.log('(aviso: login)', String(e).split('\n')[0].slice(0, 90));
     }
 
-    const idPerfil = await p.evaluate(() => {
-      const a = document.querySelector('a.avatar-link[href^="/users/"]');
-      return ((a && a.getAttribute('href')) || '/users/1').split('/')[2];
+    const idPerfil = await p.evaluate(async () => {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token') || '';
+      const claves = Object.keys(localStorage);
+      try {
+        const r = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } });
+        const texto = await r.text();
+        if (r.ok) {
+          const j = JSON.parse(texto);
+          if (j && j.id) return String(j.id);
+        }
+        console.log('DIAGNOSTICO me:', r.status, texto.slice(0, 120), 'claves:', claves.join(','));
+      } catch (e) {
+        console.log('DIAGNOSTICO me: fallo', String(e).slice(0, 120));
+      }
+      return '1';
     });
     await p.goto(`${URL_BASE}/users/${idPerfil}`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(4000);
@@ -72,9 +90,12 @@ const CLAVE = process.env.CLAVE || 'clave-de-pruebas-larga-123';
         secciones,
         sospechosos,
         cuerpoAlto: document.querySelector('.Main-section')?.scrollHeight,
+        texto: (document.querySelector('.Main-section')?.innerText || '').replace(/\s+/g, ' ').slice(0, 240),
       };
     });
     console.log(`\n=== ${vista} (${info.idPerfil}) ===`);
+    await p.screenshot({ path: `capturas/debug-perfil-${vista}.png` });
+    console.log('texto de la pagina:', info.texto);
     console.log('cabecera:', JSON.stringify(info.cabecera));
     console.log('hijos de la cabecera:', JSON.stringify(info.hijosCabecera, null, 1));
     console.log('avatar:', JSON.stringify(info.avatar));

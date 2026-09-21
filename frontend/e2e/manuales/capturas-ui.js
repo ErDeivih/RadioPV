@@ -64,14 +64,19 @@ const PANTALLAS = [
       console.log(`  (aviso: no se pudo iniciar sesión: ${String(e).split('\n')[0].slice(0, 90)})`);
     }
 
-    // El id del perfil se pregunta a la propia aplicación (el enlace del avatar de la barra de
-    // arriba), en vez de escribirlo a mano: con `1` a fuego la captura del perfil salía en negro
-    // durante semanas y nadie lo vio.
+    // El id del perfil se le pregunta a la API con la sesión que acaba de abrir el navegador, en
+    // vez de escribirlo a mano: con `1` a fuego la captura del perfil salía en negro durante
+    // semanas y nadie lo vio. (Primero se intentó leyendo el enlace del avatar, pero ese enlace no
+    // siempre está en el DOM; la API sí contesta siempre.)
     let idPerfil = '';
     try {
-      idPerfil = await p.evaluate(() => {
-        const enlace = document.querySelector('a.avatar-link[href^="/users/"]');
-        return (enlace && enlace.getAttribute('href') || '').split('/')[2] || '';
+      idPerfil = await p.evaluate(async () => {
+        const token = localStorage.getItem('access_token');
+        if (!token) return '';
+        const r = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } });
+        if (!r.ok) return '';
+        const j = await r.json();
+        return String(j.id || '');
       });
     } catch (e) {
       console.log(`  (aviso: no se pudo leer el id del perfil)`);

@@ -101,7 +101,12 @@ const Header = ({ opacity }: { opacity: number; title?: string }) => {
           {user ? (
             <div className='avatar-container'>
               <Link to={`/users/${user!.id}`} className='avatar-link' aria-label='Tu perfil'>
-                {user?.images && user.images[0].url ? (
+                {/* OJO con la comprobación: antes era `user?.images && user.images[0].url`, que
+                  * da por hecho que si HAY lista hay primer elemento. Con la lista vacía (nuestra
+                  * API no devuelve foto de usuario) `images[0]` es `undefined` y leer `.url`
+                  * lanzaba un TypeError que tumbaba TODA la aplicación: al entrar en el perfil se
+                  * veía una pantalla en blanco. */}
+                {user?.images?.[0]?.url ? (
                   <img
                     className='avatar'
                     id='user-avatar'
