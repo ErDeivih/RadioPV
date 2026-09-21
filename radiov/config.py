@@ -258,6 +258,45 @@ DEFAULT_SETTINGS: dict = {
         {"mode": "query", "genre": "dubstep", "query": "dubstep", "language": "en"},
         {"mode": "query", "genre": "hardstyle", "query": "hardstyle", "language": "en"},
         {"mode": "query", "genre": "trance", "query": "trance", "language": "en"},
+
+        # ============ MÁS ARTISTAS Y SELLOS DEL CIRCUITO DE CLUB Y FESTIVAL ============
+        # La música del perfil que pasó el usuario (#SesionLassana) da para mucho más que los
+        # primeros nombres: el circuito de club y festival tiene dos patas grandes —el house/tech
+        # house de Ibiza y el techno melódico de festivales como Tomorrowland o Awakenings— y en la
+        # lista sólo estaban los cabezas de cartel más obvios. Estos van por Deezer (`explore`, que
+        # además crece solo con los artistas relacionados) porque su catálogo SÍ está en las tiendas.
+        {"mode": "explore", "genre": "techno", "language": "en",
+         "seeds": ["Solomun", "Tale Of Us", "Adriatique", "Mathame", "ARTBAT", "Anyma",
+                   "Kevin de Vries", "Miss Monique", "Agents Of Time", "Colyn"]},
+        {"mode": "explore", "genre": "techno", "language": "en",
+         "seeds": ["Charlotte de Witte", "Amelie Lens", "Adam Beyer", "Joseph Capriati",
+                   "Nina Kraviz", "Richie Hawtin", "Marco Carola", "Loco Dice", "Paco Osuna",
+                   "Michael Bibi"]},
+        {"mode": "explore", "genre": "house", "language": "en",
+         "seeds": ["Vintage Culture", "HUGEL", "Mau P", "Fatboy Slim", "Roger Sanchez",
+                   "David Penn", "Joris Voorn", "Franky Rizardo", "The Martinez Brothers"]},
+
+        # Los sellos: una búsqueda por sello trae su catálogo entero de golpe. Son los que suenan en
+        # ese circuito (melódico, tech house y techno de pista).
+        {"mode": "youtube", "query": "Afterlife label mix", "genre": "techno", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Drumcode techno set", "genre": "techno", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Anjunabeats mix", "genre": "trance", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Glitterbox house mix", "genre": "house", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "mau5trap mix", "genre": "edm", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Black Book records tech house", "genre": "techhouse", "language": "en", "n": 20},
+
+        # Sesiones y festivales de ese circuito (es donde vive esta música en YouTube).
+        {"mode": "youtube", "query": "Cercle dj set", "genre": "techno", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Boiler Room set", "genre": "techno", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Awakenings festival set", "genre": "techno", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Hï Ibiza closing set", "genre": "house", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Ushuaia Ibiza set", "genre": "house", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "Pacha Ibiza set", "genre": "house", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "melodic techno mix 2025", "genre": "techno", "language": "en", "n": 25},
+        {"mode": "youtube", "query": "afro house set 2025", "genre": "house", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "tech house ibiza 2025", "genre": "techhouse", "language": "en", "n": 20},
+        {"mode": "youtube", "query": "medusa festival 2025 set", "genre": "techno", "language": "es", "n": 15},
+        {"mode": "youtube", "query": "aqm festival set", "genre": "techno", "language": "es", "n": 15},
         # Listas de éxitos reales (Apple Music, varios países) → artistas → expansión continua
         {"mode": "hits_apple", "country": "es", "genre": "latin", "language": "es", "limit": 20},
         {"mode": "hits_apple", "country": "us", "genre": "pop", "language": "en", "limit": 20},
