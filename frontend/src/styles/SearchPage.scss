@@ -22,15 +22,12 @@
   .search-filters-header {
     display: none;
   }
-
-  /* Los chips dejan sitio a la barra: si no, el primer resultado queda debajo. */
-  .Search-Page {
-    margin-top: 12px;
-  }
 }
 
 .Search-Page {
   padding: 20px;
+  /* En escritorio los chips de la búsqueda viven en la barra fija de arriba, así que la página les
+   * deja sitio con este margen. */
   margin-top: 80px;
 
   .section-title {
@@ -42,6 +39,15 @@
 
   .top-result-container {
     width: 100%;
+
+    /* La tarjeta del resultado principal se ENCOGÍA al ancho de su contenido (unos 112 px) porque
+     * va dentro del envoltorio de acciones —un `Dropdown` de Ant Design, que es `inline-block`—.
+     * Con 112 px de ancho el título salía cortado («Quev…») y el botón de reproducir se le echaba
+     * encima. Se estira hasta el ancho de su columna, que es lo que hace Spotify. */
+    .ant-dropdown-trigger,
+    .playlist-card {
+      width: 100%;
+    }
 
     .playlist-card {
       padding: 5px;
@@ -82,6 +88,20 @@
       color: white;
       text-decoration: underline;
     }
+  }
+}
+
+/* MÓVIL: aquí los chips van en una barra propia (`.search-filters-bar`, pegajosa), así que el hueco
+ * de la barra fija NO hace falta.
+ *
+ * OJO CON EL ORDEN: esta regla estaba ANTES que el `.Search-Page` de arriba, y con la misma
+ * especificidad gana la última del fichero. O sea que en el móvil se seguía aplicando el
+ * `margin-top: 80px` de escritorio y quedaba un **hueco de más de cien píxeles** entre los chips y
+ * «Resultado más relevante». Medido con `_debug-buscar.js`: los chips acababan en y=176 y el título
+ * no empezaba hasta y=280. */
+@media (max-width: $desktop-breakpoint) {
+  .Search-Page {
+    margin-top: 12px;
   }
 }
 
