@@ -15,7 +15,7 @@ import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panel
 // Redux
 import { useAppDispatch, useAppSelector } from '../../store/store';
 import { isActiveOnOtherDevice, spotifyActions } from '../../store/slices/spotify';
-import { getLibraryCollapsed, isRightLayoutOpen, uiActions } from '../../store/slices/ui';
+import { getLibraryCollapsed, isRightLayoutOpen } from '../../store/slices/ui';
 import { LoginFooter } from './components/LoginFooter';
 import { LoginModal } from '../Modals/LoginModal';
 import useIsMobile from '../../utils/isMobile';
@@ -30,31 +30,40 @@ export const AppLayout: FC<{ children: ReactElement }> = memo((props) => {
   const hasState = useAppSelector((state) => !!state.spotify.state);
   const activeOnOtherDevice = useAppSelector(isActiveOnOtherDevice);
 
-  const [isTablet, setIsTablet] = useState(false);
+  const [isTablet, setIsTablet] = useState(() => window.innerWidth < 950);
 
   const isMobile = useIsMobile();
   const showDetails = rightLayoutOpen && hasState;
 
+  /**
+   * EN EL MÓVIL SÓLO HAY UNA COLUMNA (y esto estaba mal).
+   *
+   * El panel de la biblioteca se ocultaba con la clase CSS `mobile-hidden`, pero **seguía ocupando
+   * su ancho**: en un móvil de 390 px se quedaba con 85 px y el contenido empezaba en x≈109 con
+   * sólo 281 px de ancho, así que las tarjetas se salían por la derecha y el título de un género se
+   * cortaba. Medido con el navegador: contenedor del género en x=109 y 281 px de ancho.
+   *
+   * Ocultar con CSS no es quitar del diseño. En el móvil la biblioteca y el «sonando ahora» ya
+   * tienen su propio cajón a pantalla completa (`LibraryDrawer`, `PlayingNowDrawer`), así que aquí
+   * no se montan esos paneles: centro y nada más, como en Spotify.
+   */
+  const ids = isMobile
+    ? ['center']
+    : showDetails
+      ? ['left', 'center', 'details-section']
+      : ['left', 'center'];
+
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'persistence',
     storage: localStorage,
-    panelIds: showDetails ? ['left', 'center', 'details-section'] : ['left', 'center'],
+    panelIds: ids,
   });
 
   useEffect(() => {
-    window.onresize = () => {
-      const vh = window.innerWidth;
-      if (vh < 950) {
-        dispatch(uiActions.collapseLibrary());
-        setIsTablet(true);
-      } else {
-        setIsTablet(false);
-      }
-    };
-    return () => {
-      window.onresize = null;
-    };
-  }, [dispatch]);
+    const alRedimensionar = () => setIsTablet(window.innerWidth < 950);
+    window.addEventListener('resize', alRedimensionar);
+    return () => window.removeEventListener('resize', alRedimensionar);
+  }, []);
 
   useEffect(() => {
     if (user) dispatch(spotifyActions.fetchDevices());
@@ -106,15 +115,17 @@ export const AppLayout: FC<{ children: ReactElement }> = memo((props) => {
               onLayoutChanged={onLayoutChanged}
               style={{ height: '100%', width: '100%' }}
             >
-              <Panel
-                id='left'
-                className='mobile-hidden'
-                groupResizeBehavior={libraryCollapsed ? 'preserve-pixel-size' : 'preserve-relative-size'}
-                {...leftPanelSize}
-                style={{ borderRadius: 5 }}
-              >
-                <Library />
-              </Panel>
+              {!isMobile ? (
+                <Panel
+                  id='left'
+                  className='mobile-hidden'
+                  groupResizeBehavior={libraryCollapsed ? 'preserve-pixel-size' : 'preserve-relative-size'}
+                  {...leftPanelSize}
+                  style={{ borderRadius: 5 }}
+                >
+                  <Library />
+                </Panel>
+              ) : null}
 
               {!isMobile ? <Separator className='resize-handler' /> : null}
 
@@ -123,7 +134,7 @@ export const AppLayout: FC<{ children: ReactElement }> = memo((props) => {
                 {props.children}
               </Panel>
 
-              {showDetails ? (
+              {showDetails && !isMobile ? (
                 <>
                   {!isTablet ? <Separator className='resize-handler' /> : null}
                   <Panel

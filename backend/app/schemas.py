@@ -96,6 +96,10 @@ class PlaylistOut(BaseModel):
     cover: Optional[str] = None
     # Lista compartida. La interfaz lo necesita para ofrecer «hacer publica» o «hacer privada».
     public: bool = False
+    # Hasta 4 carátulas de sus primeras canciones, para que la interfaz componga un mosaico (el
+    # 2×2 de Spotify) en las listas que no tienen portada propia. Antes TODAS las listas generadas
+    # salían con el mismo icono gris de relleno y la portada parecía rota.
+    collage: list[str] = []
     model_config = ConfigDict(from_attributes = True)
 
 

@@ -102,7 +102,14 @@ export const toPlaylist = (p: PlaylistOut, cover?: string) => ({
   // las sirve es el contenedor de la API, que en producción está detrás de `/api`. Sin el prefijo
   // el navegador pide `/media/...` a nginx, que no tiene esa ruta y devuelve el `index.html` de la
   // aplicación (¡con código 200!), así que la imagen no carga y encima parece que sí existe.
-  images: [{ url: img(p.cover) ?? cover ?? PLACEHOLDER, height: 640, width: 640 }],
+  //
+  // Si la lista no tiene portada propia, la API manda hasta 4 carátulas de sus primeras canciones
+  // (`collage`) y aquí se pasan TODAS: la tarjeta las pinta como el mosaico 2×2 de Spotify. Antes
+  // se usaba sólo la primera y, al no haber ninguna, quedaba el mismo icono gris en todas las
+  // listas generadas.
+  images: (p.collage && p.collage.length >= 4
+    ? p.collage.slice(0, 4).map((url) => ({ url: img(url) as string, height: 640, width: 640 }))
+    : [{ url: img(p.cover) ?? cover ?? PLACEHOLDER, height: 640, width: 640 }]),
   tracks: { href: '', total: p.n_tracks },
   followers: { href: '', total: 0 },
   owner: {

@@ -33,8 +33,11 @@ export const GenreContent = memo((props: { color: string }) => {
       style={{
         padding: 20,
         paddingTop: 30,
-        maxHeight: 260,
-        overflow: 'auto',
+        /* SIN `maxHeight` NI SCROLL PROPIO. Aquí había `maxHeight: 260, overflow: 'auto'`: la
+         * página metía 7.137 px de listas y canciones dentro de una ventana de 260 px, así que en
+         * la pantalla sólo se veía el título, «Listas de este género» y una tarjeta — el resto
+         * exigía desplazar una cajita diminuta. Medido con el navegador. Ahora manda el scroll de
+         * la página, que es lo que hace Spotify. */
         background: `linear-gradient(${
           tinycolor(props.color).isLight()
             ? tinycolor(props.color).darken(20)

@@ -48,6 +48,7 @@
     justify-content: flex-end;
     z-index: 0;
     padding: 20px 40px;
+    min-width: 0;          // sin esto, un título largo estira el contenedor y desplaza la página
 
     span {
       display: -webkit-box;
@@ -62,10 +63,16 @@
       h1 {
         visibility: visible;
         width: 100%;
-        font-size: 5rem;
-        white-space: nowrap;
+        // ANTES: `font-size: 5rem` + `white-space: nowrap`. En un móvil de 390 px el título se
+        // cortaba por la derecha («Tech house / G…») porque no se le dejaba partirse en dos
+        // líneas. Ahora se ajusta al ancho disponible y, si hace falta, baja de tamaño solo
+        // (`clamp`), que es lo que hace Spotify con los títulos largos.
+        font-size: clamp(1.6rem, 4.5vw, 5rem);
+        white-space: normal;
+        overflow-wrap: anywhere;
         color: #fff;
         font-weight: 800;
+        margin: 0;
       }
     }
   }
@@ -75,26 +82,24 @@
     min-height: 150px;
     .textContainer {
       padding: 20px 20px;
-      h1 {
-        font-size: 4rem !important;
-      }
     }
   }
 
   @media (max-width: $desktop-breakpoint) {
-    max-height: 150px;
-    min-height: 150px;
+    max-height: 170px;
+    min-height: 140px;
     .textContainer {
-      padding: 20px 20px;
-      h1 {
-        font-size: 3rem !important;
-      }
+      padding: 16px 16px;
     }
   }
 }
 
 .genre-list {
-  overflow: hidden;
+  // ANTES: `overflow: hidden` y, en el componente, una caja de 260 px con scroll propio. El
+  // resultado medido: 7.137 px de contenido metidos en una ventana de 260 px, así que las canciones
+  // existían pero no se veían (parecía una página vacía). Ahora el contenido fluye y se desplaza la
+  // página entera, como en Spotify.
+  overflow: visible;
 
   .playlist-grid {
     overflow: hidden;

@@ -41,6 +41,8 @@ export interface PlaylistOut {
   cover?: string | null;
   /** Lista compartida con los demas usuarios. */
   public?: boolean;
+  /** Hasta 4 caratulas de sus primeras canciones, para el mosaico 2×2 (listas sin portada propia). */
+  collage?: string[];
 }
 
 export interface FacetValue {

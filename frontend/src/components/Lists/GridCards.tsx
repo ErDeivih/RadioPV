@@ -22,17 +22,47 @@ import { PLAYLIST_DEFAULT_IMAGE } from '../../constants/spotify';
 import { uiActions } from '../../store/slices/ui';
 import { useCallback } from 'react';
 
+/**
+ * Portada de una tarjeta: una imagen, o el MOSAICO 2Ã—2 cuando hay cuatro.
+ *
+ * POR QUÃ‰ EXISTE
+ * --------------
+ * Las listas que genera la aplicaciÃ³n no tienen portada propia, asÃ­ que salÃ­an **todas con el mismo
+ * icono gris de relleno**: en la portada se veÃ­an seis tarjetas idÃ©nticas y parecÃ­a que faltaban las
+ * imÃ¡genes. Spotify resuelve esto con un mosaico de las carÃ¡tulas de las primeras canciones, que es
+ * lo que se pinta aquÃ­ (la API manda hasta cuatro en `collage`).
+ */
+const Portada = ({ images, title, rounded }: { images: string[]; title: string; rounded?: boolean }) => {
+  if (images.length >= 4) {
+    return (
+      <div className='portada-mosaico'>
+        {images.slice(0, 4).map((url, i) => (
+          <img key={`${url}-${i}`} src={url} alt='' loading='lazy' />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={images[0]}
+      alt={title}
+      className={rounded ? 'rounded' : ''}
+      style={{ borderRadius: 5, width: '100%' }}
+    />
+  );
+};
+
 const Card = ({
   uri,
   title,
-  image,
+  images,
   rounded,
   description,
   onClick,
   context,
 }: {
   uri: string;
-  image: string;
+  images: string[];
   title: string;
   rounded?: boolean;
   description: string;
@@ -53,18 +83,13 @@ const Card = ({
         style={{ position: 'relative' }}
         className='aspect-square md:aspect-w-1 md:aspect-h-1/2 lg:aspect-w-1 lg:aspect-h-3/4 xl:aspect-w-1 xl:aspect-h-4/5 p-4'
       >
-        <img
-          src={image}
-          alt={title}
-          className={rounded ? 'rounded' : ''}
-          style={{ borderRadius: 5, width: '100%' }}
-        />
+        <Portada images={images} title={title} rounded={rounded} />
         <div
           className={`circle-play-div transition translate-y-1/4 ${
             isCurrent && !paused ? 'active' : ''
           }`}
         >
-          <PlayCircle image={image} isCurrent={isCurrent} context={context} />
+          <PlayCircle image={images[0]} isCurrent={isCurrent} context={context} />
         </div>
       </div>
       <div className='playlist-card-info'>
@@ -98,7 +123,7 @@ export const ArtistCard = ({
           title={title}
           uri={item.uri}
           description={description}
-          image={item.images[0]?.url}
+          images={[item.images[0]?.url]}
           context={{ context_uri: item.uri }}
           onClick={() => navigate(`/artist/${item.id}`)}
         />
@@ -144,7 +169,7 @@ export const AlbumCard = ({
           uri={item.uri}
           onClick={onNavigate}
           description={description}
-          image={item.images[0]?.url}
+          images={[item.images[0]?.url]}
           context={{ context_uri: item.uri }}
         />
       </div>
@@ -165,7 +190,7 @@ export const PlaylistCard = ({
   const [t] = useTranslation(['playlist']);
 
   const title = item.name;
-  // Feb 2026 renamed the playlist track-count field `tracks` → `items`; fall back so we never
+  // Feb 2026 renamed the playlist track-count field `tracks` â†’ `items`; fall back so we never
   // render "undefined songs" regardless of which endpoint the playlist came from.
   const trackTotal = (item as any).tracks?.total ?? (item as any).items?.total;
   const description = getDescription
@@ -183,7 +208,7 @@ export const PlaylistCard = ({
           description={description}
           context={{ context_uri: item.uri }}
           onClick={() => navigate(`/playlist/${item.id}`)}
-          image={item.images && item.images.length ? item.images[0].url : PLAYLIST_DEFAULT_IMAGE}
+          images={item.images && item.images.length ? item.images.map((i) => i.url) : [PLAYLIST_DEFAULT_IMAGE]}
         />
       </div>
     </PlayistActionsWrapper>
@@ -210,7 +235,7 @@ export const TrackCard = ({
           title={item.name}
           description={description}
           context={{ uris: [item.uri] }}
-          image={item.album.images[0]?.url}
+          images={[item.album.images[0]?.url]}
           onClick={() => navigate(`/album/${item.album.id}`)}
         />
       </div>

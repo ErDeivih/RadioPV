@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas
 from ..config import MEDIA_ROOT
+from ..paths import media_filename
 from ..security import get_current_user
 
 router = APIRouter(prefix="/playlists", tags=["playlists"],
@@ -33,14 +34,48 @@ def _extension(datos: bytes) -> str | None:
     return None
 
 
+def _collage(db: Session, playlist_id: int, cuantas: int = 4) -> list[str]:
+    """Hasta 4 carátulas de las primeras canciones de la lista, para el mosaico 2×2.
+
+    POR QUÉ
+    -------
+    Las listas que genera la aplicación (Top pop, Fiesta, Tech house y guaracha…) no tienen portada
+    propia, así que **todas salían con el mismo icono gris de relleno**: en la portada se veían seis
+    tarjetas idénticas y parecía que faltaban las imágenes. Spotify resuelve esto con un mosaico de
+    las carátulas de sus primeras canciones, y es lo que se compone aquí (la interfaz las pinta en
+    cuadrícula).
+
+    Se cogen las que TIENEN carátula y se respeta el orden de la lista: las 4 primeras con imagen
+    son las que identifican la lista.
+    """
+    filas = (
+        db.query(models.Track.cover_path)
+        .join(models.PlaylistTrack, models.PlaylistTrack.track_id == models.Track.id)
+        .filter(models.PlaylistTrack.playlist_id == playlist_id,
+                models.Track.cover_path.isnot(None), models.Track.cover_path != "")
+        .order_by(models.PlaylistTrack.position)
+        .limit(cuantas)
+        .all()
+    )
+    urls: list[str] = []
+    for (ruta,) in filas:
+        nombre = media_filename(ruta)
+        if nombre:
+            urls.append(f"/media/covers/{nombre}")
+    return urls
+
+
 def _out(p: models.Playlist, n: int | None = None, db: Session | None = None) -> schemas.PlaylistOut:
     """Serializador unico: antes cada ruta repetia la construccion a mano y era facil que una se
     olvidara un campo (le paso a `user_id`, que dejo el menu de las listas sin opciones)."""
     if n is None:
         n = db.query(models.PlaylistTrack).filter_by(playlist_id=p.id).count()
+    # El mosaico sólo hace falta cuando la lista NO tiene portada propia: si la tiene (una lista de
+    # usuario con foto), manda la suya.
+    collage = [] if p.cover_path else (_collage(db, p.id) if db is not None else [])
     return schemas.PlaylistOut(id=p.id, name=p.name, description=p.description, type=p.type,
                                n_tracks=n, user_id=p.user_id, cover=p.cover,
-                               public=bool(p.public))
+                               public=bool(p.public), collage=collage)
 
 
 def _visible_o_404(db: Session, playlist_id: int, user: models.User) -> models.Playlist:
