@@ -66,9 +66,19 @@ def test_lista_tech_house(client):
         assert sesion.id in _lista(db, "Sesiones de DJ")
         # Y las otras dos listas siguen teniendo lo suyo (no se rompió nada al añadir la tercera).
         assert mashup.id in _lista(db, "Mashups y remixes")
+
+        # «Club y festival»: la electrónica de pista (dance/house/electro/techno) más el tech house,
+        # que es el terreno del perfil de electrónica que pidió el usuario. Una sesión de tech house
+        # cuenta por partida doble (duración → sesiones; género → club), y eso es correcto.
+        club = _lista(db, "Club y festival")
+        assert por_ficha.id in club, "el tech house también es música de club"
+        assert sesion.id in club, "una sesión de tech house es música de club"
+        assert pop.id not in club, "una canción de pop no es música de pista"
+        assert portugues.id not in club
     finally:
         db.query(models.Track).filter(models.Track.source == "test_techhouse").delete()
-        for nombre in ("Tech house y guaracha", "Mashups y remixes", "Sesiones de DJ"):
+        for nombre in ("Tech house y guaracha", "Mashups y remixes", "Sesiones de DJ",
+                       "Club y festival"):
             pl = db.query(models.Playlist).filter_by(type="system", name=nombre).first()
             if pl:
                 db.query(models.PlaylistTrack).filter_by(playlist_id=pl.id).delete()

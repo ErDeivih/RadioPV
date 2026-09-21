@@ -469,7 +469,10 @@ def rebuild_remixes(db) -> int:
                       models.Track.genre)
              .filter(models.Track.status == "descargada")
              .all())
-    remixes, sesiones, tech_house = [], [], []
+    remixes, sesiones, tech_house, club = [], [], [], []
+    # Géneros que son «música de pista» (el terreno del perfil de electrónica que pidió el usuario):
+    # la electrónica de baile del catálogo, sin las canciones de otros estilos.
+    DE_PISTA = {"dance", "house", "electro", "techno", "techhouse"}
     for tid, title, artist, duration, rank, language, genre in filas:
         # Portugués fuera de las listas: la política del catálogo es español (España y Latinoamérica)
         # e inglés, con italiano y francés de siempre. Estas listas son las que el usuario pone a
@@ -481,6 +484,8 @@ def rebuild_remixes(db) -> int:
         # de que existiera el género `techhouse` (el título lo dice igual de claro).
         if (genre or "") == "techhouse" or guess_genre(title or "", artist or "") == "techhouse":
             tech_house.append((rank or 0, tid))
+        if (genre or "") in DE_PISTA:
+            club.append((rank or 0, tid))
         tipo = clasificar(title or "", artist or "", duration)
         if tipo == "sesion":
             sesiones.append((rank or 0, tid))
@@ -490,6 +495,7 @@ def rebuild_remixes(db) -> int:
     remixes.sort(reverse=True)
     sesiones.sort(reverse=True)
     tech_house.sort(reverse=True)
+    club.sort(reverse=True)
     # SIN TOPE: la lista tiene que ser TODA la música de ese tipo, no una muestra. Antes cortaba en
     # 60 y 40, y con el catálogo creciendo eso significaba que las listas del tipo de música que el
     # usuario más escucha se quedaban cortas y no dejaban ver lo que había: pedía «la lista de este
@@ -498,11 +504,17 @@ def rebuild_remixes(db) -> int:
     todas_remix = [tid for _, tid in remixes]
     todas_sesiones = [tid for _, tid in sesiones]
     todo_tech = [tid for _, tid in tech_house]
+    todo_club = [tid for _, tid in club]
     n = _swap_system_playlist(db, "Mashups y remixes", todas_remix)
     n += _swap_system_playlist(db, "Sesiones de DJ", todas_sesiones)
     n += _swap_system_playlist(db, "Tech house y guaracha", todo_tech)
-    log.info("[remixes] %s mashups/remixes · %s sesiones · %s tech house (listas completas)",
-             len(todas_remix), len(todas_sesiones), len(todo_tech))
+    # «Club y festival»: la electrónica de pista del catálogo (dance, house, electro, techno y tech
+    # house). Nace del perfil de electrónica que pasó el usuario —dinámica de club y de festival,
+    # con las sesiones y los clásicos de baile—, para que esa música tenga su sitio donde se ve.
+    n += _swap_system_playlist(db, "Club y festival", todo_club)
+    log.info("[remixes] %s mashups/remixes · %s sesiones · %s tech house · %s club y festival "
+             "(listas completas)", len(todas_remix), len(todas_sesiones), len(todo_tech),
+             len(todo_club))
     return n
 
 

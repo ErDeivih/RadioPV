@@ -365,6 +365,73 @@ DEFAULT_SETTINGS: dict = {
     {"mode": "youtube", "query": "techengue session", "genre": "techhouse", "language": "es", "n": 20},
     {"mode": "youtube", "query": "guaracha sesion 2025", "genre": "techhouse", "language": "es", "n": 20},
 
+    # ============ ELECTRÓNICA DE CLUB Y FESTIVAL (el perfil que pasó el usuario) ============
+    # El usuario pidió «cosas de este perfil y muchos más que encuentres»:
+    #   https://open.spotify.com/user/lassanamusic
+    #
+    # Ese perfil es un DJ español (Lassana) con una serie propia de sesiones, «#SesionLassana»
+    # («lo mejor de la electrónica se reúne en la Sesión Lassana… cada domingo nuevos sonidos»,
+    # ha pinchado en A Summer Story). Los episodios que se pueden leer por fuera dan los nombres de
+    # su terreno: Avicii, Axwell, CamelPhat, Claptone, Da Hool, Robert Miles, Sash!, Klubbheads,
+    # Merk & Kremont, Zonderling, Aloe Blacc, Rita Ora… O sea: **electrónica de pista y de festival**
+    # (progressive, vocal house, tech house) más los **clásicos de baile de los 90 y 2000**.
+    #
+    # Eso encaja con lo que ya le gustaba (tech house con bajo, remezclas latinas) y añade la pata
+    # que faltaba: el club y el «remember». Los géneros van a `dance`/`house`/`techhouse`/`electro`
+    # según el sonido, y hay una lista nueva «Club y festival» (ver workers.rebuild_remixes).
+
+    # --- el término general: sesiones de club y de festival ---
+    {"mode": "youtube", "query": "festival dj set 2025", "genre": "dance", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "tomorrowland set", "genre": "dance", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "a summer story set", "genre": "dance", "language": "es", "n": 15},
+    {"mode": "youtube", "query": "medusa festival set", "genre": "dance", "language": "es", "n": 15},
+    {"mode": "youtube", "query": "club mix session house", "genre": "house", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "progressive house mix 2025", "genre": "house", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "vocal house classics mix", "genre": "house", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "ibiza closing set", "genre": "house", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "club anthems mix", "genre": "dance", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "afro house mix 2025", "genre": "house", "language": "en", "n": 20},
+
+    # --- los clásicos de baile (el «remember» de las sesiones) ---
+    {"mode": "youtube", "query": "classic dance anthems 90s", "genre": "dance", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "eurodance 90s hits", "genre": "dance", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "remember dance 2000", "genre": "dance", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "session remember dance", "genre": "dance", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "makina remember sesion", "genre": "dance", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "remember club 90 mix", "genre": "dance", "language": "es", "n": 20},
+
+    # --- los nombres de ese terreno (uno por artista: donde están sus sets y remezclas) ---
+    {"mode": "youtube", "query": "Avicii mix", "genre": "dance", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Axwell set", "genre": "house", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Swedish House Mafia set", "genre": "house", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "CamelPhat set", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Claptone set", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Da Hool remix", "genre": "dance", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Robert Miles mix", "genre": "dance", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Sash! remix", "genre": "dance", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Klubbheads remix", "genre": "dance", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Merk Kremont remix", "genre": "house", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Zonderling remix", "genre": "house", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Fisher tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Chris Lake tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Dom Dolla remix", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "John Summit tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Purple Disco Machine remix", "genre": "house", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Peggy Gou mix", "genre": "house", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Meduza remix", "genre": "house", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Lost Frequencies remix", "genre": "house", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "Alok remix", "genre": "dance", "language": "en", "n": 15},
+
+    # --- los sellos de esta música (una búsqueda por sello trae su catálogo de golpe) ---
+    {"mode": "youtube", "query": "Toolroom tech house", "genre": "techhouse", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "Defected house mix", "genre": "house", "language": "en", "n": 25},
+    {"mode": "youtube", "query": "Sola records tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Repopulate Mars tech house", "genre": "techhouse", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Spinnin records mix", "genre": "dance", "language": "en", "n": 20},
+    {"mode": "youtube", "query": "Axtone mix", "genre": "house", "language": "en", "n": 15},
+    {"mode": "youtube", "query": "elrow music set", "genre": "techhouse", "language": "es", "n": 20},
+    {"mode": "youtube", "query": "Solid Grooves tech house", "genre": "techhouse", "language": "en", "n": 20},
+
     # Estas siguen buscando en Deezer porque son artistas que SÍ están en las tiendas.
     {"mode": "explore", "genre": "dance", "language": "en",
      "seeds": ["DJ Snake", "Tiesto", "Marshmello", "Robin Schulz"]},
