@@ -33,7 +33,12 @@ export const toUser = (u: MeOut): User => ({
   email: u.email,
   uri: `radiopv:user:${u.id}`,
   type: 'user' as const,
-  images: [{ url: '', height: 0, width: 0 }, { url: '', height: 0, width: 0 }],
+  // SIN IMÁGENES, no dos imágenes VACÍAS. Aquí ponía `[{url: ''}, {url: ''}]`, y eso rompía dos
+  // cosas a la vez: la foto del perfil salía como un `<img src="">` (un hueco en blanco, no un
+  // avatar) y los sitios que comprueban `user.images[0]?.url` para decidir si pintar el avatar
+  // creían que SÍ había foto, así que tampoco usaban su imagen por defecto. La API no devuelve
+  // avatar (no hay campo para él en `/auth/me`): se deja vacío y cada pantalla usa su relleno.
+  images: [],
   followers: { href: null, total: 0 },
   external_urls: { spotify: '' },
   explicit_content: { filter_enabled: false, filter_locked: false },

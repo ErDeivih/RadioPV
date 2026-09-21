@@ -5,18 +5,18 @@ export interface User {
   };
   href?: string;
   id?: string;
-  images?: [
-    {
-      url: string;
-      height: number;
-      width: number;
-    },
-    {
-      url: string;
-      height: number;
-      width: number;
-    }
-  ];
+  // Lista de imágenes, NO una tupla de exactamente dos.
+  //
+  // Estaba declarada como `[{…}, {…}]` (dos elementos obligatorios), copiada de la forma que tiene
+  // la respuesta de Spotify. Nuestra API no devuelve ninguna imagen de usuario, así que el adaptador
+  // rellenaba las dos con `url: ''`: la foto del perfil salía como un `<img src="">` —un hueco— y
+  // las pantallas que preguntan `user.images[0]?.url` para decidir si usar su imagen por defecto
+  // creían que sí había foto. Ahora puede ir vacía y cada pantalla usa su relleno.
+  images?: {
+    url: string;
+    height: number;
+    width: number;
+  }[];
   type?: string;
   uri?: string;
   followers?: {

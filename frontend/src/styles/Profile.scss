@@ -243,6 +243,9 @@
           -ms-flex-wrap: wrap;
           flex-wrap: wrap;
           margin-top: 8px;
+          /* Separación entre «0 Seguidores» y «Ocultar contenido explícito»: iban pegados, sin
+           * ni un espacio, y se leían como una sola frase. */
+          gap: 12px;
         }
       }
     }
