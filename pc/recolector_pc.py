@@ -629,6 +629,20 @@ TIEMPO_MAX_ENVIO = 20 * 60
 TIEMPO_MAX_PUBLICAR = 20 * 60
 
 
+def _tamano(p: Path) -> int:
+    """Tamaño del fichero en bytes (0 si no se puede leer): para ordenar la cola de envío."""
+    try:
+        return p.stat().st_size
+    except OSError:
+        return 0
+
+
+def _ordenar_por_tamano(ficheros: list[tuple[Path, str]]) -> list[tuple[Path, str]]:
+    """De lo pequeño a lo grande. El porqué está en `publicar`: con 1 MB/s de enlace, lo que hace que
+    la aplicación suene antes son las canciones cortas (no se pierde ninguna, sólo cambia el orden)."""
+    return sorted(ficheros, key=lambda par: _tamano(par[0]))
+
+
 def _en_tandas(ficheros: list[tuple[Path, str]], max_mb: float = 120.0) -> list[list[tuple[Path, str]]]:
     """Parte la lista en tandas de ~`max_mb`: un envío gigante se atasca y bloquea la vuelta entera.
 
@@ -910,6 +924,15 @@ def publicar(cfg: dict) -> int:
                 nombre = guardado.split("/")[-1]      # en el servidor sólo se usa el nombre
                 sub = "covers" if columna == "cover_path" else "artists"
                 lista.append((datos_locales / sub / nombre, nombre))
+
+    # DE LO PEQUEÑO A LO GRANDE, Y POR QUÉ
+    # --------------------------------
+    # Medido el 21/09/2026: el enlace del servidor negocia a **10 Mbps** (1 MB/s real), así que una
+    # tanda de 120 MB tarda dos minutos y hay que elegir qué se manda primero. Con una mezcla de 250 MB
+    # delante, la cola no avanza y la aplicación sigue enseñando canciones que no suenan; mandando
+    # antes las de 5-8 MB, cada minuto de enlace deja decenas de canciones escuchables. Las mezclas
+    # largas van llegando después (no se pierde ninguna: la cola es la misma, sólo cambia el orden).
+    audio = _ordenar_por_tamano(audio)
 
     llegaron_audio = _enviar_ficheros(cfg, audio, cfg["musica_servidor"], "música")
     if covers:

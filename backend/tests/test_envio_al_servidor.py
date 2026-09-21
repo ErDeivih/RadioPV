@@ -125,6 +125,24 @@ def test_el_presupuesto_de_una_vuelta_corta_el_envio(tmp_path, monkeypatch):
     assert len(llegaron) < len(ficheros), "lo que no se envió no puede darse por enviado"
 
 
+def test_la_cola_se_ordena_de_lo_pequeno_a_lo_grande(tmp_path):
+    """Con 1 MB/s de enlace, mandar antes las canciones cortas hace que suene música antes.
+
+    Medido el 21/09/2026: el servidor negocia a 10 Mbps (1 MB/s real). Enviando primero una mezcla de
+    250 MB, la aplicación se queda dos horas con canciones que no suenan; enviando antes las de 6 MB,
+    en esos mismos minutos quedan escuchables decenas. No se pierde ninguna: sólo cambia el orden.
+    """
+    rcp = _recolector()
+    grande = (_falso(tmp_path, "grande.mp3", 40), "catalogada/grande.mp3")
+    pequena = (_falso(tmp_path, "pequena.mp3", 2), "catalogada/pequena.mp3")
+    mediana = (_falso(tmp_path, "mediana.mp3", 10), "catalogada/mediana.mp3")
+
+    orden = [n for _p, n in rcp._ordenar_por_tamano([grande, pequena, mediana])]
+    assert orden == ["catalogada/pequena.mp3", "catalogada/mediana.mp3", "catalogada/grande.mp3"], orden
+    # Y no se pierde ni se duplica nada.
+    assert sorted(orden) == sorted(n for _p, n in (grande, pequena, mediana))
+
+
 def test_el_tope_de_tiempo_es_razonable():
     """20 minutos para 120 MB: si tarda más, está colgado (14 minutos fue el atasco real)."""
     rcp = _recolector()
