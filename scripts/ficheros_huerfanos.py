@@ -18,6 +18,7 @@ Uso (dentro del contenedor del API):
 """
 import argparse
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -58,6 +59,42 @@ def _rutas_en_las_bases() -> set[str]:
     return conocidas
 
 
+def _claves_de_canciones() -> set[str]:
+    """Las claves normalizadas (artista|título) de todo el catálogo, para no borrar algo único.
+
+    Borrar un fichero «sin ficha» es seguro cuando la MISMA canción ya está en el catálogo por otra
+    ficha (son copias que quedaron de cuando el envío se cortaba). Pero si el fichero es la única
+    copia de algo que nadie tiene, borrarlo es destruir música: eso no se hace solo, se avisa.
+    """
+    from radiov.db import clave_cancion
+
+    claves: set[str] = set()
+    for base in BASES:
+        ruta = f"{DIR}/{base}"
+        if not os.path.exists(ruta):
+            continue
+        con = sqlite3.connect(ruta)
+        try:
+            for artist, title in con.execute("SELECT artist, title FROM tracks"):
+                if title:
+                    claves.add(clave_cancion(artist or "", title))
+        finally:
+            con.close()
+    return claves
+
+
+def _posible_clave(p: Path) -> str:
+    """Saca (artista, título) del nombre del fichero («Artista - Tema (3).mp3» → su clave)."""
+    from radiov.db import clave_cancion
+
+    nombre = re.sub(r"\s*\(\d+\)\s*$", "", p.stem).strip()
+    if " - " in nombre:
+        artista, titulo = nombre.split(" - ", 1)
+    else:
+        artista, titulo = p.parent.name, nombre
+    return clave_cancion(artista.strip(), titulo.strip())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Ficheros de música sin ficha (ocupan disco para nada).")
     ap.add_argument("--borrar", action="store_true", help="bórralos (sólo si tienen más de 6 horas)")
@@ -93,13 +130,23 @@ def main() -> int:
         print("Nada que limpiar: cada fichero del disco tiene su ficha.")
         return 0
 
+    # Sólo se borra lo que tiene copia segura en el catálogo (misma canción, otra ficha).
+    claves = _claves_de_canciones()
+    con_copia = [(p, mb) for p, mb in huerfanos if _posible_clave(p) in claves]
+    sin_copia = [(p, mb) for p, mb in huerfanos if _posible_clave(p) not in claves]
+    print(f"   de ellos, {len(con_copia)} son copias de una canción que YA está en el catálogo "
+          f"({sum(mb for _p, mb in con_copia):.1f} MB)")
+    print(f"   y {len(sin_copia)} NO se corresponden con ninguna canción del catálogo "
+          f"({sum(mb for _p, mb in sin_copia):.1f} MB) → no se borran solos")
+    for p, mb in sin_copia[:10]:
+        print(f"      {mb:7.1f} MB  {p.relative_to(RAIZ)}"[:130])
+
     if args.borrar:
         borrados = 0
         liberado = 0.0
-        for p, mb in huerfanos:
+        for p, mb in con_copia:
             try:
-                edad_h = (time.time() - p.stat().st_mtime) / 3600
-                if edad_h < args.horas:
+                if (time.time() - p.stat().st_mtime) / 3600 < args.horas:
                     continue          # puede ser un envío en marcha: no se toca
                 p.unlink()
                 borrados += 1

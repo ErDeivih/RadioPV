@@ -44,7 +44,21 @@ def campos_que_faltan(t: dict) -> list[str]:
         exentos.add("year")
     if sin_fuente:
         exentos.add("cover_url")
-    return [k for k in CAMPOS_OBLIGATORIOS if k not in exentos and not t.get(k)]
+    faltan = []
+    for campo in CAMPOS_OBLIGATORIOS:
+        if campo in exentos:
+            continue
+        if campo == "cover_url":
+            # La carátula vale por CUALQUIERA de las dos vías: la URL de Deezer/YouTube o el fichero
+            # ya descargado (`cover_path`), que es lo que la aplicación sirve de verdad
+            # (`/media/covers/<fichero>`). Exigir la URL dejaba 'incompleta' para siempre a canciones
+            # que YA tenían su carátula en el disco: se veía en el recolector con dos canciones
+            # pedidas desde la app, con su imagen descargada y sin publicar.
+            if t.get("cover_url") or t.get("cover_path"):
+                continue
+        if not t.get(campo):
+            faltan.append(campo)
+    return faltan
 
 
 def _rel_music(path: str) -> str:

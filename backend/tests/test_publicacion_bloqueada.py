@@ -58,6 +58,21 @@ def test_una_recuperada_del_disco_se_publica_cuando_esta_medida():
     assert campos_que_faltan(_completa(source="recuperada", cover_url="http://x/c.jpg")) == []
 
 
+def test_la_caratula_vale_por_cualquiera_de_las_dos_vias():
+    """Una canción con la carátula YA descargada no puede quedarse sin publicar por no tener la URL.
+
+    La aplicación sirve `/media/covers/<fichero>` (que sale de `cover_path`); exigir `cover_url` dejaba
+    'incompleta' para siempre a canciones con su imagen en el disco. Se vio con dos canciones pedidas
+    desde la app (21/09/2026): las dos con `cover_path` puesto y sin publicar.
+    """
+    con_url = _completa(deezer_id="1", year=2020, cover_url="http://x/c.jpg")
+    con_fichero = _completa(deezer_id="1", year=2020, cover_path="covers/123.jpg")
+    sin_nada = _completa(deezer_id="1", year=2020)
+    assert campos_que_faltan(con_url) == []
+    assert campos_que_faltan(con_fichero) == [], "tenía la carátula descargada y no se publicaba"
+    assert campos_que_faltan(sin_nada) == ["cover_url"]
+
+
 def test_la_lista_de_obligatorios_no_se_queda_corta():
     """Si alguien añade un campo obligatorio, esta prueba obliga a mirarlo (y a documentarlo)."""
     assert set(CAMPOS_OBLIGATORIOS) == {"year", "genre", "language", "bpm", "energy", "gain_db",
