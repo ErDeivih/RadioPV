@@ -17,10 +17,12 @@ const SALIDA = 'capturas';
 
 const PANTALLAS = [
   ['inicio', '/'],
-  ['explorar', '/browse'],
-  ['buscar', '/search'],
+  // OJO: «Explorar» vive en /search (no hay /browse; esa ruta da la página 404)
+  ['explorar', '/search'],
+  ['buscar-resultados', '/search/Quevedo'],
   ['genero', '/genre/genre:techhouse'],
-  ['lista-sistema', '/genre/genre:pop'],
+  ['genero-pop', '/genre/genre:pop'],
+  ['artista', '/artist/Bad Bunny'],
   ['mis-listas', '/users/1/playlists'],
   ['me-gusta', '/collection/tracks'],
   ['pedir', '/pedir'],

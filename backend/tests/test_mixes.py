@@ -159,7 +159,7 @@ def test_r5_explicacion_y_kinds(client):
 
 
 def test_get_mixes_endpoint(client):
-    """U2 · GET /mixes devuelve los mixes del usuario con explicacion."""
+    """U2 · GET /mixes devuelve los mixes del usuario con explicacion, portada y recuento."""
     from app.database import SessionLocal
     db = SessionLocal()
     r = client.post("/auth/register", json={"email": "mixapi@t.com", "password": "clave-larga-1"})
@@ -168,13 +168,23 @@ def test_get_mixes_endpoint(client):
     for i in range(12):
         db.add(models.Track(title=f"M{i}", artist=f"MA{i % 4}", genre=("pop", "rock", "flamenco", "latin")[i % 4],
                             era="2020s", year=2000 + i, rank=1000 - i, status="descargada",
-                            source=SRC, file_path="E:/x.mp3"))
+                            source=SRC, file_path="E:/x.mp3",
+                            # carátula local: es la única que la interfaz puede pedir a la API
+                            cover_path=f"E:/media/covers/mix{i}.jpg"))
     db.commit()
     rebuild_mixes(db)
     h = {"Authorization": f"Bearer {tok}"}
     ms = client.get("/mixes", headers=h).json()
     assert ms and "kind" in ms[0], ms
     assert all(m["explicacion"] for m in ms), "todos deben tener explicacion"
+    # La tarjeta de «Hecho para ti» necesita las tres cosas: con qué URI suena, cuántas canciones
+    # tiene y las carátulas del mosaico. Antes sólo llegaban `kind` y `explicacion`, así que la
+    # tarjeta era un cuadro de texto gris sin imagen y sin forma de reproducir nada.
+    for m in ms:
+        assert m["uri"] == f"radiopv:mix:{m['kind']}", m
+        assert m["n_tracks"] > 0, m
+        assert len(m["collage"]) == 4, m
+        assert all(c.startswith("/media/covers/") for c in m["collage"]), m
     # limpieza
     u = db.query(models.User).filter_by(email="mixapi@t.com").first()
     if u:
@@ -182,5 +192,41 @@ def test_get_mixes_endpoint(client):
         db.query(models.Reaction).filter_by(user_id=u.id).delete()
         db.query(models.Mix).filter_by(user_id=u.id).delete()
         db.query(models.User).filter_by(id=u.id).delete()
+    db.query(models.Track).filter(models.Track.source == SRC).delete()
+    db.commit(); db.close()
+
+
+def test_tracks_de_un_mix_en_su_orden(client):
+    """Las canciones de un mix se sirven EN EL ORDEN del mix, y un `kind` inventado da 404.
+
+    Esto es lo que hace que «Hecho para ti» suene de verdad: la tarjeta apuntaba a `/search`, que no
+    busca nada, y no existía ninguna ruta que convirtiera los ids guardados en canciones."""
+    from app.database import SessionLocal
+    db = SessionLocal()
+    r = client.post("/auth/register", json={"email": "mixapi@t.com", "password": "clave-larga-1"})
+    assert r.status_code == 200, r.text
+    tok = r.json()["access_token"]
+    ids = []
+    for i in range(12):
+        t = models.Track(title=f"M{i}", artist=f"MA{i % 4}", genre=("pop", "rock", "flamenco", "latin")[i % 4],
+                         era="2020s", year=2000 + i, rank=1000 - i, status="descargada",
+                         source=SRC, file_path="E:/x.mp3", duration=200)
+        db.add(t); db.flush(); ids.append(t.id)
+    db.commit()
+    u = db.query(models.User).filter_by(email="mixapi@t.com").first()
+    # Un mix con orden deliberadamente AL REVÉS del que devolvería cualquier consulta por id.
+    db.add(models.Mix(user_id=u.id, kind="radar", tracks_json=json.dumps(list(reversed(ids))),
+                      explicacion="porque sí"))
+    db.commit()
+    h = {"Authorization": f"Bearer {tok}"}
+    r = client.get("/mixes/radar/tracks", headers=h)
+    assert r.status_code == 200, r.text
+    assert [t["id"] for t in r.json()] == list(reversed(ids)), r.text
+    assert client.get("/mixes/no-existe/tracks", headers=h).status_code == 404
+    # limpieza
+    db.query(models.Play).filter_by(user_id=u.id).delete()
+    db.query(models.Reaction).filter_by(user_id=u.id).delete()
+    db.query(models.Mix).filter_by(user_id=u.id).delete()
+    db.query(models.User).filter_by(id=u.id).delete()
     db.query(models.Track).filter(models.Track.source == SRC).delete()
     db.commit(); db.close()

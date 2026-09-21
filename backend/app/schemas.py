@@ -116,6 +116,15 @@ class MixOut(BaseModel):
     tracks_json: Optional[str] = None
     explicacion: Optional[str] = None
     created_at: datetime
+    # La URI con la que la interfaz arranca ESTE mix (`radiopv:mix:radar`). La construye el
+    # servidor y no el navegador a propósito: el mismo valor tiene que servir para pedir la lista
+    # (`/mixes/{kind}/tracks`) y para marcar en la interfaz cuál de los mixes está sonando. Si cada
+    # lado lo armara por su cuenta, un cambio de formato en uno dejaría al otro sin reconocerlo.
+    uri: str = ""
+    n_tracks: int = 0
+    # Hasta 4 carátulas de sus canciones, para el mosaico 2×2: los mixes no tienen portada propia
+    # y sin esto las tarjetas de «Hecho para ti» salían como cuadros de texto sin imagen.
+    collage: list[str] = []
     model_config = ConfigDict(from_attributes=True)
 
 

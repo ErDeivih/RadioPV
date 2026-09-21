@@ -54,6 +54,15 @@
       -webkit-padding-end: 30%;
       padding-inline-end: 30%;
 
+      /* El recuento, más pequeño y sin negrita: es un dato, no parte del nombre. */
+      .browse-card-count {
+        font-size: 0.85em;
+        font-weight: 400;
+        font-style: normal;
+        opacity: 0.85;
+        white-space: nowrap;
+      }
+
       @media (max-width: $desktop-breakpoint) {
         font-size: 1rem;
         -webkit-padding-end: 20%;

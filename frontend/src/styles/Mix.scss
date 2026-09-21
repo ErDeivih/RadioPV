@@ -1,0 +1,182 @@
+@use './variables.scss' as *;
+
+/* «Hecho para ti»: la fila de tarjetas de mix y la página de un mix.
+ *
+ * POR QUÉ ESTE FICHERO
+ * --------------------
+ * Estas tarjetas eran cuadros de texto grises sin imagen que llevaban a `/search`, y la página del
+ * mix no existía. El mosaico de la portada y el botón de reproducir que sale al pasar el ratón los
+ * comparten con las tarjetas de lista, así que esas reglas viven en `home.scss` (bajo
+ * `.playlist-card, .mix-card`); aquí está sólo lo propio del mix. */
+
+.hecho-para-ti {
+  padding: 0 20px;
+  margin-top: 16px;
+
+  /* Rejilla, no carrusel horizontal: con el carrusel las tarjetas de la derecha quedaban fuera de
+   * la pantalla y en el móvil no había forma de saber que había más. */
+  &__fila {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px;
+
+    @media (max-width: $desktop-breakpoint) {
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+    }
+  }
+}
+
+.mix-card {
+  background: #181818;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: #282828;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
+  /* Móvil y tableta táctil: sin ratón no hay `:hover`, así que no se pinta el cambio de fondo
+   * para no dejar el color pegado después de tocar la tarjeta. */
+  @media (hover: none) {
+    &:hover {
+      background: #181818;
+    }
+
+    &:active {
+      background: #282828;
+      transform: scale(0.99);
+    }
+  }
+
+  &__portada {
+    position: relative;
+    margin-bottom: 10px;
+  }
+
+  /* Cuando el mix no tiene ninguna carátula local: un fondo con el nombre, que se lee entero. */
+  &__fondo {
+    align-items: center;
+    aspect-ratio: 1 / 1;
+    background: linear-gradient(135deg, #3f3f3f, #1d1d1d);
+    border-radius: 5px;
+    color: #b3b3b3;
+    display: flex;
+    font-size: 0.95rem;
+    font-weight: 600;
+    justify-content: center;
+    padding: 8px;
+    text-align: center;
+  }
+
+  &__titulo {
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__explicacion {
+    color: #b3b3b3;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    margin: 0 0 4px;
+    /* Dos líneas como mucho: la explicación es larga («porque escuchas mucho a…») y sin tope las
+     * tarjetas de la fila quedaban de alturas distintas. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  &__n {
+    color: #b3b3b3;
+    font-size: 0.72rem;
+  }
+
+  @media (max-width: $desktop-breakpoint) {
+    padding: 8px;
+
+    &__explicacion {
+      display: none;
+    }
+
+    &__titulo {
+      font-size: 0.85rem;
+    }
+  }
+}
+
+/* Página de un mix (`/mix/:kind`). */
+.mix-cabecera {
+  align-items: flex-end;
+  display: flex;
+  gap: 20px;
+  padding: 24px 20px 16px;
+
+  &__portada {
+    flex: 0 0 auto;
+    width: 180px;
+
+    img {
+      border-radius: 5px;
+      width: 100%;
+    }
+  }
+
+  &__datos {
+    min-width: 0;
+  }
+
+  &__tipo {
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    /* Es un enlace a la portada: se subraya al pasar por encima, no siempre. */
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__titulo {
+    color: #fff;
+    font-size: clamp(1.6rem, 4.5vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    margin: 4px 0 8px;
+    /* Antes los títulos largos se salían de la pantalla porque iban en una sola línea. */
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  &__texto {
+    color: #b3b3b3;
+    font-size: 0.85rem;
+    margin: 0 0 2px;
+  }
+
+  @media (max-width: $desktop-breakpoint) {
+    align-items: center;
+    padding: 16px 16px 8px;
+
+    &__portada {
+      width: 110px;
+    }
+  }
+}
+
+.mix-controles {
+  padding: 10px 20px;
+}

@@ -72,7 +72,7 @@ const initialState: {
   episodesMightLike: Episode[];
   episodesToTry: Episode[];
   moreLikeArtists: MoreLikeArtistSection[];
-  mixes: { kind: string; explicacion: string | null }[];
+  mixes: MixResumen[];
   popularidad: { subiendo: PopularidadItem[]; bajando: PopularidadItem[]; nuevas: PopularidadItem[] } | null;
   stats: PopularidadStats | null;
 } = {
@@ -120,9 +120,23 @@ export const fetchTopTracks = createAsyncThunk('home/fetchTopTracks', async () =
   return data.map(toTrack);
 });
 
-/** U3 · "Hecho para ti": los mixes del usuario (kind, explicacion) desde GET /mixes. */
+/** U3 · "Hecho para ti": los mixes del usuario desde GET /mixes.
+ *
+ *  `uri`, `n_tracks` y `collage` los manda el servidor: sin ellos la tarjeta no tenía con qué
+ *  sonar (`uri`), ni cuántas canciones decir (`n_tracks`), ni carátulas que pintar (`collage`), y
+ *  acababa siendo un cuadro de texto gris que llevaba a `/search`. */
+export interface MixResumen {
+  id: number;
+  kind: string;
+  explicacion: string | null;
+  tracks_json: string | null;
+  uri: string;
+  n_tracks: number;
+  collage: string[];
+}
+
 export const fetchMixes = createAsyncThunk('home/fetchMixes', async () => {
-  const { data } = await axios.get<{ kind: string; explicacion: string | null; tracks_json: string }[]>('/mixes');
+  const { data } = await axios.get<MixResumen[]>('/mixes');
   return data;
 });
 

@@ -209,6 +209,20 @@ const startPlayback = async (
     return;
   }
 
+  // Mix de «Hecho para ti» (`radiopv:mix:radar`): las canciones las sirve el servidor, que es el
+  // único que sabe cuáles componen el mix y en qué orden. Antes esta URI caía en la rama genérica
+  // y acababa pidiendo una canción con id «mix», así que pulsar reproducir en una tarjeta de
+  // «Hecho para ti» no sonaba.
+  if (kind === 'mix') {
+    const { data } = await axios.get<TrackOut[]>(`/mixes/${encodeURIComponent(id)}/tracks`);
+    const lista = data.map(toTrack);
+    if (!lista.length) return;
+    const pos = Math.min(offset, lista.length - 1);
+    colaController.cargar(lista, `mix:${id}`, pos, trackUri);
+    await playerController.play(lista[pos]);
+    return;
+  }
+
   // Artista: sus canciones más escuchadas, para que el botón grande del artista suene.
   if (kind === 'artist') {
     const { data } = await axios.get<TrackOut[]>(`/artists/${encodeURIComponent(id)}/top`);

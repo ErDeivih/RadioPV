@@ -101,6 +101,7 @@ vi.mock('../axios', () => ({
       if (url === '/library/liked') return { data: [7, 8].map(trackOut) };
       if (url === '/tracks') return { data: [1, 2, 3].map(trackOut) };
       if (/^\/artists\/.*\/top$/.test(url)) return { data: [4, 5].map(trackOut) };
+      if (/^\/mixes\/[\w-]+\/tracks$/.test(url)) return { data: [11, 12, 13].map(trackOut) };
       return { data: [] };
     }),
     post: vi.fn(async () => ({ data: {} })),
@@ -426,6 +427,18 @@ describe('servicio · playlists, álbumes y favoritos', () => {
     await playerService.startPlayback({ context_uri: 'radiopv:artist:Rosalía' });
     expect(colaController.actual?.id).toBe('4');
     expect(colaController.cola.map((t) => t.id)).toEqual(['5']);
+  });
+
+  it('un mix de «Hecho para ti» suena con sus canciones y respeta la posición pedida', async () => {
+    // Antes `radiopv:mix:radar` caía en la rama genérica y se pedía una canción con id «mix»: las
+    // tarjetas de «Hecho para ti» no sonaban. El servidor sirve la lista en `/mixes/{kind}/tracks`.
+    await playerService.startPlayback({
+      context_uri: 'radiopv:mix:radar',
+      offset: { position: 1 },
+    });
+    expect(colaController.actual?.id).toBe('12');
+    expect(colaController.uriContexto).toBe('radiopv:mix:radar');
+    expect(colaController.cola.map((t) => t.id)).toEqual(['13']);
   });
 
   it('añadir una lista entera a la cola encola todas sus canciones', async () => {

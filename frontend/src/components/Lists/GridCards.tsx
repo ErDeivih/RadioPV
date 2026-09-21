@@ -32,7 +32,7 @@ import { useCallback } from 'react';
  * imÃ¡genes. Spotify resuelve esto con un mosaico de las carÃ¡tulas de las primeras canciones, que es
  * lo que se pinta aquÃ­ (la API manda hasta cuatro en `collage`).
  */
-const Portada = ({ images, title, rounded }: { images: string[]; title: string; rounded?: boolean }) => {
+export const Portada = ({ images, title, rounded }: { images: string[]; title: string; rounded?: boolean }) => {
   if (images.length >= 4) {
     return (
       <div className='portada-mosaico'>

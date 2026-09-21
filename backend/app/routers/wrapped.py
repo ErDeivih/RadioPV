@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -180,6 +181,44 @@ def borrar_request(request_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+def _ids_del_mix(mix: models.Mix) -> list[int]:
+    """Los ids de las canciones de un mix, en su orden.
+
+    Se guardan como JSON en una columna de texto (`tracks_json`), así que hay que tolerar que
+    venga vacío o mal formado: un mix a medio generar no puede tumbar la portada entera.
+    """
+    try:
+        datos = json.loads(mix.tracks_json or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(datos, list):
+        return []
+    return [int(x) for x in datos if isinstance(x, int)]
+
+
+def _canciones_del_mix(db: Session, mix: models.Mix) -> list[models.Track]:
+    """Las canciones del mix, EN EL ORDEN del mix (no en el que las devuelva la base)."""
+    ids = _ids_del_mix(mix)
+    if not ids:
+        return []
+    filas = {t.id: t for t in db.query(models.Track).filter(models.Track.id.in_(ids))}
+    return [filas[i] for i in ids if i in filas]
+
+
+def _mix_out(db: Session, mix: models.Mix) -> schemas.MixOut:
+    """Serializador único de un mix (igual que `_out` en las listas): así `/mixes` y cualquier
+    otra ruta que devuelva mixes no se olvidan de la portada ni del número de canciones."""
+    canciones = _canciones_del_mix(db, mix)
+    # Sólo se usan las carátulas LOCALES (`/media/covers/…`): son las que la interfaz sabe pedir a
+    # la API. Las `cover_url` son enlaces externos (Deezer, YouTube) y la interfaz les antepone la
+    # base de la API, así que acabarían en una URL inventada que no carga.
+    collage = [t.cover for t in canciones if t.cover][:4]
+    return schemas.MixOut(id=mix.id, kind=mix.kind, seed=mix.seed, tracks_json=mix.tracks_json,
+                          explicacion=mix.explicacion, created_at=mix.created_at,
+                          uri=f"radiopv:mix:{mix.kind}", n_tracks=len(canciones),
+                          collage=collage)
+
+
 @router.get("/mixes", response_model=list[schemas.MixOut])
 def my_mixes(user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     """U2 · los mixes del usuario (kind, explicacion, tracks_json) para la fila "Hecho para ti".
@@ -191,4 +230,29 @@ def my_mixes(user: models.User = Depends(get_current_user), db: Session = Depend
         _generar_mixes_usuario(db, user)
         mix = (db.query(models.Mix).filter_by(user_id=user.id)
                .order_by(models.Mix.created_at.desc()).all())
-    return mix
+    return [_mix_out(db, m) for m in mix]
+
+
+@router.get("/mixes/{kind}/tracks", response_model=list[schemas.TrackOut])
+def tracks_of_mix(kind: str, user: models.User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+    """Las canciones de un mix, para que «Hecho para ti» SUENE.
+
+    POR QUÉ EXISTE
+    --------------
+    Las tarjetas de «Hecho para ti» llevaban a `/search`, que no busca nada: se pulsara lo que se
+    pulsara, la música no sonaba. Los ids de cada mix ya estaban en la base (`tracks_json`), pero no
+    había ninguna ruta que los convirtiera en canciones, así que la interfaz no tenía forma de
+    reproducir un mix ni de enseñar su lista."""
+    mix = (db.query(models.Mix).filter_by(user_id=user.id, kind=kind)
+           .order_by(models.Mix.created_at.desc()).first())
+    if not mix:
+        # Sin mix de ese tipo se generan todos (es lo mismo que hace `/mixes`) y se reintenta
+        # una vez: un usuario recién registrado no tiene ninguno todavía.
+        from ..workers import _generar_mixes_usuario
+        _generar_mixes_usuario(db, user)
+        mix = (db.query(models.Mix).filter_by(user_id=user.id, kind=kind)
+               .order_by(models.Mix.created_at.desc()).first())
+    if not mix:
+        raise HTTPException(404, "Ese mix no existe")
+    return _canciones_del_mix(db, mix)

@@ -35,6 +35,7 @@ const GenrePage = lazy(() => import('./pages/Genre'));
 const BrowsePage = lazy(() => import('./pages/Browse'));
 const ArtistPage = lazy(() => import('./pages/Artist'));
 const PlaylistView = lazy(() => import('./pages/Playlist'));
+const MixPage = lazy(() => import('./pages/Mix'));
 const ArtistDiscographyPage = lazy(() => import('./pages/Discography'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 const WrappedPage = lazy(() => import('./pages/Wrapped'));
@@ -139,6 +140,9 @@ const RoutesComponent = memo(() => {
           element: <PlaylistView container={container} />,
         },
         { path: '/album/:albumId', element: <AlbumView container={container} /> },
+        // «Hecho para ti»: cada mix tiene su pantalla con su lista de canciones. Las tarjetas de la
+        // portada llevaban a `/search` (que no busca nada), así que los mixes no se podían ni ver.
+        { path: '/mix/:kind', element: <MixPage container={container} /> },
         {
           path: '/artist/:artistId/discography',
           element: <ArtistDiscographyPage container={container} />,
