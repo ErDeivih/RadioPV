@@ -147,7 +147,19 @@ for DIR in "$BASE"/*/; do
 
       # Los contenedores se levantan igual: asi el backend nuevo entra aunque la web falle. Lo
       # que NO se hace es decir que todo ha ido bien.
-      if ! docker compose up -d --remove-orphans >/tmp/autodeploy-up.log 2>&1; then
+      #
+      # `--force-recreate` cuando se ha reconstruido algo: `up -d` a secas NO recrea un contenedor
+      # cuya imagen se ha reconstruido con la MISMA etiqueta. Comprobado el 20/09/2026: al
+      # reconstruir `radiopv-api:latest`, `api` y `web` se recrearon pero **`worker` y `collector`
+      # siguieron con el codigo viejo** (el trabajador no creo la lista nueva y el recolector
+      # mantenia las tareas de antes) hasta recrearlos a mano. Aqui solo se llega cuando el
+      # `git pull` ha traido cambios (si no, el script sale antes), asi que no reinicia nada de
+      # mas.
+      RECREAR=""
+      if [ "$RECONSTRUIR" = "1" ] || [ "$WEB" = "1" ]; then
+        RECREAR="--force-recreate"
+      fi
+      if ! docker compose up -d --remove-orphans $RECREAR >/tmp/autodeploy-up.log 2>&1; then
         FALLOS="$FALLOS up"
         echo "FALLO: docker compose up. Ultimas lineas:"
         tail -n 15 /tmp/autodeploy-up.log | sed 's/^/    /'
