@@ -60,39 +60,41 @@ def _rutas_en_las_bases() -> set[str]:
 
 
 def _claves_de_canciones() -> set[str]:
-    """Las claves normalizadas (artista|título) de todo el catálogo, para no borrar algo único.
+    """Los TÍTULOS normalizados de todo el catálogo, para no borrar música que nadie más tiene.
 
-    Borrar un fichero «sin ficha» es seguro cuando la MISMA canción ya está en el catálogo por otra
-    ficha (son copias que quedaron de cuando el envío se cortaba). Pero si el fichero es la única
-    copia de algo que nadie tiene, borrarlo es destruir música: eso no se hace solo, se avisa.
+    Se compara por TÍTULO y no por «artista - título» del nombre del fichero, porque los ficheros
+    huérfanos llevan a menudo un artista mal puesto o inventado («Fonsi - Échame la culpa (3).mp3»
+    cuando en el catálogo está como «Luis Fonsi - Échame la culpa.mp3», o «Álex y Christina - Chu
+    chu.mp3» para un tema de Alejandro Fernández). Con la comparación estricta, once de los catorce
+    huérfanos salían como «música única» y no lo eran: son copias de algo que la aplicación ya toca.
+
+    Si el título NO está en el catálogo, no se borra: puede ser música que sólo existe en ese fichero.
     """
     from radiov.db import clave_cancion
 
-    claves: set[str] = set()
+    titulos: set[str] = set()
     for base in BASES:
         ruta = f"{DIR}/{base}"
         if not os.path.exists(ruta):
             continue
         con = sqlite3.connect(ruta)
         try:
-            for artist, title in con.execute("SELECT artist, title FROM tracks"):
-                if title:
-                    claves.add(clave_cancion(artist or "", title))
+            for (title,) in con.execute("SELECT title FROM tracks WHERE title IS NOT NULL"):
+                # `clave_cancion` normaliza (sin tildes, sin paréntesis de ruido…): se usa sólo la
+                # parte del título.
+                titulos.add(clave_cancion("", title).split("|", 1)[-1])
         finally:
             con.close()
-    return claves
+    return titulos
 
 
 def _posible_clave(p: Path) -> str:
-    """Saca (artista, título) del nombre del fichero («Artista - Tema (3).mp3» → su clave)."""
+    """Título que se deduce del nombre del fichero («Artista - Tema (3).mp3» → «tema»)."""
     from radiov.db import clave_cancion
 
     nombre = re.sub(r"\s*\(\d+\)\s*$", "", p.stem).strip()
-    if " - " in nombre:
-        artista, titulo = nombre.split(" - ", 1)
-    else:
-        artista, titulo = p.parent.name, nombre
-    return clave_cancion(artista.strip(), titulo.strip())
+    titulo = nombre.split(" - ", 1)[1] if " - " in nombre else nombre
+    return clave_cancion("", titulo).split("|", 1)[-1]
 
 
 def main() -> int:
