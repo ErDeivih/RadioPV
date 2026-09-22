@@ -38,6 +38,7 @@ const PANTALLAS = [
   ['mis-listas', '/users/PERFIL/playlists'],
   ['me-gusta', '/collection/tracks'],
   ['pedir', '/pedir'],
+  ['importar', '/importar'],
   ['ajustes', '/settings'],
   ['admin', '/admin'],
   // El perfil es el del usuario que ha iniciado sesión: el id se lee del enlace del avatar (antes

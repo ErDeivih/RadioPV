@@ -40,6 +40,14 @@
     align-items: stretch;
     flex-direction: column;
 
+    /* OJO: en un `flex` en COLUMNA, `flex-basis` es el ALTO. Con `flex: 1 1 260px` heredado de la
+     * regla de arriba, el campo de texto salía como una caja de 260 px de alto (medido en la captura
+     * del móvil). Aquí vuelve a su altura normal y sólo el botón se estira a lo ancho. */
+    .ant-input-affix-wrapper,
+    .ant-input {
+      flex: 0 0 auto;
+    }
+
     .ant-btn {
       width: 100%;
     }
