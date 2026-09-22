@@ -89,3 +89,6 @@ _pc_data/
 
 # Capturas que dejan las pruebas manuales (e2e/manuales): son evidencia de cada pasada, no codigo
 frontend/e2e/manuales/*.png
+
+# Marca local de standby: dice al autodespliegue que no toque este proyecto en ESA maquina.
+# Se crea a mano en /opt/stacks/<proyecto>/.no-autodeploy y no se versiona..no-autodeploy

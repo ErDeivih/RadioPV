@@ -67,6 +67,25 @@ for DIR in "$BASE"/*/; do
   echo ""
   echo "──── $NOMBRE ────"
 
+  # ── PROYECTO EN STANDBY ──────────────────────────────────────────────────────────────────────
+  # Si el proyecto tiene un fichero `.no-autodeploy`, se deja en paz: ni se baja ni se levanta.
+  #
+  # POR QUÉ EXISTE (22/09/2026)
+  # --------------------------
+  # El usuario pidió «apaga el proyecto y déjalo en standby, que no consuma recursos». Se pararon
+  # los contenedores a mano, y CINCO MINUTOS DESPUÉS este script los volvió a levantar: como los
+  # commits de esa sesión no estaban en GitHub (se habían pasado por paquete), el script veía
+  # «CAMBIOS» y hacía `docker compose build` + `up -d` — con `--force-recreate` desde el arreglo
+  # del 20/09. Parar un proyecto a mano no bastaba: había que decirle al autodespliegue que no lo
+  # toque.
+  #
+  # El fichero NO se versiona (está en .gitignore a propósito): es una decisión de ESA máquina, no
+  # del proyecto. Para volver a activarlo: borra el fichero.
+  if [ -f "${DIR}.no-autodeploy" ]; then
+    echo "EN STANDBY: tiene .no-autodeploy; no se toca"
+    continue
+  fi
+
   RESULTADO="$(
     cd "$DIR" || exit 0
 

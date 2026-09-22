@@ -45,6 +45,11 @@ RAIZ = Path(__file__).resolve().parent.parent
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 sys.path.insert(0, str(RAIZ))
 
+#: Bandera de Windows para que los comandos NO abran una ventana negra.
+#: Sin esto, cada consulta de red lanzaba un PowerShell visible: el terminal
+#: parpadeaba cada pocos segundos y no dejaba trabajar.
+SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # Cada cuánto se pregunta si hay órdenes y cada cuánto se manda el latido.
 SEGUNDOS_ENTRE_CONSULTAS = 5
 SEGUNDOS_ENTRE_LATIDOS = 30
@@ -113,7 +118,7 @@ def estado_de_red() -> dict:
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", orden],
                            capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=30)
+                           timeout=30, creationflags=SIN_VENTANA)
         datos = json.loads(r.stdout.strip() or "[]")
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return {}
@@ -161,7 +166,7 @@ def ejecutar(orden: str, probar: bool) -> str:
         return f"(PRUEBA) habría ejecutado: {' '.join(cmd)}"
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=60)
+                           errors="replace", timeout=60, creationflags=SIN_VENTANA)
     except (OSError, subprocess.TimeoutExpired) as e:
         return f"no se pudo ejecutar {orden}: {e}"
     salida = (r.stdout or r.stderr or "").strip()
