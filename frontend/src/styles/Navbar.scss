@@ -935,3 +935,17 @@
     height: 14px !important;
   }
 }
+
+/* Área pulsable de los iconos de la biblioteca y del avatar en el móvil: medían 32×32, por debajo de
+ * los 44 px que se recomiendan para el dedo (lo midió `probar-usabilidad.js`). */
+@media (max-width: $desktop-breakpoint) {
+  .library-icon-button,
+  .avatar-link,
+  .nav-text-link {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

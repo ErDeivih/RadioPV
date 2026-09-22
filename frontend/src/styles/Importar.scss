@@ -1,0 +1,92 @@
+@use './variables.scss' as *;
+
+/* Importar una lista de Spotify (`/importar`). */
+
+.importar {
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 24px;
+
+  .playlist-header,
+  .playlist-subheader {
+    margin-left: 0;
+  }
+
+  .playlist-subheader {
+    line-height: 1.5;
+    max-width: 620px;
+  }
+}
+
+.importar-caja {
+  align-items: center;
+  background: #181818;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+
+  /* El campo ocupa la fila entera y los controles van debajo: en el móvil, con el ancho justo, un
+   * `flex` en una sola línea dejaba el botón fuera de la pantalla. */
+  .ant-input-affix-wrapper,
+  .ant-input {
+    flex: 1 1 260px;
+    min-width: 0;
+  }
+
+  @media (max-width: $desktop-breakpoint) {
+    align-items: stretch;
+    flex-direction: column;
+
+    .ant-btn {
+      width: 100%;
+    }
+  }
+}
+
+.importar-resultado {
+  margin-top: 16px;
+}
+
+.importar-faltan {
+  background: #181818;
+  border-radius: 8px;
+  margin-top: 16px;
+  padding: 16px 20px;
+
+  h3 {
+    color: #fff;
+    font-size: 1rem;
+    margin: 0 0 8px;
+  }
+
+  ul {
+    color: #d7d7d7;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin: 0;
+    padding-left: 18px;
+  }
+}
+
+.importar-artista {
+  color: #b3b3b3;
+}
+
+/* Atajo a «Importar una lista de Spotify» desde la página de listas del perfil. */
+.importar-atajo {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+
+  @media (max-width: $desktop-breakpoint) {
+    justify-content: stretch;
+
+    a,
+    .ant-btn {
+      width: 100%;
+    }
+  }
+}

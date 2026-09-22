@@ -36,6 +36,7 @@ const BrowsePage = lazy(() => import('./pages/Browse'));
 const ArtistPage = lazy(() => import('./pages/Artist'));
 const PlaylistView = lazy(() => import('./pages/Playlist'));
 const MixPage = lazy(() => import('./pages/Mix'));
+const ImportarSpotifyPage = lazy(() => import('./pages/ImportarSpotify'));
 const ArtistDiscographyPage = lazy(() => import('./pages/Discography'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 const WrappedPage = lazy(() => import('./pages/Wrapped'));
@@ -158,6 +159,10 @@ const RoutesComponent = memo(() => {
         // Pedir una canción que no esté en la biblioteca: se descarga sola (el recolector del PC
         // recoge las peticiones y busca también en YouTube, para mashups y sesiones de DJ).
         { path: '/pedir', element: <PedirCancionesPage /> },
+        // Importar una lista pública de Spotify: pegas el enlace y se crea aquí con la música que ya
+        // haya. Se pidió así: «me gustaría una opción en donde pasara un playlist de spotify y se me
+        // creara igual en mi aplicación».
+        { path: '/importar', element: <ImportarSpotifyPage /> },
         { public: true, path: '/genre/:genreId', element: <GenrePage /> },
         { public: true, path: '/search', element: <BrowsePage /> },
         { path: '/recent-searches', element: <RecentlySearched /> },

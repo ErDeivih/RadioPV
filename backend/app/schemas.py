@@ -109,6 +109,27 @@ class PlaylistIn(BaseModel):
     type: str = "user"
 
 
+class ImportarOut(BaseModel):
+    """Resultado de importar una lista de Spotify: lo que ha entrado y lo que falta.
+
+    «Lo que falta» se devuelve A PROPÓSITO: es lo que hace falta para poder decir «de 50 canciones,
+    23 están y 27 no» y ofrecer pedirlas al recolector. Sin esto, la interfaz sólo podría decir que
+    la lista se ha creado, aunque hubiera entrado una sola canción.
+    """
+    playlist: "PlaylistOut"
+    nombre: str
+    total: int
+    encontradas: int
+    faltan: list[dict] = []
+    pedidas: int = 0
+    aviso: Optional[str] = None
+
+
+# La anotación de arriba es una cadena (referencia adelantada a `PlaylistOut`), así que hay que
+# resolverla al final del módulo o Pydantic no sabrá qué modelo es.
+ImportarOut.model_rebuild()
+
+
 class MixOut(BaseModel):
     id: int
     kind: str

@@ -662,3 +662,23 @@ button.disabled {
     overflow: hidden;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * ÁREA PULSABLE DE LOS CONTROLES EN EL MÓVIL
+ *
+ * Medido con `probar-usabilidad.js`: 251 objetivos por debajo de 44 px, y los peores eran los
+ * controles del reproductor (32×32), que es lo que MÁS se toca de toda la aplicación. Se agranda el
+ * ÁREA que recibe el toque, no el icono: 44 px es el mínimo que se recomienda para el dedo.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: $desktop-breakpoint) {
+  .mobile-player,
+  .mobile-now-playing {
+    button {
+      align-items: center;
+      display: inline-flex;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+}

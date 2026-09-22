@@ -1,4 +1,6 @@
 import { memo } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from 'antd';
 
 // Components
 import { GridItemList } from '../../../../../components/Lists/list';
@@ -13,6 +15,15 @@ export const PlaylistsProfileSection = memo(() => {
 
   return (
     <div>
+      {/* Importar una lista de Spotify. Va aquí —donde se ven y se crean las listas— porque es donde
+        * se busca: el usuario lo pidió como «una opción donde pasar una playlist de Spotify y que se
+        * cree igual en mi aplicación». */}
+      <div className='importar-atajo'>
+        <Link to='/importar'>
+          <Button size='large'>Importar una lista de Spotify</Button>
+        </Link>
+      </div>
+
       <GridItemList multipleRows items={playlists} title={t('Public playlists')} />
 
       {/* Sin listas públicas la pantalla quedaba en blanco: sólo el título y nada más. Se dice. */}
