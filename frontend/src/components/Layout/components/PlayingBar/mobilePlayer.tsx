@@ -48,7 +48,10 @@ const NextButton = () => (
 const QueueButton = () => {
   const dispatch = useAppDispatch();
   return (
-    <button onClick={() => dispatch(uiActions.toggleQueue())}>
+    // `aria-label`: el botón no tenía NINGUNA etiqueta, así que ni un lector de pantalla ni una
+    // prueba automática podían saber qué hace (el reconocimiento visual no podía abrir la cola en
+    // el móvil por esto). El de escritorio sí la tiene.
+    <button aria-label='Cola' onClick={() => dispatch(uiActions.toggleQueue())}>
       <ListIcon />
     </button>
   );
