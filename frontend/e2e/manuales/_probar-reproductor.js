@@ -18,7 +18,11 @@ const SALIDA = 'capturas';
 
 const pulsar = async (p, selector, etiqueta) => {
   try {
-    const el = p.locator(selector).first();
+    // `:visible` es importante en el móvil: en el DOM están a la vez la barra de escritorio (oculta)
+    // y el reproductor del móvil, así que el primer botón con esa etiqueta puede ser el que no se ve
+    // y la pulsación se queda esperando hasta agotar el tiempo.
+    const visible = p.locator(`${selector}:visible`).first();
+    const el = (await visible.count()) ? visible : p.locator(selector).first();
     await el.click({ timeout: 6000 });
     await p.waitForTimeout(1800);
     console.log(`   ${etiqueta}: sí`);
